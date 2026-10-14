@@ -4179,7 +4179,8 @@ mod tests {
         }
         let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
         visible_label(&labels, screen, "New Section");
-        // Typing a number in the field chooses Start Page Numbering at; OK: page 3 is page 2.
+        // Typing a number in the field chooses Start Page Numbering at; OK: page 3 is page 5 (odd,
+        // so a facing page stays on the right).
         let field = visible_label(&labels, screen, "1");
         click_dialog(&mut app, &ctx, screen, field.center());
         dialog_frame(
@@ -4189,18 +4190,18 @@ mod tests {
             vec![
                 egui::Event::Key { key: egui::Key::End, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE },
                 egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE },
-                egui::Event::Text("2".into()),
+                egui::Event::Text("5".into()),
             ],
         );
         assert!(!app.ui.dialog.as_ref().unwrap().b("automatic"), "typing chose Start Page Numbering at");
         let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
         click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "OK").center());
         assert!(app.ui.dialog.is_none());
-        assert_eq!(app.session.active().unwrap().doc.page_name(2), "2");
+        assert_eq!(app.session.active().unwrap().doc.page_name(2), "5");
         // Opened again on that page, it is Numbering & Section Options, showing the section.
         crate::menus::activate(&mut app, "layout.section", &Value::Null);
         let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.b("newSection"), d.b("startSection"), d.b("automatic"), d.s("startNumber")), (false, true, false, "2".into()));
+        assert_eq!((d.b("newSection"), d.b("startSection"), d.b("automatic"), d.s("startNumber")), (false, true, false, "5".into()));
         let labels = (0..4).map(|_| dialog_frame(&mut app, &ctx, screen, vec![])).last().unwrap();
         visible_label(&labels, screen, "Numbering & Section Options");
         assert!(!labels.iter().any(|(t, _, _)| t == "New Section"));
