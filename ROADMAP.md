@@ -128,6 +128,7 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 Newest first.
 
+- **2026-10-14** · The Direct Selection tool pressed on a corner or anchor of an object that isn't selected selects it and pulls just that point, as in InDesign (it moved the whole object). No readiness percentage change.
 - **2026-10-12** · Text threads by hand: click a selected text frame's in or out port to load
   the text cursor, then click a frame to thread it, click empty space for a column-wide frame or
   drag one (it snaps like frame drawing); Shift-click autoflows, Alt-click stays loaded on the
