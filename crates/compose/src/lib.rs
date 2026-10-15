@@ -21,6 +21,7 @@ pub mod shape;
 pub mod table;
 pub mod vars;
 mod warichu;
+pub mod wrap;
 pub mod xref;
 
 use std::collections::HashMap;
@@ -305,6 +306,16 @@ impl ComposedStory {
 pub struct Exclusion {
     pub rect: Rect,
     pub mode: WrapMode,
+    /// An anchored object in the frame's own story: it wraps only lines that start after this
+    /// story byte (its anchor).
+    pub after: Option<usize>,
+}
+
+impl Exclusion {
+    /// Does it wrap a line starting at story byte `line_start`?
+    fn wraps(&self, line_start: usize) -> bool {
+        self.after.is_none_or(|a| a < line_start)
+    }
 }
 
 /// One frame of the thread, ready for composition.
@@ -403,7 +414,7 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
                 if !(reach.width() > 0.0 && reach.height() > 0.0) {
                     continue;
                 }
-                exclusions.push(Exclusion { rect: inner, mode: other.wrap.mode });
+                exclusions.push(Exclusion { rect: inner, mode: other.wrap.mode, after: None });
             }
         }
         let (page_name, page, left_page) = match (loc.spread, spread) {
@@ -483,13 +494,12 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
     out
 }
 
-/// Compose a story of `doc` through its frames.
+/// Compose a story of `doc` through its frames, with the text wrap of page items and of anchored
+/// objects ([`wrap`]).
 pub fn compose_story(doc: &Document, sid: StoryId, opts: &ComposeOptions) -> ComposedStory {
-    let specs = frame_specs(doc, sid);
-    match doc.story(sid) {
-        Some(st) => compose(doc, st, &specs, opts),
-        None => ComposedStory { story: sid, ..Default::default() },
-    }
+    let others: Vec<ComposedStory> =
+        wrap::neighbours(doc, sid).into_iter().map(|o| wrap::compose_among(doc, o, &ComposeOptions::default(), &[])).collect();
+    wrap::compose_among(doc, sid, opts, &others.iter().collect::<Vec<_>>())
 }
 
 const DEFAULT_TAB: f64 = 36.0;
@@ -1037,8 +1047,9 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                 if !f.exclusions.is_empty() {
                     let jump = cur.jump(f, lead, asc, tops);
                     let mut tries = 0;
+                    let line_start = glyphs.get(s).map_or(prange.start, |g| g.byte);
                     loop {
-                        let Some((nb, (a, z))) = wrap_slot(f, col, baseline, asc, desc, jump, base_size) else {
+                        let Some((nb, (a, z))) = wrap_slot(f, col, baseline, asc, desc, jump, base_size, line_start) else {
                             // No room in this column.
                             baseline = baseline.max(col.y1) + 1.0;
                             break;
@@ -1246,6 +1257,21 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                 {
                     begin_at(&mut cur, start);
                     col_first_line = line_no;
+                    g0 += b.next;
+                    moved = true;
+                    break;
+                }
+                // An own-story anchored object anchored in this line wraps the lines after it,
+                // which were broken without it: break them again.
+                if k + 1 < breaks.len()
+                    && f.exclusions.iter().any(|ex| {
+                        ex.after.is_some_and(|a| (range_start..range_end).contains(&a))
+                            && ex.rect.x0 < col.x1
+                            && ex.rect.x1 > col.x0
+                            && ex.rect.y1 > baseline
+                            && ex.rect.y0 < col.y1
+                    })
+                {
                     g0 += b.next;
                     moved = true;
                     break;
@@ -2306,7 +2332,8 @@ const JUMP_EPS: f64 = 1e-6;
 /// A line under a Jump Object wrap moves below it as `jump` says. Other wraps are rectangles, so the
 /// free space only grows where one in the line's band ends: the search jumps from one such bottom
 /// edge to the next, and a line that clears a wrap has its top exactly on the wrap's bottom.
-fn wrap_slot(f: &FrameSpec, col: Rect, baseline: f64, asc: f64, desc: f64, jump: Jump, size: f64) -> Option<(f64, (f64, f64))> {
+#[allow(clippy::too_many_arguments)]
+fn wrap_slot(f: &FrameSpec, col: Rect, baseline: f64, asc: f64, desc: f64, jump: Jump, size: f64, line_start: usize) -> Option<(f64, (f64, f64))> {
     let top = jump.top.max(0.0);
     let mut b = baseline;
     // Each step passes at least one wrap; the cap bounds hostile geometry.
@@ -2314,7 +2341,7 @@ fn wrap_slot(f: &FrameSpec, col: Rect, baseline: f64, asc: f64, desc: f64, jump:
         let jumped = f
             .exclusions
             .iter()
-            .filter(|e| e.mode == WrapMode::JumpObject)
+            .filter(|e| e.wraps(line_start) && e.mode == WrapMode::JumpObject)
             .map(|e| e.rect)
             .filter(|r| r.x0 < col.x1 && r.x1 > col.x0 && b > r.y0 + JUMP_EPS && b - top < r.y1 - JUMP_EPS)
             .fold(f64::NEG_INFINITY, |m, r| m.max(r.y1));
@@ -2325,14 +2352,14 @@ fn wrap_slot(f: &FrameSpec, col: Rect, baseline: f64, asc: f64, desc: f64, jump:
             } else {
                 jumped + top
             }
-        } else if let Some(slot) = free_slot(f, col, b - asc, b + desc, size) {
+        } else if let Some(slot) = free_slot(f, col, b - asc, b + desc, size, line_start) {
             return Some((b, slot));
         } else {
             let (y0, y1) = (b - asc, b + desc);
             let edge = f
                 .exclusions
                 .iter()
-                .filter(|e| e.mode != WrapMode::JumpObject)
+                .filter(|e| e.wraps(line_start) && e.mode != WrapMode::JumpObject)
                 .map(|e| e.rect)
                 .filter(|r| r.y0 < y1 && r.y1 > y0)
                 .fold(f64::INFINITY, |m, r| m.min(r.y1));
@@ -2349,10 +2376,10 @@ fn wrap_slot(f: &FrameSpec, col: Rect, baseline: f64, asc: f64, desc: f64, jump:
 /// cuts narrower than 1.5 em of `size` is skipped (a sliver beside the object); when no object
 /// reaches the column in the band the whole column is free, however narrow (a one-character frame
 /// such as an article's closing tombstone, or a narrow column beside another that wraps).
-fn free_slot(f: &FrameSpec, col: Rect, y0: f64, y1: f64, size: f64) -> Option<(f64, f64)> {
+fn free_slot(f: &FrameSpec, col: Rect, y0: f64, y1: f64, size: f64, line_start: usize) -> Option<(f64, f64)> {
     let mut free = vec![(col.x0, col.x1)];
     let mut cut = false;
-    for ex in &f.exclusions {
+    for ex in f.exclusions.iter().filter(|e| e.wraps(line_start)) {
         let r = ex.rect;
         let overlaps_band = r.y0 < y1 && r.y1 > y0;
         match ex.mode {
@@ -2406,9 +2433,12 @@ fn estimate_slots(
     let n = ((total / (col.width().max(10.0) * 0.5)).ceil() as usize + 2).min(2000);
     let mut v = Vec::with_capacity(n);
     let mut b = first;
+    // Own-story anchored objects whose anchor is in these lines wrap only the lines after it: the
+    // rest is broken again once that line is set.
+    let line_start = glyphs.first().map_or(0, |g| g.byte);
     let mut jump = jump;
     for _ in 0..n {
-        let slot = match wrap_slot(f, col, b, size * 0.8, size * 0.25, jump, size) {
+        let slot = match wrap_slot(f, col, b, size * 0.8, size * 0.25, jump, size, line_start) {
             Some((nb, s)) => {
                 b = nb;
                 s
