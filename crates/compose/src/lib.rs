@@ -514,6 +514,9 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
     let mut out = ComposedStory { story: story.id, rev: story.rev, text_len: story.text.len(), ..Default::default() };
     let mut styles_tab: Vec<RunStyle> = Vec::new();
     let mut missing_fonts: HashMap<String, bool> = HashMap::new();
+    // The wrap of the story's own custom and above-line anchored objects, per frame, added as
+    // their anchor lines are set (see `own_wrap`).
+    let mut own_ex: Vec<Vec<Exclusion>> = vec![Vec::new(); frames.len()];
     let cols: Vec<Vec<Rect>> = frames
         .iter()
         .map(|f| {
@@ -986,7 +989,16 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                 para_box_decos(&mut out, pi, &pp);
                 break 'paras;
             }
-            let f = &frames[cur.fi];
+            let merged;
+            let f = match own_ex.get(cur.fi).filter(|e| !e.is_empty()) {
+                Some(extra) => {
+                    let mut spec = frames[cur.fi].clone();
+                    spec.exclusions.extend(extra.iter().cloned());
+                    merged = spec;
+                    &merged
+                }
+                None => &frames[cur.fi],
+            };
             let base = cols[cur.fi][cur.col.min(cols[cur.fi].len() - 1)];
             let col = cur.clip(base);
             // A spanning paragraph isn't held to the balanced bottom of the columns above it.
@@ -1232,14 +1244,30 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                         continue 'paras;
                     }
                 }
+                let mut wraps_below = false;
                 if !sub_objects.is_empty() {
                     let ft = &mut out.frames[cur.fi];
                     let li = ft.lines.len() - 1;
                     let text_ascent = line_glyphs.iter().filter(|g| g.ch != designcraft_doc::OBJECT_MARK).map(|g| g.ascent).fold(0.0, f64::max);
                     let text_ascent = if text_ascent > 0.0 { text_ascent } else { base_chars.size * 0.75 };
+                    let first = ft.objects.len();
                     for g in ft.lines[li].glyphs.iter().filter(|g| g.len > 0) {
                         if let Some(o) = sub_objects.get(&g.byte) {
                             ft.objects.push(PlacedObject { index: o.index, origin: Point::ZERO, size: (o.w, o.h), line: li, x: g.x, text_ascent });
+                        }
+                    }
+                    // Custom and above-line objects anchored here wrap the lines after this one.
+                    for o in ft.objects.get(first..).unwrap_or_default() {
+                        if let (Some(l), Some(obj)) = (ft.lines.get(li), story.objects.get(o.index))
+                            && let Some(ex) = own_wrap(story, obj, o, l, &ft.columns, f)
+                        {
+                            for e in &mut own_ex {
+                                e.retain(|x| x.after != ex.after);
+                            }
+                            wraps_below |= ex.rect.x0 < col.x1 && ex.rect.x1 > col.x0 && ex.rect.y1 > baseline && ex.rect.y0 < col.y1;
+                            if let Some(e) = own_ex.get_mut(cur.fi) {
+                                e.push(ex);
+                            }
                         }
                     }
                 }
@@ -1263,6 +1291,11 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                 }
                 // An own-story anchored object anchored in this line wraps the lines after it,
                 // which were broken without it: break them again.
+                if k + 1 < breaks.len() && wraps_below {
+                    g0 += b.next;
+                    moved = true;
+                    break;
+                }
                 if k + 1 < breaks.len()
                     && f.exclusions.iter().any(|ex| {
                         ex.after.is_some_and(|a| (range_start..range_end).contains(&a))
@@ -1404,47 +1437,7 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
             for o in &mut ft.objects {
                 let Some(l) = ft.lines.get(o.line) else { continue };
                 let Some(obj) = story.objects.get(o.index) else { continue };
-                let (w, h) = o.size;
-                o.origin = match &obj.position {
-                    designcraft_doc::AnchorPosition::Inline { y_offset } => Point::new(o.x, l.baseline - y_offset - h),
-                    designcraft_doc::AnchorPosition::AboveLine { align, space_after, .. } => {
-                        let x = match align {
-                            designcraft_doc::anchored::AnchorAlign::Left => l.x0,
-                            designcraft_doc::anchored::AnchorAlign::Center => (l.x0 + l.x1 - w) / 2.0,
-                            designcraft_doc::anchored::AnchorAlign::Right => l.x1 - w,
-                        };
-                        Point::new(x, l.baseline - o.text_ascent - space_after - h)
-                    }
-                    designcraft_doc::AnchorPosition::Custom {
-                        x_relative,
-                        y_relative,
-                        x_offset,
-                        y_offset,
-                        object_point,
-                        ref_point,
-                        keep_within_column,
-                    } => {
-                        use designcraft_doc::anchored::AnchorRelative as R;
-                        let col = ft.columns.get(l.column as usize).copied().unwrap_or(f.area);
-                        let area = |r: R| match r {
-                            R::Anchor => None,
-                            R::TextFrame => Some(f.area),
-                            R::ColumnEdge => Some(col),
-                            R::PageMargin => Some(f.page_rect.map_or(f.area, |p| p.1)),
-                            R::PageEdge => Some(f.page_rect.map_or(f.area, |p| p.0)),
-                        };
-                        let frac = |i: u8| ([0.0, 0.5, 1.0][(i % 3) as usize], [0.0, 0.5, 1.0][(i / 3).min(2) as usize]);
-                        let (rfx, rfy) = frac(*ref_point);
-                        let (ofx, ofy) = frac(*object_point);
-                        let rx = area(*x_relative).map_or(o.x, |a| a.x0 + a.width() * rfx);
-                        let ry = area(*y_relative).map_or(l.baseline, |a| a.y0 + a.height() * rfy);
-                        let mut y = ry + y_offset - h * ofy;
-                        if *keep_within_column {
-                            y = y.clamp(col.y0, (col.y1 - h).max(col.y0));
-                        }
-                        Point::new(rx + x_offset - w * ofx, y)
-                    }
-                };
+                o.origin = object_origin(obj, o, l, &ft.columns, f);
             }
         }
     }
@@ -1469,6 +1462,60 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
     out.styles = styles_tab;
     mark_keep_violations(doc, story, &mut out);
     out
+}
+
+/// The wrap of a custom or above-line anchored object `obj` of `story`, placed as `o` on line `l`
+/// of a frame (`columns`, spec `f`), in the frame's inner space: it wraps the lines of the story
+/// that start after its anchor. None for inline objects (they sit in their line) and objects
+/// without text wrap.
+fn own_wrap(story: &Story, obj: &designcraft_doc::AnchoredObject, o: &PlacedObject, l: &Line, columns: &[Rect], f: &FrameSpec) -> Option<Exclusion> {
+    if obj.item.wrap.mode == WrapMode::None || obj.item.hidden || matches!(obj.position, designcraft_doc::AnchorPosition::Inline { .. }) {
+        return None;
+    }
+    let anchor = story.text.match_indices(designcraft_doc::OBJECT_MARK).nth(o.index).map(|(i, _)| i)?;
+    let origin = object_origin(obj, o, l, columns, f);
+    let w = obj.item.wrap.offsets;
+    let b = obj.item.bounds();
+    let rect = Rect::new(b.x0 - w[1], b.y0 - w[0], b.x1 + w[3], b.y1 + w[2]) + origin.to_vec2();
+    rect.is_finite().then_some(Exclusion { rect, mode: obj.item.wrap.mode, after: Some(anchor) })
+}
+
+/// Where anchored object `obj`, placed as `o` on line `l` of a frame (`columns`, spec `f`), has its
+/// top-left, in the frame's inner space.
+fn object_origin(obj: &designcraft_doc::AnchoredObject, o: &PlacedObject, l: &Line, columns: &[Rect], f: &FrameSpec) -> Point {
+    let (w, h) = o.size;
+    match &obj.position {
+        designcraft_doc::AnchorPosition::Inline { y_offset } => Point::new(o.x, l.baseline - y_offset - h),
+        designcraft_doc::AnchorPosition::AboveLine { align, space_after, .. } => {
+            let x = match align {
+                designcraft_doc::anchored::AnchorAlign::Left => l.x0,
+                designcraft_doc::anchored::AnchorAlign::Center => (l.x0 + l.x1 - w) / 2.0,
+                designcraft_doc::anchored::AnchorAlign::Right => l.x1 - w,
+            };
+            Point::new(x, l.baseline - o.text_ascent - space_after - h)
+        }
+        designcraft_doc::AnchorPosition::Custom { x_relative, y_relative, x_offset, y_offset, object_point, ref_point, keep_within_column } => {
+            use designcraft_doc::anchored::AnchorRelative as R;
+            let col = columns.get(l.column as usize).copied().unwrap_or(f.area);
+            let area = |r: R| match r {
+                R::Anchor => None,
+                R::TextFrame => Some(f.area),
+                R::ColumnEdge => Some(col),
+                R::PageMargin => Some(f.page_rect.map_or(f.area, |p| p.1)),
+                R::PageEdge => Some(f.page_rect.map_or(f.area, |p| p.0)),
+            };
+            let frac = |i: u8| ([0.0, 0.5, 1.0][(i % 3) as usize], [0.0, 0.5, 1.0][(i / 3).min(2) as usize]);
+            let (rfx, rfy) = frac(*ref_point);
+            let (ofx, ofy) = frac(*object_point);
+            let rx = area(*x_relative).map_or(o.x, |a| a.x0 + a.width() * rfx);
+            let ry = area(*y_relative).map_or(l.baseline, |a| a.y0 + a.height() * rfy);
+            let mut y = ry + y_offset - h * ofy;
+            if *keep_within_column {
+                y = y.clamp(col.y0, (col.y1 - h).max(col.y0));
+            }
+            Point::new(rx + x_offset - w * ofx, y)
+        }
+    }
 }
 
 /// The columns a spanning paragraph is set across, from `col`'s top to its bottom.

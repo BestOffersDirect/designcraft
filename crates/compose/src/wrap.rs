@@ -10,21 +10,15 @@
 //!   other's text don't depend on each other in a cycle.
 //! - **Its own story.** A custom or above-line anchored object wraps the lines of its own story
 //!   that come after the line holding its anchor; that line and the lines before it are never
-//!   wrapped by it (an inline object sits in its line and wraps none of its own story). The story
-//!   is composed again with the objects where the previous pass placed them until they stop
-//!   moving, at most [`MAX_PASSES`] more times.
+//!   wrapped by it (an inline object sits in its line and wraps none of its own story). As in
+//!   InDesign, the object is placed when its anchor line is set and wraps the text that follows
+//!   in the same composition (`own_wrap` in the composer), so the layout doesn't depend on where
+//!   an earlier composition put the objects.
 
 use designcraft_doc::{AnchorPosition, AnchoredObject, Document, OBJECT_MARK, SpreadRef, Story, StoryId, WrapMode};
 use designcraft_geom::{Affine, Rect};
 
 use crate::{ComposeOptions, ComposedStory, Exclusion, FrameSpec};
-
-/// Extra compositions of a story with its own anchored objects' wrap; a layout that keeps moving
-/// its objects (keep options, vertical justification) stops here.
-pub(crate) const MAX_PASSES: usize = 4;
-
-/// How far an obstacle may move between passes and still count as settled (points).
-const SETTLED: f64 = 0.01;
 
 /// A wrapping anchored object where its story's composition placed it.
 #[derive(Clone, Debug)]
@@ -161,18 +155,6 @@ fn with_exclusions(specs: &[FrameSpec], added: &[Vec<Exclusion>]) -> Vec<FrameSp
         .collect()
 }
 
-fn settled(a: &[Vec<Exclusion>], b: &[Vec<Exclusion>]) -> bool {
-    let near = |x: &Exclusion, y: &Exclusion| {
-        x.mode == y.mode
-            && x.after == y.after
-            && (x.rect.x0 - y.rect.x0).abs() <= SETTLED
-            && (x.rect.y0 - y.rect.y0).abs() <= SETTLED
-            && (x.rect.x1 - y.rect.x1).abs() <= SETTLED
-            && (x.rect.y1 - y.rect.y1).abs() <= SETTLED
-    };
-    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.len() == y.len() && x.iter().zip(y).all(|(p, q)| near(p, q)))
-}
-
 /// Compose story `sid` with the wrapping anchored objects of `others` (compositions of its
 /// [`neighbours`]) and of its own.
 pub(crate) fn compose_among(doc: &Document, sid: StoryId, opts: &ComposeOptions, others: &[&ComposedStory]) -> ComposedStory {
@@ -190,18 +172,5 @@ pub(crate) fn compose_among(doc: &Document, sid: StoryId, opts: &ComposeOptions,
             specs = with_exclusions(&specs, &added);
         }
     }
-    let mut out = crate::compose(doc, st, &specs, opts);
-    if !has_wrapping_objects(st) {
-        return out;
-    }
-    let mut prev = vec![Vec::new(); specs.len()];
-    for _ in 0..MAX_PASSES {
-        let added = exclusions(doc, &specs, &obstacles(doc, st, &out, true));
-        if settled(&added, &prev) {
-            break;
-        }
-        out = crate::compose(doc, st, &with_exclusions(&specs, &added), opts);
-        prev = added;
-    }
-    out
+    crate::compose(doc, st, &specs, opts)
 }
