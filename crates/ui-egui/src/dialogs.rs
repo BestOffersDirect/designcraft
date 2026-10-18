@@ -6334,7 +6334,10 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let mut title_style = d.s("titleStyle");
     egui::Grid::new("toc_title").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
         crate::rtl::label(ui, tr("Title:"));
-        text_field(ui, d, "title", 200.0);
+        let mut title = d.s("title");
+        if ui.add_sized([200.0, ui.spacing().interact_size.y], egui::TextEdit::singleline(&mut title).horizontal_align(egui::Align::Min)).changed() {
+            d.fields.insert("title".into(), json!(title));
+        }
         crate::rtl::label(ui, tr("Style:"));
         toc_style_combo(ui, "title", &styles, "TOC Title", &mut title_style);
         ui.end_row();
@@ -7955,6 +7958,24 @@ mod tests {
             app.run("edit.undo", json!({})).unwrap();
         }
         assert_eq!(opts(&app), before);
+    }
+
+    /// The title stays readable beside the style selector after the grid settles.
+    #[test]
+    fn toc_title_field_shows_the_whole_default_title() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.newSample", json!({})).unwrap();
+        open_toc(&mut app);
+        let ctx = dialog_context("en");
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0));
+        for _ in 0..3 {
+            dialog_frame(&mut app, &ctx, screen, vec![]);
+        }
+        let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+        visible_label(&labels, screen, "Contents");
+        app.ui.dialog.as_mut().unwrap().fields.insert("title".into(), json!("Table of Contents"));
+        let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+        visible_label(&labels, screen, "Table of Contents");
     }
 
     #[test]
