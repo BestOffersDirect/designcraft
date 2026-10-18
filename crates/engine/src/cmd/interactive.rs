@@ -73,7 +73,7 @@ pub fn specs() -> Vec<CommandSpec> {
             let name = str_param(p, "name").map(str::to_string);
             s.edit(|d, _| {
                 let name = name.clone().unwrap_or_else(|| format!("Bookmark {}", d.bookmarks.len() + 1));
-                d.bookmarks.push(Bookmark { name, page, children: vec![] });
+                d.bookmarks.push(Bookmark { name, page, children: vec![], generated_by_toc: false });
                 Ok(json!({"index": d.bookmarks.len() - 1}))
             })
         }),

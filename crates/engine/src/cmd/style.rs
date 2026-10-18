@@ -2987,6 +2987,7 @@ mod delete_tests {
                 entries: vec![TocEntry { entry_style: Some("Table Body".into()), ..TocEntry::new("Table Body", 1) }],
                 page_numbers: false,
                 title_style: Some("Table Body".into()),
+                create_bookmarks: false,
             });
             Ok(())
         })

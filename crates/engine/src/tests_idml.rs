@@ -509,7 +509,7 @@ fn table_of_contents_definition_round_trips_through_idml_and_updates() {
     let basic = designcraft_doc::story::BASIC_PARAGRAPH;
     s.execute(
         "toc.generate",
-        &json!({"page": page, "title": "Inside", "titleStyle": basic, "entries": [
+        &json!({"page": page, "title": "Inside", "titleStyle": basic, "createBookmarks": true, "entries": [
             {"style": "Cover Title", "level": 1, "pageNumber": "before", "separator": " ^ "},
             {"style": "Headline", "level": 2, "entryStyle": basic, "pageNumber": "none"},
         ]}),
@@ -524,6 +524,7 @@ fn table_of_contents_definition_round_trips_through_idml_and_updates() {
     let b64 = s.execute("file.exportIdml", &json!({})).unwrap()["base64"].as_str().unwrap().to_string();
     s.execute("file.openIdml", &json!({"base64": b64, "name": "toc.idml"})).unwrap();
     let after = s.doc().unwrap().doc.toc.clone().expect("the TOC definition is imported");
+    assert!(after.create_bookmarks);
     assert_eq!((&after.title, &after.title_style, &after.entries), (&before.title, &before.title_style, &before.entries));
     assert_eq!(toc_text(&s), text);
     s.execute("toc.update", &json!({})).unwrap();

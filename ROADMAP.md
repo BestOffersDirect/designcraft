@@ -346,6 +346,8 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 ## Progress log
 
+- **2026-10-18** · Table of Contents gains Create PDF Bookmarks: included headings become nested page destinations, regenerated on update without replacing manual bookmarks. The setting survives native and IDML files. No readiness percentage change.
+
 Newest first.
 
 - **2026-10-16** · Threading: the loaded text cursor threads into a text frame inside a group (it hit the group and showed it could not thread); a plain click still selects the group (#1075). Gap 27 closed. No readiness percentage change.

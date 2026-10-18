@@ -793,6 +793,9 @@ pub struct Toc {
     /// Paragraph style of the title; `None` is the generated "TOC Title" style.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title_style: Option<String>,
+    /// Generate a nested PDF outline from the included paragraphs when the TOC is updated.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub create_bookmarks: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -803,6 +806,9 @@ pub struct Bookmark {
     pub page: usize,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Bookmark>,
+    /// Owned by the document's generated TOC, so updating it preserves manual bookmarks.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub generated_by_toc: bool,
 }
 
 impl Document {
