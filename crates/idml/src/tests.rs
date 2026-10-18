@@ -4216,7 +4216,7 @@ fn toc_style_entries_read_id_prefixed_separators_and_styles() {
     let d = import_idml(&fixture_with_table_styles(TOC_STYLES, TOC_STORY)).unwrap();
     let toc = d.toc.as_ref().expect("the story's TOC style is imported");
     let entry = toc.entries.iter().find(|e| e.style == "Heading 1").unwrap();
-    assert_eq!(entry.separator, None, "`$ID/^y` is the right indent tab, the default separator, not text: {:?}", entry.separator);
+    assert_eq!(entry.separator.as_deref(), Some("\u{E006}"), "right-indent tabs must not become ordinary tab stops");
     assert_eq!(entry.entry_style.as_deref(), Some("TOC/TOC body text"));
     assert_eq!(entry.page_number_style.as_deref(), Some("TOC Page Number"));
     assert_eq!(toc.title_style.as_deref(), Some("TOC/TOC Header"));

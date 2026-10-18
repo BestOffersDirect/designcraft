@@ -31,6 +31,35 @@ pub const FRAME_BREAK: char = '\u{E003}';
 pub const PAGE_BREAK: char = '\u{E004}';
 pub const INDENT_HERE: char = '\u{E005}';
 pub const RIGHT_INDENT_TAB: char = '\u{E006}';
+
+/// Encode a table-of-contents separator using InDesign's special-character notation.
+pub fn toc_separator_notation(text: &str) -> String {
+    text.replace('^', "^^").replace('\t', "^t").replace(RIGHT_INDENT_TAB, "^y").replace('\u{2003}', "^m").replace('\u{2002}', "^>")
+}
+
+/// Decode TOC notation, preserving unknown codes and an escaped literal caret.
+pub fn toc_separator_text(notation: &str) -> String {
+    let mut text = String::new();
+    let mut chars = notation.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '^' {
+            text.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('t') => text.push('\t'),
+            Some('y') => text.push(RIGHT_INDENT_TAB),
+            Some('m') => text.push('\u{2003}'),
+            Some('>') => text.push('\u{2002}'),
+            Some('^') | None => text.push('^'),
+            Some(other) => {
+                text.push('^');
+                text.push(other);
+            }
+        }
+    }
+    text
+}
 pub const NEXT_PAGE_NUMBER: char = '\u{E007}';
 pub const PREV_PAGE_NUMBER: char = '\u{E008}';
 /// Anchor of a table: alone in its paragraph, whose [`ParaFormat::table`] names the table.

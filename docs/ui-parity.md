@@ -1,6 +1,6 @@
 # UI and interaction parity
 
-> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-15 · **Change:** minor (live corners work; document views row: scrollbars, Alt pans while editing text; Tabs panel listed as present (#343); spring-loaded Zoom navigation; paragraph style override feedback and clearing) · **Target:** Adobe InDesign 2026 (21.6, Medium Dark, macOS)
+> **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-18 · **Change:** minor (live corners work; document views row: scrollbars, Alt pans while editing text; Tabs panel listed as present (#343); spring-loaded Zoom navigation; paragraph style override feedback and clearing) · **Target:** Adobe InDesign 2026 (21.6, Medium Dark, macOS)
 
 Tools, handles, snapping, nudging, modifiers, shortcuts, panels, menus, context menus and feel,
 against InDesign 2026. The look was measured from the running app
@@ -69,6 +69,12 @@ cover the cursors, click anchors, scrub/release ownership, restoration, typing g
 history (DC-1).
 
 ## Remaining effort
+
+The Table of Contents separator field accepts `^y` (Right Indent Tab), with a special-character
+picker alongside it. Literal carets use `^^`; ordinary tabs, em/en spaces and surrounding spaces
+survive reopening. IDML preserves right-indent separators, including `$ID/^y`, so updating an
+imported TOC keeps page numbers at the right edge and inherits paragraph tab leaders. This covers
+10:54–16:08 of [Michael Bullo's TOC tutorial](https://www.youtube.com/watch?v=m4y2tm6LH_c).
 
 Applying a paragraph or character style now removes local values equal to the applied style,
 so text used to capture a style follows later edits to that style. Different local formatting

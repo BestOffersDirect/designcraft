@@ -346,6 +346,8 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 ## Progress log
 
+- **2026-10-18** · TOC separators preserve right-indent tabs through the dialog and IDML, including localized `$ID/^y` values. A separator picker exposes Tab Character, Right Indent Tab, Em Space and En Space. Existing paragraph tab leaders now work with the tutorial's TOC workflow. No readiness percentage change.
+
 Newest first.
 
 - **2026-10-16** · Threading: the loaded text cursor threads into a text frame inside a group (it hit the group and showed it could not thread); a plain click still selects the group (#1075). Gap 27 closed. No readiness percentage change.
