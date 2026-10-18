@@ -32,6 +32,14 @@ pub const PAGE_BREAK: char = '\u{E004}';
 pub const INDENT_HERE: char = '\u{E005}';
 pub const RIGHT_INDENT_TAB: char = '\u{E006}';
 
+pub const NEXT_PAGE_NUMBER: char = '\u{E007}';
+pub const PREV_PAGE_NUMBER: char = '\u{E008}';
+/// Anchor of a table: alone in its paragraph, whose [`ParaFormat::table`] names the table.
+pub const TABLE_ANCHOR: char = '\u{E009}';
+pub const FORCED_LINE_BREAK: char = '\u{2028}';
+pub const ODD_PAGE_BREAK: char = '\u{E011}';
+pub const EVEN_PAGE_BREAK: char = '\u{E012}';
+
 /// Encode a table-of-contents separator using InDesign's special-character notation.
 pub fn toc_separator_notation(text: &str) -> String {
     text.replace('^', "^^").replace('\t', "^t").replace(RIGHT_INDENT_TAB, "^y").replace('\u{2003}', "^m").replace('\u{2002}', "^>")
@@ -60,13 +68,6 @@ pub fn toc_separator_text(notation: &str) -> String {
     }
     text
 }
-pub const NEXT_PAGE_NUMBER: char = '\u{E007}';
-pub const PREV_PAGE_NUMBER: char = '\u{E008}';
-/// Anchor of a table: alone in its paragraph, whose [`ParaFormat::table`] names the table.
-pub const TABLE_ANCHOR: char = '\u{E009}';
-pub const FORCED_LINE_BREAK: char = '\u{2028}';
-pub const ODD_PAGE_BREAK: char = '\u{E011}';
-pub const EVEN_PAGE_BREAK: char = '\u{E012}';
 
 /// A column, frame or page break character. It ends its paragraph: the story stores it as the
 /// paragraph's last character, followed by the `\n` separator (also at the end of the story), and

@@ -346,9 +346,9 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 ## Progress log
 
-- **2026-10-18** · TOC separators preserve right-indent tabs through the dialog and IDML, including localized `$ID/^y` values. A separator picker exposes Tab Character, Right Indent Tab, Em Space and En Space. Existing paragraph tab leaders now work with the tutorial's TOC workflow. No readiness percentage change.
-
 Newest first.
+
+- **2026-10-18** · TOC separators preserve right-indent tabs through the dialog and IDML, including localized `$ID/^y` values. A separator picker exposes Tab Character, Right Indent Tab, Em Space and En Space. Existing paragraph tab leaders now work with the tutorial's TOC workflow. No readiness percentage change.
 
 - **2026-10-16** · Threading: the loaded text cursor threads into a text frame inside a group (it hit the group and showed it could not thread); a plain click still selects the group (#1075). Gap 27 closed. No readiness percentage change.
 - **2026-10-16** · Greek text hyphenates. The patterns were never compiled in, so Greek set unhyphenated however narrow the column; `"Greek"`, `"Greek: Greece"`, `el` and `el-GR` all resolve now and ανθρωπος breaks αν-θρω-πος. They are the monotonic patterns (hyph-el-monoton, Dimitrios Filippou, under MIT), which is what polytonic text hyphenates by too. Five of InDesign's ~40 hyphenation languages. No readiness percentage change.
