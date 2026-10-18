@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 use super::{CommandSpec, bad, cmd, has_doc, str_param};
 use crate::{Result, Session};
 
+/// Register TOC generation and refresh commands.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -302,9 +303,10 @@ fn fill(d: &mut Document, toc: &Toc, width: Option<f64>) -> Result<usize> {
             st.format_paras(r.start..r.start, |f| *f = ParaFormat { style: name.clone(), ..Default::default() });
         }
     }
+    let insertion = d.bookmarks.iter().position(|b| b.generated_by_toc).unwrap_or(d.bookmarks.len());
     d.bookmarks.retain(|b| !b.generated_by_toc);
     if toc.create_bookmarks {
-        d.bookmarks.extend(bookmarks(&found));
+        d.bookmarks.splice(insertion..insertion, bookmarks(&found));
     }
     Ok(found.len())
 }
@@ -312,6 +314,7 @@ fn fill(d: &mut Document, toc: &Toc, width: Option<f64>) -> Result<usize> {
 /// Levels are validated to 1–9. Recursion follows strictly increasing levels, including when
 /// a document skips a level; each destination is the physical page, not its section label.
 fn bookmarks(found: &[Found]) -> Vec<designcraft_doc::Bookmark> {
+    /// Collect descendants until the next sibling or ancestor entry.
     fn children(iter: &mut std::iter::Peekable<std::slice::Iter<'_, Found>>, parent: u8) -> Vec<designcraft_doc::Bookmark> {
         let mut out = Vec::new();
         while iter.peek().is_some_and(|f| f.level > parent) {
@@ -323,6 +326,7 @@ fn bookmarks(found: &[Found]) -> Vec<designcraft_doc::Bookmark> {
     children(&mut found.iter().peekable(), 0)
 }
 
+/// Validate the TOC settings and generate its frame, text, and outline in one edit.
 fn generate(s: &mut Session, p: &Value) -> Result<Value> {
     let entries = entries_param(p)?;
     if entries.is_empty() {
@@ -645,6 +649,7 @@ mod tests {
         assert!(toc_runs(&s).iter().any(|(t, st)| t == "1" && st == "Folio"), "{:?}", toc_runs(&s));
     }
 
+    /// Refresh preserves manual outline positions, nested destinations, storage, and undo.
     #[test]
     fn toc_bookmarks_refresh_nested_page_destinations_and_preserve_manual_bookmarks() {
         let (mut s, page) = doc_with(&[("First", "Head"), ("Child", "Sub"), ("Last", "Head")]);
@@ -660,12 +665,13 @@ mod tests {
         assert_eq!(d.bookmarks[1].children[0].name, "Child");
         assert!(d.bookmarks[1].children[0].generated_by_toc);
         let sid = d.stories.iter().find(|(_, st)| st.text.starts_with("First")).map(|(sid, _)| *sid).unwrap();
+        s.execute("bookmark.add", &json!({"name": "Manual after", "page": page})).unwrap();
         s.execute("text.select", &json!({"story": sid.0, "anchor": 0, "focus": 5})).unwrap();
         s.execute("text.insert", &json!({"text": "Changed"})).unwrap();
         assert_eq!(s.doc().unwrap().doc.bookmarks[1].name, "First", "refresh is explicit");
         s.execute("toc.update", &json!({})).unwrap();
         let refreshed = s.doc().unwrap().doc.bookmarks.clone();
-        assert_eq!(refreshed[1].name, "Changed");
+        assert_eq!(refreshed.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Manual", "Changed", "Last", "Manual after"]);
         s.execute("toc.update", &json!({})).unwrap();
         assert_eq!(s.doc().unwrap().doc.bookmarks, refreshed, "updates do not duplicate bookmarks");
         // Native storage retains both the option and ownership; old bookmarks default to manual.
@@ -678,8 +684,7 @@ mod tests {
         let mut disabled = p;
         disabled["createBookmarks"] = json!(false);
         s.execute("toc.generate", &disabled).unwrap();
-        assert_eq!(s.doc().unwrap().doc.bookmarks.len(), 1);
-        assert_eq!(s.doc().unwrap().doc.bookmarks[0].name, "Manual");
+        assert_eq!(s.doc().unwrap().doc.bookmarks.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["Manual", "Manual after"]);
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(s.doc().unwrap().doc.bookmarks, refreshed);
     }

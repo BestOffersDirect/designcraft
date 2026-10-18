@@ -58,7 +58,8 @@ is a PNG of the page; another extension is an error, and nothing runs.
 
 `toc.generate` accepts `createBookmarks: true` to generate page-level PDF bookmarks from the
 included paragraph styles and their levels. `toc.update` refreshes their titles, hierarchy and
-destinations. Manual bookmarks stay intact; disabling the option removes only the generated
+destinations. Refresh keeps the generated outline at its previous position, preserving manual
+bookmarks before and after it; disabling the option removes only the generated
 bookmarks. Omitting the parameter keeps the existing TOC setting (false for a new command-created
 TOC). The Table of Contents dialog exposes Create PDF Bookmarks and defaults it on for a new TOC.
 

@@ -500,6 +500,7 @@ fn type_para_sets_a_drop_cap_that_survives_idml() {
     assert_eq!(p.nested_styles, Some(vec![designcraft_doc::NestedStyle::drop_cap("Initial")]));
 }
 
+/// Imported TOC definitions retain their settings and remain refreshable.
 #[test]
 fn table_of_contents_definition_round_trips_through_idml_and_updates() {
     let mut s = Session::new();

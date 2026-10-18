@@ -2967,6 +2967,7 @@ mod delete_tests {
         assert_eq!(s.doc().unwrap().history.undo.len(), undo);
     }
 
+    /// Deleting a paragraph style also redirects TOC style references to its replacement.
     #[test]
     fn deleting_a_paragraph_style_points_every_use_at_the_replacement() {
         let mut s = Session::new();

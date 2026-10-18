@@ -7959,6 +7959,7 @@ mod tests {
         assert_eq!(opts(&app), before);
     }
 
+    /// The bookmarks checkbox persists through generation and reopening the dialog.
     #[test]
     fn toc_bookmarks_checkbox_sets_and_reopens_the_persisted_option() {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());

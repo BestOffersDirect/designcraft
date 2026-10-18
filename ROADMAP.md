@@ -346,7 +346,7 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 ## Progress log
 
-- **2026-10-18** · Table of Contents gains Create PDF Bookmarks: included headings become nested page destinations, regenerated on update without replacing manual bookmarks. The setting survives native and IDML files. No readiness percentage change.
+- **2026-10-18** · Table of Contents gains Create PDF Bookmarks: included headings become nested page destinations, regenerated in their existing outline position on update without replacing or moving surrounding manual bookmarks. The setting survives native and IDML files. No readiness percentage change.
 
 Newest first.
 

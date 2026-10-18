@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use super::{CommandSpec, bad, cmd, has_doc, str_param};
 use crate::{Result, Session};
 
+/// Register commands for editing hyperlinks and manual bookmarks.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
