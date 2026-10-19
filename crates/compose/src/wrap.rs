@@ -10,23 +10,29 @@
 //!   other's text don't depend on each other in a cycle.
 //! - **Its own story.** A custom or above-line anchored object wraps the lines of its own story
 //!   that come after the line holding its anchor; that line and the lines before it are never
-//!   wrapped by it (an inline object sits in its line and wraps none of its own story). As in
-//!   InDesign, the object is placed when its anchor line is set and wraps the text that follows
-//!   in the same composition (`own_wrap` in the composer), so the layout doesn't depend on where
-//!   an earlier composition put the objects.
+//!   wrapped by it (an inline object sits in its line and wraps none of its own story). The story
+//!   is composed again with the objects where the previous pass placed them until they stop
+//!   moving, at most [`MAX_PASSES`] more times.
 
-use designcraft_doc::{AnchorPosition, AnchoredObject, Document, OBJECT_MARK, SpreadRef, Story, StoryId, WrapMode};
-use designcraft_geom::{Affine, Rect};
+use designcraft_doc::{AnchorPosition, AnchoredObject, Document, Item, OBJECT_MARK, PageSide, SpreadRef, Story, StoryId, WrapMode};
+use designcraft_geom::Affine;
 
 use crate::{ComposeOptions, ComposedStory, Exclusion, FrameSpec};
 
+/// Extra compositions of a story with its own anchored objects' wrap; a layout that keeps moving
+/// its objects (keep options, vertical justification) stops here.
+pub(crate) const MAX_PASSES: usize = 4;
+
+/// How far an obstacle may move between passes and still count as settled (points).
+const SETTLED: f64 = 0.01;
+
 /// A wrapping anchored object where its story's composition placed it.
 #[derive(Clone, Debug)]
-pub(crate) struct Obstacle {
+pub(crate) struct Obstacle<'a> {
     spread: SpreadRef,
-    /// Wrap area (the object's bounds plus its wrap offsets) in spread space.
-    rect: Rect,
-    mode: WrapMode,
+    item: &'a Item,
+    /// The object's parent space → spread space.
+    xf: Affine,
     /// Story byte of the anchor, for obstacles in their own story.
     anchor: Option<usize>,
 }
@@ -80,7 +86,7 @@ fn story_spreads(doc: &Document, sid: StoryId) -> Vec<SpreadRef> {
 
 /// The wrapping anchored objects `cs` (a composition of `story`) places. `own`: obstacles for the
 /// story itself (inline objects left out, anchors recorded).
-pub(crate) fn obstacles(doc: &Document, story: &Story, cs: &ComposedStory, own: bool) -> Vec<Obstacle> {
+pub(crate) fn obstacles<'a>(doc: &Document, story: &'a Story, cs: &ComposedStory, own: bool) -> Vec<Obstacle<'a>> {
     let mut out = Vec::new();
     if !has_wrapping_objects(story) {
         return out;
@@ -99,11 +105,8 @@ pub(crate) fn obstacles(doc: &Document, story: &Story, cs: &ComposedStory, own: 
             if own && matches!(obj.position, AnchorPosition::Inline { .. }) {
                 continue;
             }
-            let w = obj.item.wrap.offsets;
-            let b = obj.item.bounds();
-            let r = Rect::new(b.x0 - w[1], b.y0 - w[0], b.x1 + w[3], b.y1 + w[2]);
-            let rect = (fxf * Affine::translate(o.origin.to_vec2())).transform_rect_bbox(r);
-            if !rect.is_finite() {
+            let xf = fxf * Affine::translate(o.origin.to_vec2());
+            if !xf.transform_rect_bbox(obj.item.bounds()).is_finite() {
                 continue;
             }
             let anchor = if own {
@@ -112,14 +115,15 @@ pub(crate) fn obstacles(doc: &Document, story: &Story, cs: &ComposedStory, own: 
             } else {
                 None
             };
-            out.push(Obstacle { spread: loc.spread, rect, mode: obj.item.wrap.mode, anchor });
+            out.push(Obstacle { spread: loc.spread, item: &obj.item, xf, anchor });
         }
     }
     out
 }
 
 /// The exclusions `obs` add to each of `specs` (frames that ignore wrap, type on a path and
-/// frames the obstacle doesn't reach get none).
+/// frames the obstacle doesn't reach get none). They are built as for page items
+/// ([`crate::wrap_obstacles`]): sides, contours, custom boundaries, the wrap of a graphic inside.
 pub(crate) fn exclusions(doc: &Document, specs: &[FrameSpec], obs: &[Obstacle]) -> Vec<Vec<Exclusion>> {
     let mut out = vec![Vec::new(); specs.len()];
     if obs.is_empty() {
@@ -132,11 +136,18 @@ pub(crate) fn exclusions(doc: &Document, specs: &[FrameSpec], obs: &[Obstacle]) 
         let Some(loc) = doc.find(spec.id) else { continue };
         let Some(item) = doc.item_at(&loc) else { continue };
         let inv = (doc.parent_xf(&loc) * doc.text_xf(item)).inverse();
+        let sp = doc.spread(loc.spread);
+        let left = |x: f64| sp.and_then(|sp| sp.page_at_x(x).and_then(|pi| sp.pages.get(pi))).is_some_and(|p| p.side == PageSide::Left);
         let a = spec.area;
         for ob in obs.iter().filter(|o| o.spread == loc.spread) {
-            let r = inv.transform_rect_bbox(ob.rect);
-            if r.is_finite() && r.x0 < a.x1 && r.x1 > a.x0 && r.y0 < a.y1 && r.y1 > a.y0 {
-                ex.push(Exclusion { rect: r, mode: ob.mode, after: ob.anchor });
+            let mut found = Vec::new();
+            crate::wrap_obstacles(ob.item, ob.xf, inv, spec.id, &left, 0, &mut found);
+            for mut e in found {
+                let r = e.rect;
+                if r.is_finite() && r.x0 < a.x1 && r.x1 > a.x0 && r.y0 < a.y1 && r.y1 > a.y0 {
+                    e.after = ob.anchor;
+                    ex.push(e);
+                }
             }
         }
     }
@@ -153,6 +164,18 @@ fn with_exclusions(specs: &[FrameSpec], added: &[Vec<Exclusion>]) -> Vec<FrameSp
             s
         })
         .collect()
+}
+
+fn settled(a: &[Vec<Exclusion>], b: &[Vec<Exclusion>]) -> bool {
+    let near = |x: &Exclusion, y: &Exclusion| {
+        x.mode == y.mode
+            && x.after == y.after
+            && (x.rect.x0 - y.rect.x0).abs() <= SETTLED
+            && (x.rect.y0 - y.rect.y0).abs() <= SETTLED
+            && (x.rect.x1 - y.rect.x1).abs() <= SETTLED
+            && (x.rect.y1 - y.rect.y1).abs() <= SETTLED
+    };
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.len() == y.len() && x.iter().zip(y).all(|(p, q)| near(p, q)))
 }
 
 /// Compose story `sid` with the wrapping anchored objects of `others` (compositions of its
@@ -172,5 +195,18 @@ pub(crate) fn compose_among(doc: &Document, sid: StoryId, opts: &ComposeOptions,
             specs = with_exclusions(&specs, &added);
         }
     }
-    crate::compose(doc, st, &specs, opts)
+    let mut out = crate::compose(doc, st, &specs, opts);
+    if !has_wrapping_objects(st) {
+        return out;
+    }
+    let mut prev = vec![Vec::new(); specs.len()];
+    for _ in 0..MAX_PASSES {
+        let added = exclusions(doc, &specs, &obstacles(doc, st, &out, true));
+        if settled(&added, &prev) {
+            break;
+        }
+        out = crate::compose(doc, st, &with_exclusions(&specs, &added), opts);
+        prev = added;
+    }
+    out
 }
