@@ -1236,7 +1236,9 @@ pub fn open_document_setup(app: &mut DesignApp) {
     }
     // The margins as shown: OK applies them to every page only when they were edited.
     f["marginsShown"] = json!(SETUP_EDGES.map(|e| f[format!("margin{e}")].clone()));
-    app.ui.dialog = Some(Dialog::new("documentSetup", f));
+    let mut d = Dialog::new("documentSetup", f);
+    d.unit = units;
+    app.ui.dialog = Some(d);
 }
 
 /// The edges of Document Setup's margins, bleed and slug (field suffixes).
@@ -7080,6 +7082,17 @@ mod tests {
     }
 
     #[test]
+    fn document_setup_reads_a_bare_number_in_the_documents_units() {
+        let mut app = document_setup_app("millimeters");
+        setup_fields(&mut app, json!({"bleedTop": "5", "bleedBottom": "5", "bleedInside": "5", "bleedOutside": "5", "width": "210"}));
+        confirm(&mut app).unwrap();
+        let mm = designcraft_geom::units::PT_PER_MM;
+        let settings = &app.session.active().unwrap().doc.settings;
+        assert!(settings.bleed.iter().all(|b| (b - 5.0 * mm).abs() < 1e-6), "5 mm, not 5 picas: {:?}", settings.bleed);
+        assert!((settings.page_width - 210.0 * mm).abs() < 1e-6, "{}", settings.page_width);
+    }
+
+    #[test]
     fn document_setup_keeps_each_pages_margins_unless_they_are_edited() {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"pages": 3, "margins": 36})).unwrap();
@@ -7972,10 +7985,14 @@ mod tests {
             dialog_frame(&mut app, &ctx, screen, vec![]);
         }
         let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
-        visible_label(&labels, screen, "Contents");
+        let title_row = |labels: &[(String, egui::Rect, egui::Rect)]| {
+            let y = visible_label(labels, screen, "Title:").center().y;
+            labels.iter().filter(|(_, rect, _)| (rect.center().y - y).abs() < 2.0).cloned().collect::<Vec<_>>()
+        };
+        visible_label(&title_row(&labels), screen, "Contents");
         app.ui.dialog.as_mut().unwrap().fields.insert("title".into(), json!("Table of Contents"));
         let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
-        visible_label(&labels, screen, "Table of Contents");
+        visible_label(&title_row(&labels), screen, "Table of Contents");
     }
 
     #[test]
