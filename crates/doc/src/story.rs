@@ -31,7 +31,6 @@ pub const FRAME_BREAK: char = '\u{E003}';
 pub const PAGE_BREAK: char = '\u{E004}';
 pub const INDENT_HERE: char = '\u{E005}';
 pub const RIGHT_INDENT_TAB: char = '\u{E006}';
-
 pub const NEXT_PAGE_NUMBER: char = '\u{E007}';
 pub const PREV_PAGE_NUMBER: char = '\u{E008}';
 /// Anchor of a table: alone in its paragraph, whose [`ParaFormat::table`] names the table.
