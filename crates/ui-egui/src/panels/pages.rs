@@ -397,6 +397,17 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                     if resp.dragged() {
                         drag_ghost(ui, label, &t);
                     }
+                    if let Some((_, id)) = row.parent {
+                        resp.context_menu(|ui| {
+                            let label = crate::i18n::tr(&app.ui.language, "Delete Parent");
+                            if ui.button(crate::rtl::widget(ui, label)).clicked() {
+                                if app.run("layout.parents.delete", json!({"id": id.0})).is_ok() {
+                                    app.views.clear();
+                                }
+                                ui.close();
+                            }
+                        });
+                    }
                 };
                 if opts.parents_vertical {
                     for row in &rows {
@@ -540,6 +551,12 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                     let lr = ui.interact(br, ui.id().with(("spread_label", si)), Sense::click());
                     lr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &label));
                     if lr.clicked() {
+                        if editing_parents {
+                            let _ = app.run("layout.parents.edit", json!({"on": false}));
+                            if let Some(view) = app.view_mut() {
+                                view.fitted = false;
+                            }
+                        }
                         crate::canvas::go_to_page(app, first);
                     }
                 }
@@ -801,6 +818,30 @@ mod tests {
 
     use super::*;
     use crate::test_window;
+
+    #[test]
+    fn parent_context_menu_deletes_the_clicked_id_even_with_a_shared_prefix() {
+        for vertical in [true, false] {
+            let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+            app.run("file.new", json!({"pages": 2, "facingPages": false})).unwrap();
+            app.ui.pages_panel.parents_vertical = vertical;
+            let original = app.session.doc().unwrap().doc.parents[0].id;
+            let added = app.run("layout.parents.new", json!({"prefix": "A", "name": "Other"})).unwrap()["id"].as_u64().unwrap();
+            let mut h = harness(app);
+            // Target the actual parent row in either panel layout, not a menu helper.
+            h.get_by_label("A-Other").click_secondary();
+            h.run_steps(3);
+            h.get_by_label("Delete Parent").click();
+            h.run_steps(3);
+            let doc = &h.state().session.doc().unwrap().doc;
+            assert_eq!(doc.parents.len(), 1);
+            assert_eq!(doc.parents[0].id, original);
+            assert!(doc.parents.iter().all(|p| p.id.0 != added));
+            assert_eq!(doc.page_count(), 2, "document pages are not deleted");
+            h.state_mut().run("edit.undo", json!({})).unwrap();
+            assert_eq!(h.state().session.doc().unwrap().doc.parents.len(), 2);
+        }
+    }
 
     #[test]
     fn double_clicking_a_parent_shows_that_parent() {
@@ -1177,17 +1218,20 @@ mod spread_label_tests {
         assert!(std::sync::Arc::ptr_eq(&h.state().session.doc().unwrap().doc, &before), "opening options does not edit the section");
     }
 
+    /// Create a facing-page document for section navigation tests.
     fn app() -> DesignApp {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({"facingPages": true, "pages": 9})).unwrap();
         app
     }
 
+    /// Read the label displayed for each document spread.
     fn labels(app: &DesignApp) -> Vec<String> {
         let doc = app.session.doc().unwrap().doc.clone();
         (0..doc.spreads.len()).map(|si| spread_label(app, &doc, doc.first_page_of_spread(si), doc.spreads[si].pages.len())).collect()
     }
 
+    /// Section boundaries split a spread label instead of implying continuous numbering.
     #[test]
     fn spreads_are_labelled_as_indesign_labels_them() {
         // Chris Nielsen's "Numbering Page Sections": sections starting at 1 on pages 3 and 7,
@@ -1202,6 +1246,7 @@ mod spread_label_tests {
         assert_eq!(labels(&app), ["1", "2–3", "4–5", "6–7", "8–9"]);
     }
 
+    /// Labels navigate to document spreads, including when parent editing was active.
     #[test]
     fn the_panel_shows_spread_labels_and_a_click_on_one_goes_to_its_spread() {
         let mut app = app();
@@ -1225,8 +1270,15 @@ mod spread_label_tests {
         assert!(h.query_by_label("2 1").is_none());
         // Each page is named for screen readers: two pages are numbered 1.
         assert_eq!(h.query_all_by_label("Page 1").count(), 2);
+        h.state_mut().run("layout.parents.edit", json!({"on": true})).unwrap();
+        if let Some(view) = h.state_mut().view_mut() {
+            view.fitted = true;
+        }
+        h.run_steps(3);
         h.get_by_label("2–3").click();
         h.run_steps(3);
+        assert!(!h.state().session.doc().unwrap().editing_parents);
+        assert!(!h.state().view().unwrap().fitted);
         assert_eq!(h.state().session.doc().unwrap().doc.page_loc(crate::canvas::current_page(h.state()).unwrap()).unwrap().0, 2);
     }
 }

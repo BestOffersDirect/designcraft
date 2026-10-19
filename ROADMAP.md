@@ -186,7 +186,7 @@ DesignCraft aims at full Adobe InDesign parity — and to be better: faster, ope
 ## How far from full parity (estimate, 2026-10-04)
 
 **Breadth: ~99% weighted** (P0 core 99%, P1 100%, P2 97%) over the 275 features of the InDesign catalogue, scored
-row by row in [docs/parity.md](docs/parity.md) (`cargo xtask parity` recomputes it). Many features scored done still
+row by row in [docs/parity-checklist.md](docs/parity-checklist.md) (`cargo xtask parity` recomputes it). Many features scored done still
 lack some of InDesign's options or dialog details, so **overall parity including depth is about 83%**.
 
 **Remaining work: about 170 wall-clock hours of a single Claude Opus 5.5 agent** (±30%), or roughly 60–85 hours with
@@ -349,6 +349,14 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 Newest first.
 
 - **2026-10-18** · Double-clicking a section triangle in the Pages panel opens that page’s numbering options, including from parent-page editing. No readiness percentage change.
+- **2026-10-14** · The Pages panel labels spreads as ranges or separate names across a section start, marks each section’s first page with a triangle, and scrolls to the page in view (#892). No readiness percentage change.
+
+- **2026-10-16** · Type › Reload Fonts (`font.reload`): fonts installed, edited or removed while DesignCraft runs are read again without a restart, and the open documents recompose with them (#328, #547). An edited font file is noticed by its length and modification time; bundled, added and document fonts stay as they are. InDesign does this by itself, so noticing changes automatically is still open (gap 6). No readiness percentage change.
+- **2026-10-16** · Parents can be deleted from their Pages-panel context menu or `layout.parents.delete {id}`. Applied-page and based-on references are cleared, local override copies survive, and Undo restores the parent. Addresses the deletion portion of #956; no readiness percentage change.
+- **2026-10-17** · File › Package writes the document's and the IDML's links relative to the package (`Links/logo.png`, `file:Links/logo.png`), so a package holds no path from the machine that made it; opening a document resolves them to the files beside it. Links › Copy Link(s) To still links by full path. (#340). No readiness percentage change.
+- **2026-10-18** · View › Screen Mode: Bleed and Slug do what they say. Both were selectable from the toolbar, the View menu and `view.screenMode` but drew the canvas exactly as Normal did, guides and all; they are preview modes now, and what each page shows reaches the bleed box or the slug box instead of stopping at the trim. The slug guide is drawn as well, in the Slug colour from Preferences › Guides & Pasteboard, which nothing had read. No readiness percentage change.
+- **2026-10-17** · Object strokes reject malformed types and unknown type fields before changing the document; command help lists every stroke kind and its required fields. No readiness percentage change.
+- **2026-10-17** · Docs: documented a persistent source CLI install with Cargo, MCP-client PATH setup and bare-name server registration in `docs/mcp.md`. No readiness percentage change.
 
 - **2026-10-16** · Threading: the loaded text cursor threads into a text frame inside a group (it hit the group and showed it could not thread); a plain click still selects the group (#1075). Gap 27 closed. No readiness percentage change.
 - **2026-10-16** · Greek text hyphenates. The patterns were never compiled in, so Greek set unhyphenated however narrow the column; `"Greek"`, `"Greek: Greece"`, `el` and `el-GR` all resolve now and ανθρωπος breaks αν-θρω-πος. They are the monotonic patterns (hyph-el-monoton, Dimitrios Filippou, under MIT), which is what polytonic text hyphenates by too. Five of InDesign's ~40 hyphenation languages. No readiness percentage change.
@@ -412,7 +420,6 @@ Newest first.
 - **2026-10-15** · Flex Layout (InDesign 2026): Object › Flex Layout (Add to, Convert to, Remove) and a Flex Layout panel laid out as InDesign's, also in Properties. A container lays out its objects by direction, wrap, justification, the alignment grid, Fixed/Auto width and height, padding and spacing, after every edit; Add detects aligned objects (direction, Auto size, Space Between at their spacing); resizing a container reflows its objects instead of scaling them; dragging an object in one reorders it. Montilla Design's tutorial replays step for step. No readiness percentage change.
 - **2026-10-15** · IDML: the CJK leading model InDesign writes on [No paragraph style] of every document (Aki Below) only applies when the document uses a Japanese composer, as in InDesign; a Western document's paragraphs after a size change no longer sit lower than in InDesign (Montilla Design's Flex Layout file: its captions came out overset). No readiness percentage change.
 - **2026-10-15** · IDML: linked images in a subfolder beside the package load when the package is opened on another machine (a link to `/images/logo.png` finds `images/logo.png` next to the .idml); they showed as missing. No readiness percentage change.
-- **2026-10-14** · The Pages panel labels spreads as ranges or separate names across a section start, marks each section’s first page with a triangle, and scrolls to the page in view (#892). No readiness percentage change.
 - **2026-10-14** · Overset text is marked on every frame that ends an overset story, selected or not and inside groups too (the red mark at the out port, with frame edges shown); a selected group shows the in/out ports of the text frames inside it. InDesign shows it only on the selected frame, which hides overset labels in grouped objects until Preflight. No readiness percentage change.
 - **2026-10-14** · Load Swatches adds the colors of an `.ase` file that repeat a name or have none: a repeated name gets a number (`Red 2`), and a color without a name is named by its value (`C=0 M=0 Y=0 K=55`). Before, a repeated name kept one of its colors, and only the first unnamed color was added, with an empty name. No readiness percentage change.
 - **2026-10-14** · Objects snap to the bleed guide's four sides while moving, resizing or drawing; snapping and the canvas share one bleed rectangle (`Spread::bleed_rect`). No readiness percentage change.
