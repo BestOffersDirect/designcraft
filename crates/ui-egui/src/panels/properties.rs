@@ -882,7 +882,13 @@ fn opacity_slider(app: &mut DesignApp, resp: &egui::Response, opacity: f64) {
         let slider = ui.add(
             egui::Slider::new(&mut v, 0.0..=100.0).integer().show_value(false).handle_shape(egui::style::HandleShape::Circle).trailing_fill(false),
         );
-        let pressed = slider.is_pointer_button_down_on() || slider.dragged();
+        // The slider has no visible caption (the field beside the arrow is the label), so it's
+        // named for assistive technology only.
+        let label = crate::i18n::tr(&app.ui.language, "Opacity");
+        slider.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), v, label));
+        // The release frame can move the value too; it stays part of the drag's preview, which
+        // the next frame commits as the one undo step.
+        let pressed = slider.is_pointer_button_down_on() || slider.dragged() || slider.drag_stopped();
         if slider.changed() {
             slid = Some((v, pressed));
         }
@@ -3399,23 +3405,28 @@ mod tests {
         assert!(h.query_by_role(egui::accesskit::Role::Slider).is_none());
         h.get_by(|n| n.role() == egui::accesskit::Role::Button && n.label().as_deref() == Some("Opacity")).click();
         h.run_steps(3);
+        assert!(
+            h.query_by(|n| n.role() == egui::accesskit::Role::Slider && n.label().as_deref() == Some("Opacity")).is_some(),
+            "assistive technology names the slider"
+        );
         let track = h.get_by_role(egui::accesskit::Role::Slider).rect();
         let y = track.center().y;
         h.hover_at(egui::pos2(track.right() - 1.0, y));
         h.run_steps(1);
         h.drag_at(egui::pos2(track.right() - 1.0, y));
         h.run_steps(1);
-        for k in 1..=6 {
+        for k in 1..=5 {
             h.hover_at(egui::pos2(track.right() - track.width() * 0.05 * k as f32, y));
             h.run_steps(1);
             assert_eq!(undo_steps(h.state()), steps, "no undo step while dragging");
         }
         let previewed = opacity(h.state());
         assert!(previewed < 0.9 && previewed > 0.5, "the drag shows the opacity live: {previewed}");
+        // Let go further along than the last move: the release frame changes the value too.
         h.drop_at(egui::pos2(track.right() - track.width() * 0.3, y));
         h.run_steps(3);
         assert_eq!(undo_steps(h.state()), steps + 1, "the whole drag is one undo step");
-        assert!(opacity(h.state()) < 0.9);
+        assert!(opacity(h.state()) < previewed, "the release position is applied: {previewed} → {}", opacity(h.state()));
         assert_ne!(h.state().ui.open_panel.as_deref(), Some("effects"), "the arrow doesn't open Effects");
         h.state_mut().run("edit.undo", json!({})).unwrap();
         assert_eq!(opacity(h.state()), 1.0);
