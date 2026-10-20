@@ -457,10 +457,14 @@ impl Tool for FrameTool {
 
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         if let (true, Some(a)) = (self.active, self.start) {
-            let r = Rect::from_points(a, self.cur);
-            let _ = cx;
+            // The frame being drawn (Shift, Alt and snapping included), in the document's units
+            // to two decimals, on two lines: InDesign's readout ("W: 3.13 cm", "H: 3.13 cm").
+            let r = self.last.as_ref().map(|(_, r)| *r).unwrap_or_else(|| Rect::from_points(a, self.cur));
+            let units = &cx.doc.settings;
+            let w = designcraft_geom::units::format_measure_prec(r.width().abs(), units.horizontal_units, 2);
+            let h = designcraft_geom::units::format_measure_prec(r.height().abs(), units.vertical_units, 2);
             let mut v = self.guides.clone();
-            v.push(Overlay::Measure { p: self.cur, text: format!("W: {:.0} pt  H: {:.0} pt", r.width(), r.height()) });
+            v.push(Overlay::Measure { p: self.cur, text: format!("W: {w}\nH: {h}") });
             return v;
         }
         vec![]
