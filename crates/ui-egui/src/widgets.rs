@@ -569,7 +569,7 @@ pub fn checkbox(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     }
     // Named and ticked or not for screen readers (and tests).
     let checked = *on;
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, checked, label));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), checked, label));
     resp
 }
 

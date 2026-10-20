@@ -3370,6 +3370,10 @@ mod tests {
         let graphic = |app: &DesignApp| app.session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().graphic().unwrap().clone();
         assert_eq!(graphic(&app).auto_fit, designcraft_doc::Fitting::None);
         let mut h = panel(app);
+        // A checkbox its section disables says so: Invert, with no text wrap.
+        use egui_kittest::kittest::NodeT;
+        assert!(h.get_by_label("Invert").accesskit_node().is_disabled());
+        assert!(!h.get_by_label("Auto-Fit").accesskit_node().is_disabled());
         h.get_by_label("Auto-Fit").click();
         h.run_steps(3);
         assert_ne!(graphic(h.state()).auto_fit, designcraft_doc::Fitting::None, "Auto-Fit is on");
