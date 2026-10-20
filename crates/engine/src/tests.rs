@@ -1654,9 +1654,8 @@ fn a_line_fits_when_its_baseline_does() {
 #[test]
 fn direct_selection_on_a_selected_frame_deletes_only_its_image() {
     use designcraft_tools::{Mods, PointerEvent, PointerKind, ToolKey};
-    let dir = std::env::temp_dir().join(format!("dc-direct-delete-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let png = dir.join("photo.png");
+    let dir = tempfile::tempdir().unwrap();
+    let png = dir.path().join("photo.png");
     std::fs::write(&png, designcraft_render::Rendered { width: 100, height: 100, pixels: vec![40u8; 100 * 100 * 4] }.to_png()).unwrap();
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
@@ -1680,5 +1679,21 @@ fn direct_selection_on_a_selected_frame_deletes_only_its_image() {
     let it = st.doc.item(designcraft_doc::ItemId(frame)).expect("the frame stays");
     assert!(matches!(it.content, designcraft_doc::Content::Unassigned), "{:?}", it.content);
     assert_eq!(st.selection.items, vec![designcraft_doc::ItemId(frame)]);
-    let _ = std::fs::remove_dir_all(&dir);
+    // A frame holding pasted-in items: the click selects them too, so arrow keys move them.
+    let inner = s.execute("frame.create", &json!({"rect": [320, 120, 360, 160]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"ids": [inner]})).unwrap();
+    s.execute("edit.cut", &json!({})).unwrap();
+    let holder = s.execute("frame.create", &json!({"rect": [300, 100, 400, 200]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"ids": [holder]})).unwrap();
+    s.execute("edit.pasteInto", &json!({})).unwrap();
+    s.set_tool("selection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 340.0, 140.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 340.0, 140.0), v).unwrap();
+    assert_eq!(s.doc().unwrap().selection.items, vec![designcraft_doc::ItemId(holder)]);
+    assert!(!s.doc().unwrap().selection.content);
+    s.set_tool("directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 340.0, 140.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 340.0, 140.0), v).unwrap();
+    let st = s.doc().unwrap();
+    assert!(st.selection.content && st.selection.items == [designcraft_doc::ItemId(holder)], "the pasted-in items are selected: {:?}", st.selection);
 }
