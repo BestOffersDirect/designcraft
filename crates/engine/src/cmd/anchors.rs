@@ -67,6 +67,15 @@ pub fn specs() -> Vec<CommandSpec> {
             join_paths
         ),
         cmd!(
+            "path.deletePoints",
+            "Delete Points",
+            [],
+            None,
+            "{points?: [[id, subpath, index]]} — the Direct Selection tool's selected points by default, in one undo step (Properties › Quick Actions › Delete Point(s)); a subpath left with one point goes, and an object with none is removed → {deleted, removed: [id]}",
+            has_selection,
+            delete_points
+        ),
+        cmd!(
             "path.convertPoints",
             "Convert Point",
             [],
@@ -149,6 +158,66 @@ fn join_paths(s: &mut Session, p: &Value) -> Result<Value> {
             }
             _ => Err(bad("path.join", "select one or two open paths")),
         }
+    })
+}
+
+/// Delete Point(s): removes the given points, or the ones selected with Direct Selection.
+fn delete_points(s: &mut Session, p: &Value) -> Result<Value> {
+    const ID: &str = "path.deletePoints";
+    let points: Vec<(ItemId, usize, usize)> = match p.get("points") {
+        Some(v) => serde_json::from_value::<Vec<(u64, usize, usize)>>(v.clone())
+            .map_err(|e| bad(ID, format!("points: [[id, subpath, index], …] ({e})")))?
+            .into_iter()
+            .map(|(id, si, ai)| (ItemId(id), si, ai))
+            .collect(),
+        None => s.doc()?.selection.anchors.clone(),
+    };
+    if points.is_empty() {
+        return Err(bad(ID, "no points selected"));
+    }
+    // Each subpath's points, worked from the last subpath and the last point back, so the indices
+    // still to delete keep their place.
+    let mut groups: Vec<((ItemId, usize), Vec<usize>)> = Vec::new();
+    for (id, si, ai) in points {
+        match groups.iter_mut().find(|(k, _)| *k == (id, si)) {
+            Some((_, v)) => v.push(ai),
+            None => groups.push(((id, si), vec![ai])),
+        }
+    }
+    groups.sort_by_key(|((id, si), _)| std::cmp::Reverse((id.0, *si)));
+    s.edit(|d, sel| {
+        let (mut deleted, mut removed) = (0usize, Vec::new());
+        for ((id, si), mut ais) in groups {
+            if d.item(id).is_none() {
+                continue;
+            }
+            path_editable(d, id, ID)?;
+            let Some(it) = d.item_mut(id) else { continue };
+            let Some(sp) = it.path.subpaths.get_mut(si) else { continue };
+            ais.sort_unstable();
+            ais.dedup();
+            for ai in ais.into_iter().rev() {
+                if ai < sp.anchors.len() {
+                    sp.anchors.remove(ai);
+                    deleted += 1;
+                }
+            }
+            // A subpath needs two points (three to stay closed).
+            let (left, closed) = (sp.anchors.len(), sp.closed);
+            if left < 2 {
+                it.path.subpaths.remove(si);
+            } else if closed && left < 3 {
+                sp.closed = false;
+            }
+            as_path(&mut it.shape);
+            if it.path.subpaths.is_empty() {
+                d.remove_item(id)?;
+                sel.items.retain(|i| *i != id);
+                removed.push(id.0);
+            }
+        }
+        sel.anchors.clear();
+        Ok(json!({"deleted": deleted, "removed": removed}))
     })
 }
 
@@ -444,6 +513,35 @@ mod tests {
     }
 
     /// Convert Point turns the selected points (or a whole path's) plain, corner, smooth or symmetrical.
+    /// Delete Point(s) removes the selected points of several paths in one step; a triangle left
+    /// with two points opens, and Undo brings every point back.
+    #[test]
+    fn delete_points_removes_the_selected_points_of_several_paths() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let a = s.execute("frame.create", &json!({"rect": [72, 72, 172, 172]})).unwrap()["id"].as_u64().unwrap();
+        let b = s.execute("frame.create", &json!({"rect": [200, 72, 300, 172], "shape": "polygon", "sides": 3})).unwrap()["id"].as_u64().unwrap();
+        s.execute("selection.set", &json!({"anchors": [[a, 0, 0], [a, 0, 2], [b, 0, 1]]})).unwrap();
+        let r = s.execute("path.deletePoints", &json!({})).unwrap();
+        assert_eq!(r["deleted"], 3);
+        let d = &s.doc().unwrap().doc;
+        let pa = &d.item(ItemId(a)).unwrap().path.subpaths[0];
+        assert_eq!(pa.anchors.len(), 2, "two of the square's four points are left");
+        assert!(!pa.closed, "two points can't stay closed");
+        assert_eq!(d.item(ItemId(b)).unwrap().path.subpaths[0].anchors.len(), 2);
+        assert!(s.doc().unwrap().selection.anchors.is_empty());
+        s.execute("edit.undo", &json!({})).unwrap();
+        let d = &s.doc().unwrap().doc;
+        assert_eq!(d.item(ItemId(a)).unwrap().path.subpaths[0].anchors.len(), 4, "one undo step");
+        assert_eq!(d.item(ItemId(b)).unwrap().path.subpaths[0].anchors.len(), 3);
+        // A line's two points: the line goes.
+        let l = s.execute("path.create", &json!({"anchors": [{"p": [72, 300]}, {"p": [172, 300]}]})).unwrap()["id"].as_u64().unwrap();
+        let r = s.execute("path.deletePoints", &json!({"points": [[l, 0, 0]]})).unwrap();
+        assert_eq!(r["removed"], json!([l]));
+        assert!(s.doc().unwrap().doc.item(ItemId(l)).is_none());
+        assert!(s.execute("path.deletePoints", &json!({"points": []})).is_err());
+    }
+
     #[test]
     fn convert_point_kinds() {
         let mut s = Session::new();

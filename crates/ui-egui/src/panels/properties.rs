@@ -59,6 +59,9 @@ fn selection_title(app: &DesignApp, info: &Option<SelInfo>) -> String {
     if st.selection.text.is_some() {
         return crate::i18n::tr(&app.ui.language, "Characters").into();
     }
+    if !st.selection.anchors.is_empty() {
+        return crate::i18n::tr(&app.ui.language, "Anchor Point(s)").into();
+    }
     match info {
         None => crate::i18n::tr(&app.ui.language, "No Selection").into(),
         Some(i) if i.count > 1 => crate::i18n::tr(&app.ui.language, "Multiple Objects").into(),
@@ -118,6 +121,10 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
         document_sections(app, ui);
         return;
     };
+    if app.session.active().is_some_and(|st| !st.selection.anchors.is_empty()) {
+        anchor_point_sections(app, ui, &i);
+        return;
+    }
     section(ui, crate::i18n::tr(&app.ui.language, "Transform"), true);
     transform_section(app, ui, &i);
     divider(ui);
@@ -2214,6 +2221,37 @@ const CONVERT_SHAPE: [(&str, &str, &str); 9] = [
     ("shape-orthogonal", "orthogonalLine", "Orthogonal Line"),
 ];
 
+/// Points selected with Direct Selection, as InDesign's Properties shows them: Transform,
+/// Appearance, Convert Points (the point type of the selected points) and Delete Point(s).
+fn anchor_point_sections(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
+    section(ui, crate::i18n::tr(&app.ui.language, "Transform"), true);
+    transform_section(app, ui, i);
+    divider(ui);
+    section(ui, crate::i18n::tr(&app.ui.language, "Appearance"), true);
+    appearance_section(app, ui, i);
+    divider(ui);
+    let mut kind = None;
+    let lang = app.ui.language.clone();
+    section_row(ui, crate::i18n::tr(&lang, "Convert Points"), |ui| {
+        ui.spacing_mut().item_spacing.x = 14.0;
+        // Laid out from the right: last first, so the row reads Plain … Symmetrical.
+        for (icon, k, tip) in CONVERT_POINT.iter().rev() {
+            if icon_toggle(ui, icon, false, crate::i18n::tr(&lang, tip)).clicked() {
+                kind = Some(k);
+            }
+        }
+    });
+    if let Some(k) = kind {
+        let _ = app.run("path.convertPoints", json!({"kind": k}));
+    }
+    rule(ui);
+    section(ui, crate::i18n::tr(&app.ui.language, "Quick Actions"), true);
+    let fw = full_width(ui);
+    if outline_button(ui, crate::i18n::tr(&app.ui.language, "Delete Point(s)"), fw).clicked() {
+        let _ = app.run("path.deletePoints", json!({}));
+    }
+}
+
 /// Pathfinder panel › Convert Point: (icon, kind, tooltip).
 const CONVERT_POINT: [(&str, &str, &str); 4] = [
     ("point-plain", "plain", "Plain"),
@@ -3417,6 +3455,30 @@ mod tests {
         let doc = &h.state().session.active().unwrap().doc;
         assert_eq!(doc.story(story).unwrap().char_format_at(0).over.fill.as_deref(), Some(CYAN), "the text is cyan");
         assert_eq!(doc.item(designcraft_doc::ids::ItemId(id)).unwrap().fill.swatch, "[None]", "the frame isn't");
+    }
+
+    /// Points selected with Direct Selection: InDesign's "Anchor Point(s)" panel, with Convert
+    /// Points and the Delete Point(s) quick action, as in the Zero2Graphic tutorial (1:25).
+    #[test]
+    fn selected_points_show_convert_points_and_delete_points() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let a = app.run("frame.create", json!({"rect": [72, 72, 172, 172]})).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("frame.create", json!({"rect": [200, 72, 300, 172]})).unwrap()["id"].as_u64().unwrap();
+        app.run("selection.set", json!({"anchors": [[a, 0, 0], [b, 0, 0]]})).unwrap();
+        assert_eq!(selection_title(&app, &super::super::sel_info(&app)), "Anchor Point(s)");
+        let mut h = panel(app);
+        // The four point types (Appearance has a Corner row too).
+        for tip in ["Plain", "Corner", "Smooth", "Symmetrical"] {
+            assert!(h.get_all_by_label(tip).next().is_some(), "{tip}");
+        }
+        assert!(h.query_by_label("Align").is_none(), "only the sections InDesign shows for points");
+        h.get_by_label("Delete Point(s)").click();
+        h.run_steps(3);
+        let d = &h.state().session.active().unwrap().doc;
+        for id in [a, b] {
+            assert_eq!(d.item(designcraft_doc::ids::ItemId(id)).unwrap().path.subpaths[0].anchors.len(), 3, "one point gone from each");
+        }
     }
 
     #[test]
