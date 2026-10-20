@@ -4268,6 +4268,43 @@ fn toc_style_entries_read_id_prefixed_separators_and_styles() {
 }
 
 #[test]
+fn toc_style_entries_fall_back_on_malformed_and_unsupported_values() {
+    let long = "x".repeat(65);
+    let entries = format!(
+        r#"<TOCStyleEntry Self="e1" Name="Heading 1" Level="abc" PageNumberPosition="Sideways" Separator="$ID/^q">
+    <Properties><FormatStyle type="object">ParagraphStyle/Missing</FormatStyle>
+    <PageNumberStyle type="object">CharacterStyle/$ID/[None]</PageNumberStyle>
+    <SeparatorStyle type="object">CharacterStyle/Missing</SeparatorStyle></Properties>
+  </TOCStyleEntry>
+  <TOCStyleEntry Self="e2" Name="TOC:TOC Header" Level="12" Separator="{long}"/>
+  <TOCStyleEntry Self="e3" Name="Heading 1" Level="2" Separator="^t"/>
+  <TOCStyleEntry Self="e4" Name="" Level="3"/>"#
+    );
+    let start = TOC_STYLES.find("<TOCStyleEntry").unwrap();
+    let end = TOC_STYLES.find("</TOCStyle>").unwrap();
+    let styles = format!("{}{entries}\n{}", &TOC_STYLES[..start], &TOC_STYLES[end..])
+        .replace(r#"TitleStyle="ParagraphStyle/TOC%3aTOC Header""#, r#"TitleStyle="ParagraphStyle/Missing""#);
+    let d = import_idml(&fixture_with_table_styles(&styles, TOC_STORY)).unwrap();
+    d.check().unwrap();
+    let toc = d.toc.as_ref().expect("the TOC style is still imported");
+    assert_eq!(toc.title_style, None, "a title style the document lacks is dropped");
+    assert_eq!(toc.entries.len(), 3, "an entry without a style name is skipped: {:?}", toc.entries);
+    let e1 = &toc.entries[0];
+    assert_eq!(e1.level, 1, "an unreadable level falls back to 1");
+    assert_eq!(e1.page_number, designcraft_doc::TocPageNumber::After, "an unknown page-number position falls back to After");
+    assert_eq!(e1.separator.as_deref(), Some("^q"), "an unknown special-character code is kept as written");
+    assert_eq!(
+        (e1.entry_style.as_deref(), e1.page_number_style.as_deref(), e1.separator_style.as_deref()),
+        (None, None, None),
+        "undefined and [None] styles are no style"
+    );
+    let e2 = &toc.entries[1];
+    assert_eq!(e2.level, 9, "a level past 9 is clamped");
+    assert_eq!(e2.separator, None, "an over-long separator is dropped");
+    assert_eq!((toc.entries[2].level, toc.entries[2].separator.as_deref()), (2, None), "a plain tab is the default separator");
+}
+
+#[test]
 fn toc_style_references_in_indented_properties_resolve() {
     // Property children laid out on their own lines: the whitespace around a reference isn't
     // part of the style name.
