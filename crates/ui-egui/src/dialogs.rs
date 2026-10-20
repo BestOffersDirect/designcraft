@@ -6781,10 +6781,14 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     if pill(ui, 1, &tr("Cancel"), false) || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
         d.fields.insert("_close".into(), json!("cancel"));
     }
-    if pill(ui, 2, &tr("Add CMYK Swatch"), false) {
-        let [c, m, y, k] = designcraft_color::Color::Rgb { r: p.rgb[0], g: p.rgb[1], b: p.rgb[2] }
+    // The C/M/Y/K the fields show: the percentages typed or given, else the colour converted.
+    let cmyk = nums::<4>(d, "cmyk").map(|v| v.map(|x| x as f32)).unwrap_or_else(|| {
+        designcraft_color::Color::Rgb { r: p.rgb[0], g: p.rgb[1], b: p.rgb[2] }
             .to_cmyk_managed(designcraft_color::cms::active_settings().intent)
-            .map(|v| (v * 100.0).round());
+            .map(|v| v * 100.0)
+    });
+    if pill(ui, 2, &tr("Add CMYK Swatch"), false) {
+        let [c, m, y, k] = cmyk.map(|v| v.round());
         match app.run("swatch.create", json!({"color": {"c": c, "m": m, "y": y, "k": k}})) {
             Ok(r) => app.status(format!("{} {}", tr("Added swatch"), r["name"].as_str().unwrap_or(""))),
             Err(e) => app.status(e),
@@ -6793,11 +6797,6 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     // The values: a radio button, a label, the field, a unit.
     let mut comp_now = comp;
     let mut edited: Option<Picked> = None;
-    let cmyk = nums::<4>(d, "cmyk").map(|v| v.map(|x| x as f32)).unwrap_or_else(|| {
-        designcraft_color::Color::Rgb { r: p.rgb[0], g: p.rgb[1], b: p.rgb[2] }
-            .to_cmyk_managed(designcraft_color::cms::active_settings().intent)
-            .map(|v| v * 100.0)
-    });
     // (column x of the radio, row, component, label, key, value, range, unit)
     let rows: [(f32, usize, Option<PickComp>, &str, &str, f32, (f32, f32), &str); 13] = [
         (at::LEFT, 0, Some(PickComp::H), "H:", "h", p.hsb[0], (0.0, 360.0), "°"),
@@ -10022,105 +10021,69 @@ mod tests {
 
     fn the_color_picker_picks_on_its_field_and_slider_and_adds_a_cmyk_swatch() {
         use egui_kittest::kittest::Queryable;
-
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
-
         app.run("file.new", json!({})).unwrap();
-
         app.run("frame.create", json!({"rect": [72, 72, 200, 200], "shape": "rectangle"})).unwrap();
-
         app.run("object.color", json!({"color":designcraft_color::Color::from_hex("#7c1315").unwrap(),"target":"fill"})).unwrap();
         app.ui.dialog = Some(Dialog::new("colorPicker", json!({"target": "fill", "hex": "#7c1315", "text": false})));
-
         let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
-
         h.run_steps(3);
-
         // R at first: R up the slider, B across and G up the field.
-
         let _ = h.get_by_label("RGB Color Space View");
-
         let field = h.get_by_label("Color field").rect();
-
         crate::test_window::click_at(&mut h, egui::pos2(field.right() - 1.0, field.top() + 1.0));
-
         h.run_steps(2);
-
         let p = picked_of(h.state().app.ui.dialog.as_ref().unwrap());
-
         assert!((p.rgb[0] - 124.0 / 255.0).abs() < 0.01 && p.rgb[1] > 0.97 && p.rgb[2] > 0.97, "{p:?}: R kept, G and B full");
-
         // The slider sets R alone.
-
         let slider = h.get_by_label("Color slider").rect();
-
         crate::test_window::click_at(&mut h, egui::pos2(slider.center().x, slider.bottom() - 1.0));
-
         h.run_steps(2);
-
         let p = picked_of(h.state().app.ui.dialog.as_ref().unwrap());
-
         assert!(p.rgb[0] < 0.02 && p.rgb[1] > 0.97, "{p:?}");
-
         // Hue on the slider: the field is saturation across, brightness up.
-
         store_picked(h.state_mut().app.ui.dialog.as_mut().unwrap(), &Picked::from_rgb([124.0 / 255.0, 19.0 / 255.0, 21.0 / 255.0], 0.0));
-
         h.state_mut().app.ui.dialog.as_mut().unwrap().fields.insert("component".into(), json!("h"));
-
         h.run_steps(2);
-
         crate::test_window::click_at(&mut h, egui::pos2(field.left() + 1.0, field.top() + 1.0));
-
         h.run_steps(2);
-
         let p = picked_of(h.state().app.ui.dialog.as_ref().unwrap());
-
         assert!(p.hsb[1] < 0.02 && p.hsb[2] > 0.98 && (p.hsb[0] - 359.0).abs() < 2.0, "{p:?}: no saturation, full brightness, the hue kept");
-
         // Lab shows its own view.
-
         h.state_mut().app.ui.dialog.as_mut().unwrap().fields.insert("component".into(), json!("l"));
-
         h.run_steps(2);
-
         let _ = h.get_by_label("Lab Color Space View");
-
         // Add CMYK Swatch adds the colour as a CMYK swatch; OK applies it.
-
         store_picked(h.state_mut().app.ui.dialog.as_mut().unwrap(), &Picked::from_rgb([124.0 / 255.0, 19.0 / 255.0, 21.0 / 255.0], 0.0));
-
         h.run_steps(2);
-
         let before = h.state().app.session.active().unwrap().doc.swatches.len();
-
         h.get_by_label("Add CMYK Swatch").click();
-
         h.run_steps(3);
-
         let doc = &h.state().app.session.active().unwrap().doc;
-
         assert_eq!(doc.swatches.len(), before + 1);
-
         assert!(matches!(
             doc.swatches.last().unwrap().value,
             designcraft_color::swatch::SwatchValue::Color { color: designcraft_color::Color::Cmyk { .. }, .. }
         ));
-
-        // Its own OK, at the top right, applies it.
-
-        h.get_by_label("OK").click();
-
+        // The percentages the C/M/Y/K fields show, exactly (not the colour converted back).
+        h.state_mut().app.ui.dialog.as_mut().unwrap().fields.insert("cmyk".into(), json!([0.0, 50.0, 100.0, 0.0]));
+        h.run_steps(2);
+        h.get_by_label("Add CMYK Swatch").click();
         h.run_steps(3);
-
+        let doc = &h.state().app.session.active().unwrap().doc;
+        let designcraft_color::swatch::SwatchValue::Color { color: designcraft_color::Color::Cmyk { c, m, y, k }, .. } =
+            doc.swatches.last().unwrap().value
+        else {
+            panic!("a CMYK swatch")
+        };
+        assert_eq!([c, m, y, k].map(|v| (v * 100.0).round()), [0.0, 50.0, 100.0, 0.0]);
+        // Its own OK, at the top right, applies it.
+        h.get_by_label("OK").click();
+        h.run_steps(3);
         assert!(h.state().app.ui.dialog.is_none(), "OK closes it");
-
         let st = h.state().app.session.active().unwrap();
-
         let id = st.selection.items[0];
-
         let fill = st.doc.item(id).unwrap().fill.swatch.clone();
-
         assert_eq!(st.doc.resolve_color(&fill, 1.0).unwrap().to_hex(), "#7c1315");
     }
 
