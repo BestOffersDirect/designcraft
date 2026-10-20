@@ -826,6 +826,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Choose Image…", ["Choose Image…", "Choisir une image…", "Choose Image…", "Choose Image…", "选择图像…"]),
     ("Class:", ["Class:", "Classe :", "Class:", "Class:", "类别："]),
     ("Color Picker", ["Color Picker", "Sélecteur de couleurs", "Color Picker", "Color Picker", "拾色器"]),
+    ("Color spectrum", ["Farbspektrum", "Spectre de couleurs", "Espectro de color", "カラースペクトル", "色谱"]),
     ("Color Settings", ["Color Settings", "Réglages des couleurs", "Color Settings", "Color Settings", "颜色设置"]),
     ("Color:", ["Color:", "Couleur :", "Color:", "Color:", "颜色："]),
     ("Columns", ["Columns", "Colonnes", "Columns", "Columns", "栏"]),
@@ -5131,5 +5132,13 @@ mod tests {
                 assert_ne!(tr(code, key), key, "{code}: {key}");
             }
         }
+    }
+
+    #[test]
+    fn color_panel_spectrum_label_is_translated_in_every_language() {
+        for (code, _) in LANGUAGES.iter().filter(|(c, _)| !c.is_empty()) {
+            assert_ne!(tr(code, "Color spectrum"), "Color spectrum", "{code}");
+        }
+        assert_eq!(tr("", "Color spectrum"), "Color spectrum");
     }
 }

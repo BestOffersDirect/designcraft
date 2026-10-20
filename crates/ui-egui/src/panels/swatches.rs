@@ -11,7 +11,8 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
-    let target = super::color_target(app);
+    // With nothing selected, the proxy, Tint field and highlighted row are those of new shapes.
+    let target = super::color_target_or_defaults(app);
     header(app, ui, &doc, target.as_ref());
     // The row of the colour in front of the proxy is highlighted.
     let fill_cur = target.map(|(fill, _, stroke, _)| if app.ui.stroke_front { stroke } else { fill });
@@ -340,14 +341,7 @@ pub enum ColorMode {
 /// swatch), the spectrum ramp, Add to Swatches. Edits apply unnamed colours (`object.color`).
 pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
-    let target = super::color_target(app).or_else(|| {
-        let state = app.session.active()?;
-        if !state.selection.items.is_empty() || state.selection.text.is_some() || state.selection.cells.is_some() {
-            return None;
-        }
-        let colors = &state.doc.settings.new_object;
-        Some((colors.fill.clone(), colors.fill_tint, colors.stroke.clone(), colors.stroke_tint))
-    });
+    let target = super::color_target_or_defaults(app);
     let Some((fill, fill_tint, stroke_sw, stroke_tint)) = target else {
         ui.label(crate::rtl::widget(
             ui,
@@ -624,10 +618,60 @@ mod color_panel_defaults_tests {
             h.state_mut().app.run("frame.create", json!({"rect":[240,72,368,200],"content":"unassigned"})).unwrap()["id"].as_u64().unwrap(),
         );
         assert_eq!(h.state().app.session.active().unwrap().doc.item(new).unwrap().stroke.swatch, defaults.stroke);
+        // Two undo steps: the new frame, then the spectrum click's default stroke.
         h.state_mut().app.run("edit.undo", json!({})).unwrap();
         h.state_mut().app.run("edit.undo", json!({})).unwrap();
         assert_eq!(h.state().app.session.active().unwrap().doc.settings.new_object.stroke, original.swatch);
         assert_eq!(h.state().app.session.active().unwrap().doc.item(old).unwrap().stroke, original);
+        // With the Fill box in front, the ramp sets the default fill instead.
+        let original_fill = h.state().app.session.active().unwrap().doc.item(old).unwrap().fill.clone();
+        h.state_mut().app.ui.stroke_front = false;
+        h.run_steps(2);
+        let ramp = h.get_by_label("Color spectrum").rect();
+        crate::test_window::click_at(&mut h, egui::pos2(ramp.left() + ramp.width() * 2.0 / 3.0, ramp.center().y));
+        let defaults = h.state().app.session.active().unwrap().doc.settings.new_object.clone();
+        assert_ne!(defaults.fill, original_fill.swatch);
+        assert_eq!(defaults.stroke, original.swatch, "the stroke default is left alone");
+        assert_eq!(h.state().app.session.active().unwrap().doc.item(old).unwrap().fill, original_fill);
+    }
+
+    /// The Swatches panel shows the same defaults: its Tint field reads the default fill's tint,
+    /// and a click on a swatch row sets the default fill, not an existing frame's.
+    #[test]
+    fn swatches_panel_with_no_selection_shows_and_edits_future_shape_colors() {
+        use egui::accesskit::Role;
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let old =
+            designcraft_doc::ItemId(app.run("frame.create", json!({"rect":[72,72,200,200],"content":"unassigned"})).unwrap()["id"].as_u64().unwrap());
+        let original = app.session.active().unwrap().doc.item(old).unwrap().fill.clone();
+        app.run("selection.set", json!({"ids":[]})).unwrap();
+        app.run("object.fill", json!({"swatch": "[Black]", "tint": 0.4})).unwrap();
+        app.ui.stroke_front = false;
+        let mut h = egui_kittest::Harness::builder().with_size(vec2(320.0, 480.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                // The panel's fonts are installed on the first frame and used from the next.
+                let id = egui::Id::new("test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(id, true));
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        let fields = h.query_all_by(|n| matches!(n.role(), Role::SpinButton | Role::TextInput)).filter_map(|n| n.value()).collect::<Vec<_>>();
+        assert!(fields.iter().any(|v| v.starts_with("40")), "the Tint field shows the default fill's 40 %: {fields:?}");
+        let row = h.get_by_label("[Paper]").rect().center();
+        h.hover_at(row);
+        h.drag_at(row);
+        h.drop_at(row);
+        h.run_steps(3);
+        let defaults = h.state().session.active().unwrap().doc.settings.new_object.clone();
+        assert_eq!((defaults.fill.as_str(), defaults.fill_tint), ("[Paper]", 1.0));
+        assert_eq!(h.state().session.active().unwrap().doc.item(old).unwrap().fill, original);
     }
 }
 
