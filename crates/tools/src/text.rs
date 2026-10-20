@@ -31,6 +31,9 @@ pub struct TypeTool {
     start: Option<Point>,
     selecting: Option<u64>,
     drawing: bool,
+    /// A press on an empty frame: (frame, press point in spread space). A click turns it into a
+    /// text frame with the caret in it; a drag draws a new text frame over it, as in InDesign.
+    convert: Option<(u64, Point)>,
     /// A press on a table whose whole rows or columns are selected: (frame, press point in
     /// spread space) — a drag moves them, a click places the caret.
     cell_drag: Option<(u64, Point)>,
@@ -226,6 +229,7 @@ impl Tool for TypeTool {
                 self.cell_drag = None;
                 self.unit = None;
                 self.border = None;
+                self.convert = None;
                 if ev.kind == PointerKind::Down
                     && let Some(b) = border_at(cx, ev.pos)
                 {
@@ -244,6 +248,11 @@ impl Tool for TypeTool {
                     // Whole rows/columns selected: wait to see whether this is a drag.
                     if clicks == 1 && !ev.mods.shift && whole_rows_or_cols(cx) {
                         self.cell_drag = Some((id.0, sp));
+                        return vec![];
+                    }
+                    // An empty frame: wait to see whether this is a click or a drag.
+                    if clicks == 1 && !ev.mods.shift && !it.is_text_frame() {
+                        self.convert = Some((id.0, sp));
                         return vec![];
                     }
                     self.selecting = Some(id.0);
@@ -296,6 +305,7 @@ impl Tool for TypeTool {
                 let mut out = vec![];
                 if !self.drawing {
                     self.drawing = true;
+                    self.convert = None;
                     out.push(Action::Begin("Create Text Frame".into()));
                 }
                 out.push(Action::Preview(
@@ -322,6 +332,10 @@ impl Tool for TypeTool {
                 if std::mem::take(&mut self.drawing) {
                     self.selecting = None;
                     return vec![Action::Commit];
+                }
+                // A click in an empty frame: it becomes a text frame with the caret in it.
+                if let Some((fid, at)) = self.convert.take() {
+                    return vec![Action::Exec("text.placeCaret".into(), json!({"frame": fid, "point": [at.x, at.y]}))];
                 }
                 // Ends a press in text: drops dragged text, or is ignored by the engine.
                 if let Some(fid) = self.selecting.take() {
