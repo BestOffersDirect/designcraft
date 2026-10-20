@@ -1650,3 +1650,38 @@ fn a_line_fits_when_its_baseline_does() {
     assert!(!overset(&mut s, 78.5), "the line is set; its descenders hang below the frame");
     assert!(overset(&mut s, 50.0), "a baseline below the frame still oversets the line");
 }
+
+/// Direct Selection: a marquee over the top edges of two frames selects their top points, and a
+/// drag on one of them slants both frames in one undo step (InDesign's way to make a row of
+/// parallelograms).
+#[test]
+fn direct_selection_moves_the_points_of_several_frames_at_once() {
+    use designcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::at_zoom(1.0);
+    let a = s.execute("frame.create", &json!({"rect": [100, 300, 200, 400]})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("frame.create", &json!({"rect": [200, 300, 300, 400]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"ids": []})).unwrap();
+    s.set_tool("directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 80.0, 280.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 320.0, 320.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 320.0, 320.0), v).unwrap();
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!(sel.anchors.len(), 4, "{:?}", sel.anchors);
+    assert!(sel.items.contains(&designcraft_doc::ItemId(a)) && sel.items.contains(&designcraft_doc::ItemId(b)));
+    let shift = Mods { shift: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 136.0, 302.0).with_mods(shift), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 136.0, 302.0).with_mods(shift), v).unwrap();
+    let corners = |s: &Session, id: u64| -> Vec<(f64, f64)> {
+        let st = s.doc().unwrap();
+        let it = st.doc.item(designcraft_doc::ItemId(id)).unwrap();
+        it.path.subpaths[0].anchors.iter().map(|an| ((it.xf * an.p).x.round(), (it.xf * an.p).y.round())).collect()
+    };
+    // Both frames: top points 36 pt to the right, bottom points where they were.
+    assert_eq!(corners(&s, a), vec![(136.0, 300.0), (236.0, 300.0), (200.0, 400.0), (100.0, 400.0)]);
+    assert_eq!(corners(&s, b), vec![(236.0, 300.0), (336.0, 300.0), (300.0, 400.0), (200.0, 400.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(corners(&s, a), vec![(100.0, 300.0), (200.0, 300.0), (200.0, 400.0), (100.0, 400.0)]);
+    assert_eq!(corners(&s, b), vec![(200.0, 300.0), (300.0, 300.0), (300.0, 400.0), (200.0, 400.0)]);
+}

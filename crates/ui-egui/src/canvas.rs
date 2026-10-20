@@ -1229,9 +1229,11 @@ fn draw_selection(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc: &Docum
             let (Some(it), Some((a, _))) = (doc.item(*id), item_canvas_xf(doc, layout, *id)) else { continue };
             let m = a * it.xf;
             let col = layer_color(doc, it);
-            for sp in &it.path.subpaths {
-                for an in &sp.anchors {
+            for (si, sp) in it.path.subpaths.iter().enumerate() {
+                for (ai, an) in sp.anchors.iter().enumerate() {
                     let p = xf.to_screen(m * an.p);
+                    // A selected anchor point is solid, the others hollow (InDesign).
+                    let chosen = sel.anchors.contains(&(*id, si, ai));
                     for (h, has) in [(an.h_in, an.has_in()), (an.h_out, an.has_out())] {
                         if has {
                             let hp = xf.to_screen(m * h);
@@ -1240,7 +1242,7 @@ fn draw_selection(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc: &Docum
                         }
                     }
                     let r = Rect::from_center_size(p, vec2(5.0, 5.0));
-                    painter.rect_filled(r, 0.0, Color32::WHITE);
+                    painter.rect_filled(r, 0.0, if chosen { col } else { Color32::WHITE });
                     painter.rect_stroke(r, 0.0, Stroke::new(1.0, col), StrokeKind::Inside);
                 }
             }
