@@ -501,6 +501,22 @@ Y: 200.00%")),
     s.pointer(&PointerEvent::new(PointerKind::Up, 220.0, 100.0), v).unwrap();
     let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
     assert_eq!(it.bounds(), designcraft_geom::Rect::new(220.0, 260.0, 300.0, 300.0), "the frame previewed");
+    // 80 × 1 is past the drag tolerance, but its 2 × 1 proportional frame is too small for
+    // `place.drop`, which places at natural size: the preview shows that frame and 100 %.
+    s.execute("place.load", &json!({"base64": cmd::base64_encode(&png), "name": "a.png"})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 400.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 180.0, 401.0), v).unwrap();
+    let natural = designcraft_geom::Rect::new(100.0, 400.0, 140.0, 420.0);
+    let o = s.overlays(v);
+    assert!(o.iter().any(|o| matches!(o, Overlay::Marquee(r) if *r == natural)), "{o:?}");
+    assert!(
+        o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "X: 100.00%
+Y: 100.00%")),
+        "{o:?}"
+    );
+    s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 401.0), v).unwrap();
+    let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
+    assert_eq!(it.bounds(), natural, "the frame previewed");
 }
 
 #[test]

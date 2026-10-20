@@ -158,7 +158,7 @@ impl Tool for PlaceGun {
             return vec![crate::Overlay::Marquee(designcraft_geom::Rect::from_points(a, self.cur))];
         };
         // As InDesign: the frame the graphic will fill, and its scale beside the pointer.
-        let (r, k) = proportional(a, self.cur, size);
+        let (r, k) = drawn_frame(a, self.cur, size);
         let pct = format!("{:.2}%", k * 100.0);
         vec![
             crate::Overlay::Marquee(r),
@@ -181,6 +181,22 @@ Y: {pct}"
     fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         // Drawing the frame: the crosshair (the loaded graphic's thumbnail would hide the frame).
         if self.start.is_some() { Cursor::Crosshair } else { Cursor::LoadedGraphic }
+    }
+}
+
+/// A dragged frame `place.drop` takes only when it is wider and taller than this, in points;
+/// a thinner one places the graphic at its natural size instead.
+pub const PLACE_DRAG_MIN: f64 = 2.0;
+
+/// The frame `place.drop` makes for a place-cursor drag from `a` to `b`: the proportional frame
+/// (see [`proportional`]), or the graphic at natural size from `a` when that frame is at most
+/// [`PLACE_DRAG_MIN`] in either direction. With its scale.
+fn drawn_frame(a: Point, b: Point, size: (f64, f64)) -> (designcraft_geom::Rect, f64) {
+    let (r, k) = proportional(a, b, size);
+    if r.width() > PLACE_DRAG_MIN && r.height() > PLACE_DRAG_MIN {
+        (r, k)
+    } else {
+        (designcraft_geom::Rect::new(a.x, a.y, a.x + size.0, a.y + size.1), 1.0)
     }
 }
 
