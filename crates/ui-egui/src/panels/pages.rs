@@ -491,7 +491,10 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 app.session.page_label(abs)
                             );
                             marker.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
-                            if marker.double_clicked() {
+                            // A double click, or the keyboard or a screen reader activating it (a
+                            // single pointer click only selects, as on a page).
+                            let activated = marker.double_clicked() || marker.clicked() && !marker.clicked_by(egui::PointerButton::Primary);
+                            if activated {
                                 if editing_parents {
                                     let _ = app.run("layout.parents.edit", json!({"on": false}));
                                     if let Some(view) = app.view_mut() {
@@ -1216,6 +1219,33 @@ mod spread_label_tests {
         assert_eq!(dialog.fields.get("page"), Some(&json!(3)));
         assert!(!h.state().session.doc().unwrap().editing_parents);
         assert!(std::sync::Arc::ptr_eq(&h.state().session.doc().unwrap().doc, &before), "opening options does not edit the section");
+    }
+
+    #[test]
+    fn a_section_marker_opens_its_options_from_the_keyboard_but_not_on_one_click() {
+        let mut app = app();
+        app.run("layout.section", json!({"page": 3, "startNumber": 5})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1000.0, 800.0)));
+        let mut h = Harness::builder().with_size(vec2(280.0, 900.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::new("section_marker_key_test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_label("Numbering & Section Options: 5").click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none(), "one pointer click doesn't open the options");
+        h.run_steps(30);
+        h.get_by_label("Numbering & Section Options: 5").click_accesskit();
+        h.run_steps(2);
+        assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.id.as_str()), Some("numberingSection"));
     }
 
     /// Create a facing-page document for section navigation tests.
