@@ -4266,3 +4266,26 @@ fn toc_style_entries_read_id_prefixed_separators_and_styles() {
     assert_eq!(entry.page_number_style.as_deref(), Some("TOC Page Number"));
     assert_eq!(toc.title_style.as_deref(), Some("TOC/TOC Header"));
 }
+
+#[test]
+fn toc_style_references_in_indented_properties_resolve() {
+    // Property children laid out on their own lines: the whitespace around a reference isn't
+    // part of the style name.
+    let styles = TOC_STYLES
+        .replace(
+            ">ParagraphStyle/$ID/TOC%3aTOC body text<",
+            ">
+      ParagraphStyle/$ID/TOC%3aTOC body text
+    <",
+        )
+        .replace(
+            ">CharacterStyle/TOC Page Number<",
+            ">
+      CharacterStyle/TOC Page Number
+    <",
+        );
+    let d = import_idml(&fixture_with_table_styles(&styles, TOC_STORY)).unwrap();
+    let entry = d.toc.as_ref().unwrap().entries.iter().find(|e| e.style == "Heading 1").unwrap();
+    assert_eq!(entry.entry_style.as_deref(), Some("TOC/TOC body text"));
+    assert_eq!(entry.page_number_style.as_deref(), Some("TOC Page Number"));
+}

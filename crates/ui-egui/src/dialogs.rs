@@ -6221,6 +6221,15 @@ fn toc_separator_typed(s: &str) -> String {
     designcraft_doc::story::toc_separator_text(s)
 }
 
+/// Appends the special-character `code` (such as `^y`) to the separator field's notation. A
+/// trailing unescaped caret is a literal caret: it's escaped first, so it doesn't swallow the code.
+fn toc_separator_append(field: &mut String, code: &str) {
+    if field.chars().rev().take_while(|&c| c == '^').count() % 2 == 1 {
+        field.push('^');
+    }
+    field.push_str(code);
+}
+
 fn toc_rows(d: &Dialog) -> Vec<TocRow> {
     d.fields.get("included").cloned().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default()
 }
@@ -6414,7 +6423,7 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 ui.menu_button("▸", |ui| {
                     for (label, code) in [("Tab Character", "^t"), ("Right Indent Tab", "^y"), ("Em Space", "^m"), ("En Space", "^>")] {
                         if ui.button(tr(label)).clicked() {
-                            r.separator.push_str(code);
+                            toc_separator_append(&mut r.separator, code);
                             ui.close();
                         }
                     }
@@ -8007,6 +8016,12 @@ mod tests {
         assert_eq!(toc_rows(app.ui.dialog.as_ref().unwrap())[0].separator, " ^y ");
         for text in ["^y", "^t^y", "^m^>", "unknown ^q and trailing ^", "a\t\u{E006}\u{2003}\u{2002}z"] {
             assert_eq!(toc_separator_typed(&toc_separator_shown(text)), text);
+        }
+        // The picker after a literal caret: the caret stays, and the code is the code.
+        for (field, typed) in [("^", "^\u{E006}"), ("^^", "^\u{E006}"), ("a", "a\u{E006}"), ("^^^", "^^\u{E006}")] {
+            let mut f = field.to_string();
+            toc_separator_append(&mut f, "^y");
+            assert_eq!(toc_separator_typed(&f), typed, "{field:?} → {f:?}");
         }
     }
 
