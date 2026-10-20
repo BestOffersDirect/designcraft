@@ -523,15 +523,19 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                         resp.context_menu(|ui| page_menu(app, ui, &doc, abs, si));
                     }
                     let label = spread_label(app, &doc, first, sp.pages.len());
-                    let g = ui.painter().layout_no_wrap(label.clone(), crate::theme::semibold(11.0), Color32::WHITE);
+                    // White on the badge; the theme's text colour elsewhere, so it reads on a light panel.
+                    let badge = cur_spread == Some(si) && !editing_parents;
+                    let ink = if badge { Color32::WHITE } else { t.text_strong };
+                    let g = ui.painter().layout_no_wrap(label.clone(), crate::theme::semibold(11.0), ink);
                     let c = egui::pos2(row.min.x + center, top + row_h + 11.0);
                     let br = egui::Rect::from_center_size(c, vec2(g.size().x + 7.0, 12.5));
-                    if cur_spread == Some(si) && !editing_parents {
+                    if badge {
                         ui.painter().rect_filled(br, 0.0, BADGE);
                     }
-                    ui.painter().galley(c - g.size() / 2.0, g, Color32::WHITE);
+                    ui.painter().galley(c - g.size() / 2.0, g, ink);
                     let lr = ui.interact(br, ui.id().with(("spread_label", si)), Sense::click());
-                    lr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &label));
+                    // A click goes to the spread, so assistive technology hears a button.
+                    lr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
                     if lr.clicked() {
                         if editing_parents {
                             let _ = app.run("layout.parents.edit", json!({"on": false}));
@@ -1211,7 +1215,8 @@ mod spread_label_tests {
             app,
         );
         h.run_steps(3);
-        let _ = h.get_by_label("2, 1");
+        // A spread label is a button: a click goes to the spread.
+        let _ = h.get_by(|n| n.role() == egui::accesskit::Role::Button && n.label().as_deref() == Some("2, 1"));
         assert!(h.query_by_label("2 1").is_none());
         // Each page is named for screen readers: two pages are numbered 1.
         assert_eq!(h.query_all_by_label("Page 1").count(), 2);
