@@ -60,8 +60,10 @@ is a PNG of the page; another extension is an error, and nothing runs.
 included paragraph styles and their levels. `toc.update` refreshes their titles, hierarchy and
 destinations. Refresh keeps the generated outline at its previous position, preserving manual
 bookmarks before and after it; disabling the option removes only the generated
-bookmarks. Omitting the parameter keeps the existing TOC setting (false for a new command-created
-TOC). The Table of Contents dialog exposes Create PDF Bookmarks and defaults it on for a new TOC.
+bookmarks. Without `createBookmarks`, `toc.generate` keeps the document's existing TOC setting,
+which is off when there is no TOC yet, so a script that makes a new TOC gets no bookmarks unless
+it passes `createBookmarks: true`. The Table of Contents dialog differs: its Create PDF Bookmarks
+option is on by default for a new TOC, and for an existing one it shows the saved setting.
 
 ## Color themes
 
