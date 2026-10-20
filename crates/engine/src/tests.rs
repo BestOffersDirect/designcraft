@@ -476,6 +476,33 @@ fn place_gun_click_drag_and_into_frame() {
     assert_eq!(graphic_xf(&s), placed);
 }
 
+/// A place-cursor drag draws the frame at the graphic's proportions from where it started, as
+/// InDesign does, shows its scale, and places exactly that frame, in any direction.
+#[test]
+fn place_gun_drag_previews_and_places_a_proportional_frame() {
+    use designcraft_tools::{Cursor, Mods, Overlay, PointerEvent, PointerKind};
+    let mut s = session();
+    let png = designcraft_render::Rendered { width: 40, height: 20, pixels: vec![200; 40 * 20 * 4] }.to_png();
+    s.execute("place.load", &json!({"base64": cmd::base64_encode(&png), "name": "a.png"})).unwrap();
+    let v = ViewInfo::at_zoom(1.0);
+    let p = designcraft_geom::Point::new;
+    assert_eq!(s.cursor(p(300.0, 300.0), Mods::default(), v), Cursor::LoadedGraphic);
+    // Up and to the left: 80 × 200 holds the 40 × 20 graphic at 200 %, 80 × 40, hanging from the press.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 220.0, 100.0), v).unwrap();
+    assert_eq!(s.cursor(p(220.0, 100.0), Mods::default(), v), Cursor::Crosshair, "the crosshair while drawing");
+    let o = s.overlays(v);
+    assert!(o.iter().any(|o| matches!(o, Overlay::Marquee(r) if *r == designcraft_geom::Rect::new(220.0, 260.0, 300.0, 300.0))), "{o:?}");
+    assert!(
+        o.iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == "X: 200.00%
+Y: 200.00%")),
+        "{o:?}"
+    );
+    s.pointer(&PointerEvent::new(PointerKind::Up, 220.0, 100.0), v).unwrap();
+    let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
+    assert_eq!(it.bounds(), designcraft_geom::Rect::new(220.0, 260.0, 300.0, 300.0), "the frame previewed");
+}
+
 #[test]
 fn preflight_reports_overset_and_missing_fonts() {
     let mut s = session();

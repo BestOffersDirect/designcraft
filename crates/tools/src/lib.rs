@@ -220,6 +220,8 @@ pub struct ToolContext<'a> {
     pub unit: Unit,
     /// The toolbox's Stroke box is in front: sampled colours go to strokes (the Eyedropper).
     pub stroke_in_front: bool,
+    /// Natural size, in points, of the graphic loaded in the place cursor.
+    pub loaded: Option<(f64, f64)>,
 }
 
 impl ToolContext<'_> {
