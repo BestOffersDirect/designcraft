@@ -6870,7 +6870,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     if comp_now != comp {
         d.fields.insert("component".into(), json!(comp_now.key()));
     }
-    // The hex code, and the eyedropper's mark beside it.
+    // The hex code, and the eyedropper beside it.
     let cy = area.min.y + at::ROWS[7];
     text(ui, egui::pos2(area.min.x + 321.0, cy), egui::Align2::LEFT_CENTER, "#:");
     let hr = egui::Rect::from_min_size(egui::pos2(area.min.x + 341.0, cy - 10.5), egui::vec2(64.0, 21.0));
@@ -6886,12 +6886,26 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         p = Picked::from_rgb(c.to_rgb_uncalibrated(), p.hsb[0]);
     }
     d.fields.insert("hexEdit".into(), json!(h));
-    crate::icons::paint(
-        ui.painter(),
-        egui::Rect::from_center_size(egui::pos2(hr.right() + 16.0, cy), egui::vec2(15.0, 15.0)),
-        "tool-eyedropper",
-        t.icon,
-    );
+    // The eyedropper, as InDesign's: dragged onto the page, it takes the colour shown under the
+    // pointer when it is let go.
+    let tip = tr("Eyedropper: drag it onto the page");
+    let er = egui::Rect::from_center_size(egui::pos2(hr.right() + 16.0, cy), egui::vec2(21.0, 21.0));
+    let resp = ui.interact(er, egui::Id::new("color_picker_eyedropper"), egui::Sense::click_and_drag());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &tip));
+    if resp.hovered() || resp.dragged() {
+        ui.painter().rect_filled(er, 3.0, t.hover);
+    }
+    crate::icons::paint(ui.painter(), egui::Rect::from_center_size(er.center(), egui::vec2(15.0, 15.0)), "tool-eyedropper", t.icon);
+    if resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+    }
+    if resp.drag_stopped()
+        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
+        && let Some(c) = crate::canvas::color_at(app, ui.ctx(), pos)
+    {
+        p = Picked::from_rgb(c.map(|v| f32::from(v) / 255.0), p.hsb[0]);
+    }
+    resp.on_hover_text(tip);
     if p != before {
         store_picked(d, &p);
         if let Some(c) = exact_cmyk {
@@ -10017,8 +10031,63 @@ mod tests {
 
     /// The Color Picker laid out as InDesign's: a field and a slider for the component whose radio
     /// is on, the new colour over the old one, and the values in every space.
+    /// The course's chapter 23: the Color Picker's eyedropper, dragged from the picker onto the
+    /// page and let go there, takes the colour the page shows.
     #[test]
+    fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let id = app.run("frame.create", json!({"rect": [36, 36, 560, 700], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.fill", json!({"ids": [id], "swatch": "C=0 M=100 Y=100 K=0"})).unwrap();
+        app.ui.dialog = Some(Dialog::new("colorPicker", json!({"target": "fill", "hex": "#000000"})));
+        let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            app,
+        );
+        h.run_steps(6);
+        // Where the frame shows on screen.
+        let target = {
+            let app = h.state();
+            let doc = &app.session.doc().unwrap().doc;
+            let layout = designcraft_tools::CanvasLayout::new(doc, false);
+            let v = *app.view().unwrap();
+            crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v).to_screen(layout.slots[0].xf * designcraft_geom::Point::new(300.0, 600.0))
+        };
+        let from = h.get_by_label("Eyedropper: drag it onto the page").rect().center();
+        h.hover_at(from);
+        h.drag_at(from);
+        h.run_steps(1);
+        for k in 1..=4 {
+            h.hover_at(from + (target - from) * (k as f32 / 4.0));
+            h.run_steps(1);
+        }
+        h.drop_at(target);
+        h.run_steps(3);
+        let d = h.state().ui.dialog.as_ref().expect("the picker stays open");
+        let [r, g, b, _] = h.state().session.doc().unwrap().doc.resolve_color("C=0 M=100 Y=100 K=0", 1.0).unwrap().to_rgba8(1.0);
+        let got: Vec<f64> = d.fields["rgb"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+        for (a, e) in got.iter().zip([r, g, b]) {
+            assert!((a - f64::from(e)).abs() <= 3.0, "{got:?} vs {:?}", [r, g, b]);
+        }
+        assert!(d.b("edited"));
+        // Let go off the page (here, on the dialog's own field area): no colour, nothing changes.
+        let hex = d.s("hex");
+        h.hover_at(from);
+        h.drag_at(from);
+        h.run_steps(1);
+        h.hover_at(from + egui::vec2(-40.0, 0.0));
+        h.run_steps(1);
+        h.drop_at(egui::pos2(2.0, 2.0));
+        h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().s("hex"), hex);
+    }
 
+    #[test]
     fn the_color_picker_picks_on_its_field_and_slider_and_adds_a_cmyk_swatch() {
         use egui_kittest::kittest::Queryable;
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());

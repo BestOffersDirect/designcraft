@@ -848,6 +848,16 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Choose Image…", ["Choose Image…", "Choisir une image…", "Choose Image…", "Choose Image…", "选择图像…"]),
     ("Class:", ["Class:", "Classe :", "Class:", "Class:", "类别："]),
     ("Color Picker", ["Color Picker", "Sélecteur de couleurs", "Color Picker", "Color Picker", "拾色器"]),
+    (
+        "Eyedropper: drag it onto the page",
+        [
+            "Pipette: auf die Seite ziehen",
+            "Pipette : faites-la glisser sur la page",
+            "Cuentagotas: arrástrelo a la página",
+            "スポイト : ページにドラッグ",
+            "吸管：将其拖到页面上",
+        ],
+    ),
     ("Color Settings", ["Color Settings", "Réglages des couleurs", "Color Settings", "Color Settings", "颜色设置"]),
     ("Color:", ["Color:", "Couleur :", "Color:", "Color:", "颜色："]),
     ("Columns", ["Columns", "Colonnes", "Columns", "Columns", "栏"]),

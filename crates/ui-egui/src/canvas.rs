@@ -639,6 +639,35 @@ fn draw_cursor_badge(painter: &egui::Painter, p: Pos2, c: Cursor, t: &Tokens) {
 }
 
 /// Render options for the canvas texture.
+/// The colour the canvas shows at screen point `pos` (the Color Picker's eyedropper): one device
+/// pixel rendered as the page is, over its paper. None off the pages.
+pub fn color_at(app: &mut DesignApp, ctx: &egui::Context, pos: Pos2) -> Option<[u8; 3]> {
+    let rect = app.canvas_rect.filter(|r| r.contains(pos))?;
+    let v = *app.view()?;
+    let xf = Xf::new(rect, &v);
+    let at = xf.to_canvas(pos);
+    let st = app.session.active()?;
+    let doc = st.doc.clone();
+    let layout = CanvasLayout::new(&doc, st.editing_parents);
+    let on_page = layout
+        .slots
+        .iter()
+        .any(|slot| doc.spread(slot.spread).is_some_and(|sp| sp.pages.iter().any(|page| slot.xf.transform_rect_bbox(page.bounds()).contains(at))));
+    if !on_page {
+        return None;
+    }
+    let placed: Vec<designcraft_render::Placed> = layout.slots.iter().map(|s| designcraft_render::Placed { spread: s.spread, xf: s.xf }).collect();
+    let ppp = ctx.pixels_per_point() as f64;
+    let view = Affine::scale(ppp) * Affine::scale(xf.zoom) * Affine::translate((-at.x, -at.y));
+    let opts = screen_options(app, &layout, app.ui.screen_mode != ScreenMode::Normal, ppp);
+    let img = app.canvas.patcher.render(&doc, &app.session.cache, &placed, 1, 1, view, &opts);
+    let [r, g, b, a] = <[u8; 4]>::try_from(img.pixels.get(..4)?).ok()?;
+    // Premultiplied over the paper.
+    let paper = doc.resolve_color(designcraft_color::swatch::PAPER, 1.0).unwrap_or(designcraft_color::Color::WHITE).to_rgba8(1.0);
+    let over = |c: u8, p: u8| (u32::from(c) + u32::from(p) * (255 - u32::from(a)) / 255).min(255) as u8;
+    Some([over(r, paper[0]), over(g, paper[1]), over(b, paper[2])])
+}
+
 fn screen_options(app: &DesignApp, layout: &CanvasLayout, preview: bool, ppp: f64) -> designcraft_render::RenderOptions {
     designcraft_render::RenderOptions {
         printing_only: preview,
