@@ -1411,6 +1411,10 @@ fn run_ui_inner(app: &mut DesignApp, id: &str, p: &Value) -> Option<Result<Value
                 designcraft_render::DisplayQuality::High => "high",
             });
             f["uiScale"] = json!((app.ui.ui_scale * 100.0).round());
+            // Interface: Cancel goes back to the theme Preferences opened with.
+            f["brightness"] = json!(app.ui.brightness.id());
+            f["openedBrightness"] = json!(app.ui.brightness.id());
+            f["toolsColumns"] = json!(if app.ui.tools_double_column { "double" } else { "single" });
             f["richBlack"] = json!(app.ui.rich_black);
             f["dynamicSpelling"] = json!(app.ui.dynamic_spelling);
             f["storyEditorSize"] = json!(app.ui.story_editor_size);
