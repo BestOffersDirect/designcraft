@@ -3388,8 +3388,6 @@ mod tests {
         assert!((r.x0 - 200.0).abs() < 0.5 && (r.y1 - 200.0).abs() < 0.5 && (r.x1 - 300.0).abs() < 0.5, "{r:?}");
     }
 
-    /// The corner shape list shows each shape's glyph beside its name, as InDesign's; a row picks
-    /// the shape and the current one is marked.
     /// A row is as wide as its translated name needs: a long one isn't cut at a fixed width.
     #[test]
     fn preview_rows_fit_long_translated_names() {
@@ -3408,6 +3406,8 @@ mod tests {
         assert!(widths.0 >= widths.1, "{widths:?}");
     }
 
+    /// The corner shape list shows each shape's glyph beside its name, as InDesign's; a row picks
+    /// the shape and the current one is marked.
     #[test]
     fn the_corner_shape_list_has_glyph_rows_and_picks_a_shape() {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
