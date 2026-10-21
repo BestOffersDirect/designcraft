@@ -260,6 +260,33 @@ impl Search {
         }
     }
 
+    /// The edit Change makes when the selection `range` (offsets in `text`, target `r` of story
+    /// `sid`) is what Find Next found there, so the two commands agree on what a match is. With
+    /// no pattern: a selection inside one stretch with the Find Format (Find Next selects the rest
+    /// of a stretch from inside it). With a pattern: the match it makes from the selection's start
+    /// must be the selection, overlapping matches Find Next can select included.
+    #[allow(clippy::too_many_arguments)]
+    fn found_edit(
+        &self,
+        d: &Document,
+        sid: StoryId,
+        r: &Range<usize>,
+        text: &str,
+        range: &Range<usize>,
+        rep: &str,
+        grep: bool,
+    ) -> Result<Option<(Range<usize>, String)>> {
+        let spans = self.spans(d, sid, r);
+        let Some(re) = &self.re else {
+            let inside = !range.is_empty() && spans.unwrap_or_default().iter().any(|s| s.start <= range.start && range.end <= s.end);
+            return Ok(inside.then(|| (range.clone(), rep.to_string())));
+        };
+        let found =
+            if grep { re.replacement_at(text, range.start, rep) } else { re.find_at(text, range.start).map(|m| m.map(|m| (m, rep.to_string()))) };
+        let found = found.map_err(|e| bad("find.change", e))?;
+        Ok(found.filter(|(m, _)| m == range && spans.as_ref().is_none_or(|s| within(s, m))))
+    }
+
     /// The edits Change All makes in `text` (target `r` of story `sid`): `rep` expanded for each
     /// GREP match, else `rep` itself.
     #[allow(clippy::too_many_arguments)]
@@ -531,26 +558,28 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
     let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty());
     let context = scope(s, p)?;
     let targets = context.targets.clone();
-    // Change: only the text Find Next found, the selection, while it is still a match.
-    let found = if bool_or(p, "found", false) {
+    // Change: only the text Find Next found, the selection, while it is still a match (as Find
+    // Next defines one), with its replacement.
+    let (found, found_out) = if bool_or(p, "found", false) {
         let st = s.doc()?;
         let selected = st.selection.text.filter(|t| t.cell.is_none() && !t.is_caret()).map(|t| (t.story, t.range()));
-        let hit = selected.filter(|(sid, range)| {
-            targets.iter().any(|(tid, r)| {
-                tid == sid
-                    && r.start <= range.start
-                    && range.end <= r.end
-                    && target_text(&st.doc, *tid, r)
-                        .and_then(|text| re.replacements(&st.doc, *tid, r, text, &rep, grep, false))
-                        .is_ok_and(|edits| edits.iter().any(|(m, _)| r.start + m.start == range.start && r.start + m.end == range.end))
+        let hit = selected.and_then(|(sid, range)| {
+            targets.iter().find_map(|(tid, r)| {
+                if *tid != sid || range.start < r.start || r.end < range.end {
+                    return None;
+                }
+                let text = target_text(&st.doc, *tid, r).ok()?;
+                let local = range.start - r.start..range.end - r.start;
+                let (m, out) = re.found_edit(&st.doc, *tid, r, text, &local, &rep, grep).ok()??;
+                Some(((sid, r.start + m.start..r.start + m.end), out))
             })
         });
         match hit {
-            Some(hit) => Some(hit),
+            Some((hit, out)) => (Some(hit), Some(out)),
             None => return Ok(json!({"count": 0})),
         }
     } else {
-        None
+        (None, None)
     };
     let (count, changed) = s.edit(|d, sel| {
         let styles = d.styles.clone();
@@ -563,14 +592,21 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
             let Some(story) = d.story(sid) else { continue };
             // Collect matches first (positions refer to the original text), apply back to front.
             let text = story.text.get(r.clone()).ok_or_else(|| bad("find", "invalid selection bounds or UTF-8 boundary"))?;
-            let mut edits: Vec<(std::ops::Range<usize>, String)> = re
-                .replacements(d, sid, &r, text, &rep, grep, first_only)?
-                .into_iter()
-                .map(|(m, out)| (r.start + m.start..r.start + m.end, out))
-                .collect();
-            if let Some((_, range)) = &found {
-                edits.retain(|(m, _)| m == range);
-            }
+            let edits: Vec<(std::ops::Range<usize>, String)> = match (&found, &found_out) {
+                // Change: the found text alone, in the target it lies in.
+                (Some((_, range)), Some(out)) => {
+                    if r.start <= range.start && range.end <= r.end {
+                        vec![(range.clone(), out.clone())]
+                    } else {
+                        Vec::new()
+                    }
+                }
+                _ => re
+                    .replacements(d, sid, &r, text, &rep, grep, first_only)?
+                    .into_iter()
+                    .map(|(m, out)| (r.start + m.start..r.start + m.end, out))
+                    .collect(),
+            };
             let Some(st) = d.story_mut(sid) else { continue };
             for (range, new) in edits.iter().rev() {
                 let changed = if format_only {
@@ -851,6 +887,39 @@ mod tests {
         assert_eq!(text(&s), "blue blue | red");
         assert_eq!(s.doc().unwrap().doc.story(sid).unwrap().format_after(12).over.underline, Some(true));
         assert_eq!(s.doc().unwrap().selection.text.unwrap().range(), 12..15);
+    }
+
+    /// Change accepts what Find Next selected even when Change All wouldn't match there: the
+    /// rest of a Find Format stretch from a caret inside it, and an overlapping match.
+    #[test]
+    fn change_takes_any_selection_find_next_made() {
+        // A caret inside a bold stretch: Find Next with only a Find Format selects the rest of it.
+        let (mut s, sid) = scope_session("plain bold text");
+        s.execute("style.character.create", &json!({"name": "Strong", "chars": {"fontStyle": "Bold"}})).unwrap();
+        scope_select(&mut s, sid, 6, 10);
+        s.execute("style.character.apply", &json!({"name": "Strong"})).unwrap();
+        scope_select(&mut s, sid, 8, 8);
+        let p = json!({"find": "", "change": "", "findFormat": {"charStyle": "Strong"}, "attrs": {"underline": true}, "scope": "story"});
+        let hit = s.execute("find.next", &p).unwrap();
+        assert_eq!((hit["start"].as_u64(), hit["end"].as_u64()), (Some(8), Some(10)));
+        let mut change = p.clone();
+        change["found"] = json!(true);
+        assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
+        let st = s.doc().unwrap().doc.story(sid).unwrap().clone();
+        assert_eq!((st.format_after(7).over.underline, st.format_after(8).over.underline), (None, Some(true)), "only the selected rest");
+        // "aa" in "aaa" from the second a: Find Next selects 1..3, which Change All never finds.
+        for grep in [false, true] {
+            let (mut s, sid) = scope_session("aaa");
+            scope_select(&mut s, sid, 1, 1);
+            let (find, change) = if grep { ("(a)a", "<$1>") } else { ("aa", "b") };
+            let p = json!({"find": find, "change": change, "grep": grep, "scope": "story"});
+            let hit = s.execute("find.next", &p).unwrap();
+            assert_eq!((hit["start"].as_u64(), hit["end"].as_u64()), (Some(1), Some(3)));
+            let mut found = p.clone();
+            found["found"] = json!(true);
+            assert_eq!(s.execute("find.change", &found).unwrap()["count"], 1, "grep: {grep}");
+            assert_eq!(s.doc().unwrap().doc.story(sid).unwrap().text, if grep { "a<a>" } else { "ab" });
+        }
     }
 
     #[test]

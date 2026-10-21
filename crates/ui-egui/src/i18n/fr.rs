@@ -160,7 +160,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Scripts", "Scripts"),
     ("Section Marker", "Marque de section"),
     ("Section Symbol", "Symbole de section"),
-    ("Selection", "Sélection"),
     ("Sentence case", "Majuscule en début de phrase"),
     ("Simulate Paper Color", "Simuler la couleur du papier"),
     ("Single Left Quotation Mark", "Guillemet simple ouvrant"),
