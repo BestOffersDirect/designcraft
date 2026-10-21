@@ -255,8 +255,9 @@ fn parse_single(tok: &str, default: Unit, percent_base: Option<f64>) -> Option<f
     Some(unit.to_pt(n))
 }
 
-/// Format a value (points) in `unit` the way InDesign fields show it: up to 3 decimals, trailing
-/// zeros trimmed; picas as `3p6`, ciceros as `2c4`.
+/// Format a value (points) in `unit` the way InDesign fields show it: up to 4 decimals for inches,
+/// decimal inches and centimetres, up to 3 for the other units, trailing zeros trimmed; picas as
+/// `3p6`, ciceros as `2c4`.
 pub fn format_measure(pt: f64, unit: Unit) -> String {
     // As InDesign shows them: inches and centimetres to four decimals (a 1p gutter is 0.1667 in
     // or 0.4233 cm, A4 is 8.2677 in wide), the other units to three.
