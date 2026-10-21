@@ -2900,6 +2900,10 @@ fn clear_fitting_options(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit(|d, _| {
         let mut n = 0;
         for id in &ids {
+            // Locked frames (or frames on a locked layer) keep their options, as with Fit.
+            if !d.item(*id).is_some_and(|it| unlocked(d, it)) {
+                continue;
+            }
             let Some(it) = d.item_mut(*id) else { continue };
             let Content::Graphic(g) = &mut it.content else { continue };
             g.auto_fit = designcraft_doc::Fitting::None;
@@ -4313,6 +4317,10 @@ mod fitting_tests {
         assert_eq!(g.xf, before.xf, "the picture stays where it is");
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(graphic(&s).crop, [10.0; 4], "one undo step");
+        s.execute("object.lock", &json!({"ids": [f]})).unwrap();
+        let r = s.execute("object.clearFittingOptions", &json!({"ids": [f]})).unwrap();
+        assert_eq!(r["changed"], 0);
+        assert_eq!(graphic(&s).crop, [10.0; 4], "a locked frame keeps its options");
     }
 }
 
