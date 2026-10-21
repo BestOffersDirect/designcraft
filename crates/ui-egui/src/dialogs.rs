@@ -2087,6 +2087,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "colorGroupOptions" => crate::i18n::tr(&app.ui.language, "Color Group Options"),
         "layerSettings" => crate::i18n::tr(&app.ui.language, "Layer Options"),
         crate::effects_dialog::ID => crate::i18n::tr(&app.ui.language, "Effects"),
+        crate::package_dialog::ID => crate::i18n::tr(&app.ui.language, "Package"),
+        crate::package_dialog::INSTRUCTIONS => crate::i18n::tr(&app.ui.language, "Printing Instructions"),
         id => match id.strip_prefix("cmd:").and_then(designcraft_engine::find_command) {
             Some(c) => crate::i18n::tr(&app.ui.language, c.label.trim_end_matches('…')),
             None => crate::i18n::tr(&app.ui.language, "Dialog"),
@@ -2104,6 +2106,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             "newDocument" => 960.0,
             "numberingSection" => 560.0,
             crate::effects_dialog::ID => 720.0,
+            crate::package_dialog::ID => 720.0,
+            crate::package_dialog::INSTRUCTIONS => 520.0,
             _ => 640.0,
         };
         let width = preferred_width.min(available.x);
@@ -2361,6 +2365,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                     "colorGroupOptions" => options::color_group_options(app, ui, &mut d),
                     "layerSettings" => options::layer_options(app, ui, &mut d),
                     crate::effects_dialog::ID => crate::effects_dialog::show(app, ui, &mut d),
+                    crate::package_dialog::ID => crate::package_dialog::show(app, ui, &mut d),
+                    crate::package_dialog::INSTRUCTIONS => crate::package_dialog::show_instructions(app, ui, &mut d),
                     "preferences" => preferences(app, ui, &mut d, body_height),
                     "print" => print_dialog(app, ui, &mut d),
                     "pdfImport" => {
@@ -2819,6 +2825,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             "updateLink" => crate::i18n::tr(&app.ui.language, "  Update  ").to_string(),
             "findFont" => crate::i18n::tr(&app.ui.language, "Replace All").to_string(),
             "newDocument" => format!("  {}  ", crate::i18n::tr(&app.ui.language, "Create")),
+            crate::package_dialog::ID => crate::i18n::tr(&app.ui.language, "Package…").to_string(),
+            crate::package_dialog::INSTRUCTIONS => crate::i18n::tr(&app.ui.language, "Continue").to_string(),
             _ => crate::i18n::tr(&app.ui.language, "  OK  ").to_string(),
         };
         let cancel_label = match d.id.as_str() {
@@ -3573,6 +3581,8 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         }
         "alert" => Ok(Value::Null),
         crate::effects_dialog::ID => crate::effects_dialog::confirm(app, &d),
+        crate::package_dialog::ID => crate::package_dialog::confirm(app, &d),
+        crate::package_dialog::INSTRUCTIONS => crate::package_dialog::confirm_instructions(app, &d),
         "findChange" => {
             let result = if d.b("objectMode") { Ok(Value::Null) } else { app.run("find.change", find_change_params(&d)) };
             // Confirmation consumes retained bounds before closing, even on an error.
