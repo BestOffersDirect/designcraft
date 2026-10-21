@@ -517,6 +517,15 @@ Y: 100.00%")),
     s.pointer(&PointerEvent::new(PointerKind::Up, 180.0, 401.0), v).unwrap();
     let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
     assert_eq!(it.bounds(), natural, "the frame previewed");
+    // A drag under the threshold is a click: no frame drawn, the graphic at actual size where
+    // the press was.
+    s.execute("place.load", &json!({"base64": cmd::base64_encode(&png), "name": "a.png"})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 500.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 102.5, 501.25), v).unwrap();
+    assert!(!s.overlays(v).iter().any(|o| matches!(o, Overlay::Marquee(_))), "no frame yet");
+    s.pointer(&PointerEvent::new(PointerKind::Up, 102.5, 501.25), v).unwrap();
+    let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
+    assert_eq!(it.bounds(), designcraft_geom::Rect::new(100.0, 500.0, 140.0, 520.0), "actual size at the press");
 }
 
 #[test]

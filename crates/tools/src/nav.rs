@@ -133,7 +133,8 @@ impl Tool for PlaceGun {
                 let Some(a) = self.start.take() else { return vec![] };
                 let Some((sr, sa)) = cx.layout.spread_at(a) else { return vec![] };
                 let b = cx.layout.to_spread(sr, ev.pos);
-                if (ev.pos - a).hypot() < cx.tol(3.0)
+                let click = (ev.pos - a).hypot() < cx.tol(3.0);
+                if click
                     && let Some((_, id)) = cx.hit(a)
                     && cx
                         .doc
@@ -141,6 +142,10 @@ impl Tool for PlaceGun {
                         .is_some_and(|i| matches!(i.content, designcraft_doc::Content::Unassigned | designcraft_doc::Content::Graphic(_)))
                 {
                     return vec![Action::Exec("place.drop".into(), json!({"frame": id.0}))];
+                }
+                // Under the drag threshold it's a click, as the overlay shows: actual size there.
+                if click {
+                    return vec![Action::Exec("place.drop".into(), json!({"spread": crate::spread_json(sr), "x": sa.x, "y": sa.y}))];
                 }
                 // The frame the drag drew: at the graphic's proportions from where it started.
                 let r = cx.loaded.map_or_else(|| designcraft_geom::Rect::from_points(sa, b), |size| proportional(sa, b, size).0);
@@ -154,9 +159,14 @@ impl Tool for PlaceGun {
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<crate::Overlay> {
         let Some(a) = self.start else { return vec![] };
-        let (Some(size), true) = (cx.loaded, (self.cur - a).hypot() >= cx.tol(3.0)) else {
+        let Some(size) = cx.loaded else {
             return vec![crate::Overlay::Marquee(designcraft_geom::Rect::from_points(a, self.cur))];
         };
+        // Under the drag threshold the release is a click (actual size where it was pressed):
+        // no frame is drawn yet, the loaded cursor shows what lands.
+        if (self.cur - a).hypot() < cx.tol(3.0) {
+            return vec![];
+        }
         // As InDesign: the frame the graphic will fill, and its scale beside the pointer.
         let (r, k) = drawn_frame(a, self.cur, size);
         let pct = format!("{:.2}%", k * 100.0);
