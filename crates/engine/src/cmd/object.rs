@@ -382,7 +382,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Drop Shadow",
             ["Object", "Effects"],
             Some("Cmd+Alt+M"),
-            "{on?: bool, distance?, angle?, globalLight?: bool, opacity?, size?, spread? (%), color? (swatch), ids?}",
+            "{on?: bool, distance?, angle?, globalLight?: bool, opacity?, size?, spread? (%), color? (swatch), mode?: blend mode (multiply…), ids?}",
             has_selection,
             |s, p| {
                 let p2 = p.clone();
@@ -398,6 +398,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     if let Some(c) = str_param(&p2, "color") {
                         ds.color = c.into();
                     }
+                    if let Some(m) = blend_param(&p2) {
+                        ds.mode = m;
+                    }
                 })
             }
         ),
@@ -406,7 +409,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Inner Shadow",
             ["Object", "Effects"],
             None,
-            "{on?: bool, distance?, angle?, globalLight?: bool, opacity?, size?, choke? (%), color?, ids?}",
+            "{on?: bool, distance?, angle?, globalLight?: bool, opacity?, size?, choke? (%), color?, mode?: blend mode, ids?}",
             has_selection,
             |s, p| {
                 let p2 = p.clone();
@@ -422,6 +425,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     if let Some(c) = str_param(&p2, "color") {
                         e.color = c.into();
                     }
+                    if let Some(m) = blend_param(&p2) {
+                        e.mode = m;
+                    }
                 })
             }
         ),
@@ -430,7 +436,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Outer Glow",
             ["Object", "Effects"],
             None,
-            "{on?: bool, opacity?, size?, spread? (%), color?, ids?}",
+            "{on?: bool, opacity?, size?, spread? (%), color?, mode?: blend mode (screen…), ids?}",
             has_selection,
             |s, p| {
                 let p2 = p.clone();
@@ -442,6 +448,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     e.spread = f64_or(&p2, "spread", e.spread);
                     if let Some(c) = str_param(&p2, "color") {
                         e.color = c.into();
+                    }
+                    if let Some(m) = blend_param(&p2) {
+                        e.mode = m;
                     }
                 })
             }
@@ -3101,6 +3110,12 @@ fn align(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
+/// An effect's `mode` parameter: a blend mode by name ("multiply", "screen", or as saved).
+fn blend_param(p: &Value) -> Option<BlendMode> {
+    let v = p.get("mode")?;
+    v.as_str().and_then(BlendMode::parse).or_else(|| serde_json::from_value(v.clone()).ok())
+}
+
 fn distribute(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = targets(s, p)?;
     if ids.len() < 3 && p.get("spacing").is_none() {
@@ -4054,6 +4069,21 @@ mod label_tests {
 #[cfg(test)]
 mod light_tests {
     use super::*;
+
+    /// The shadow and glow commands take a blend mode by name.
+    #[test]
+    fn shadow_and_glow_commands_take_a_blend_mode() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let id = s.execute("frame.create", &json!({"rect": [72, 72, 172, 172]})).unwrap()["id"].as_u64().unwrap();
+        s.execute("object.dropShadow", &json!({"on": true, "mode": "screen", "ids": [id]})).unwrap();
+        s.execute("object.innerShadow", &json!({"on": true, "mode": "overlay", "ids": [id]})).unwrap();
+        s.execute("object.outerGlow", &json!({"on": true, "mode": "normal", "ids": [id]})).unwrap();
+        let fx = s.doc().unwrap().doc.item(ItemId(id)).unwrap().effects.clone();
+        assert_eq!(fx.drop_shadow.mode, BlendMode::Screen);
+        assert_eq!(fx.inner_shadow.mode, BlendMode::Overlay);
+        assert_eq!(fx.outer_glow.mode, BlendMode::Normal);
+    }
 
     #[test]
     fn global_light_moves_shadows_that_use_it() {

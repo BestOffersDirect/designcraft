@@ -2699,6 +2699,7 @@ impl<'r> Importer<'r> {
                 size: ds.num("Size").unwrap_or(def.size),
                 spread: ds.num("Spread").unwrap_or(def.spread),
                 global_light: false,
+                mode: ds.get("BlendMode").map_or(def.mode, names::blend_in),
             };
         }
         if let Some(f) = t.find("FeatherSetting")
