@@ -737,7 +737,9 @@ impl DesignApp {
         ViewInfo {
             zoom: self.view().map(|v| v.zoom).unwrap_or(1.0),
             snap: self.ui.snap_view(),
-            unit: self.ui.units,
+            // Tool readouts (sizes, smart-guide distances) measure in the document's ruler units,
+            // as its Control and Properties fields do.
+            unit: self.session.active().map_or(self.ui.units, |st| st.doc.settings.horizontal_units),
             stroke_in_front: self.ui.stroke_front,
         }
     }
@@ -834,7 +836,7 @@ impl DesignApp {
             }
         }
         if r.is_ok()
-            && matches!(id, "font.replace" | "edit.undo" | "edit.redo")
+            && matches!(id, "font.replace" | "font.reload" | "edit.undo" | "edit.redo")
             && let Some(dialog) = self.ui.dialog.as_mut().filter(|d| d.id == "findFont")
         {
             dialog.fields.remove("_fonts");
@@ -950,7 +952,7 @@ impl DesignApp {
                 }
             }
             // Release only when the request actually replaces Find, including a native PDF picker.
-            if was_find && !self.ui.dialog.as_ref().is_some_and(|d| d.id == "findChange") {
+            if was_find && self.ui.dialog.as_ref().is_none_or(|d| d.id != "findChange") {
                 self.session.reset_find_scope();
             }
         }
@@ -1437,7 +1439,7 @@ impl DesignApp {
                 self.status(format!("{file}: {}", warnings.join("; ")));
                 // Find Font, offered for the document's missing fonts, stays up: the status line
                 // keeps the warnings.
-                if !self.ui.dialog.as_ref().is_some_and(|d| d.id == "findFont") {
+                if self.ui.dialog.as_ref().is_none_or(|d| d.id != "findFont") {
                     self.ui.dialog =
                         Some(dialogs::Dialog::new("alert", json!({"title": "Import Warnings", "file": file, "message": warnings.join("\n")})));
                 }
@@ -1841,6 +1843,17 @@ mod tests {
         assert!(saved.rich_black);
         let accurate: UiState = serde_json::from_str(r#"{"richBlack": false}"#).unwrap();
         assert!(!accurate.rich_black, "a saved choice is kept");
+    }
+
+    /// Tool readouts measured in picas whatever the document's units (the UI's unit is never set):
+    /// they follow the active document's ruler units.
+    #[test]
+    fn tool_readouts_measure_in_the_documents_units() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), Services::default());
+        assert_eq!(app.view_info().unit, Unit::Picas, "no document: the UI's default");
+        app.run("file.new", json!({})).unwrap();
+        app.run("document.preferences", json!({"horizontalUnits": "inches", "verticalUnits": "millimeters"})).unwrap();
+        assert_eq!(app.view_info().unit, Unit::Inches);
     }
 
     /// An app with one document that has an unsaved edit.
