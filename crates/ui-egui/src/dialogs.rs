@@ -4493,7 +4493,12 @@ fn para_sides(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &s
                 changed = true;
             }
             match i {
-                0 => link_toggle(lang, ui, d, key, linked),
+                // Linked again, the four take Top's value.
+                0 if link_toggle(lang, ui, d, key, linked) => {
+                    sides = [sides[0]; 4];
+                    changed = true;
+                }
+                0 => {}
                 2 => {
                     ui.label("");
                 }
@@ -4512,12 +4517,15 @@ fn linked(d: &Dialog, key: &str, same: bool) -> bool {
     d.fields.get(&format!("_linked.{key}")).and_then(Value::as_bool).unwrap_or(same)
 }
 
-/// The link button between a border's or shading's four sides or corners.
-fn link_toggle(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, linked: bool) {
+/// The link button between a border's or shading's four sides or corners; true when it was
+/// clicked to link them, and the caller makes the four the same.
+fn link_toggle(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, linked: bool) -> bool {
     let tip = crate::i18n::tr(lang, "Make all settings the same");
-    if crate::widgets::icon_toggle_sized(ui, if linked { "link" } else { "link-broken" }, linked, tip, egui::vec2(22.0, 21.0)).clicked() {
+    let clicked = crate::widgets::icon_toggle_sized(ui, if linked { "link" } else { "link-broken" }, linked, tip, egui::vec2(22.0, 21.0)).clicked();
+    if clicked {
         d.fields.insert(format!("_linked.{key}"), json!(!linked));
     }
+    clicked && !linked
 }
 
 /// A swatch menu with a colour chip per swatch (hidden swatches left out); returns the swatch
@@ -4576,6 +4584,7 @@ fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: 
     let mut corners: [Corner; 4] = serde_json::from_value(para_value(d, pv, key)).unwrap_or_default();
     let linked = linked(d, key, corners.iter().all(|c| *c == corners[0]));
     let mut changed = None;
+    let mut relinked = false;
     egui::Grid::new(("pscorners", key)).num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
         for (i, label) in ["Top Left:", "Top Right:", "Bottom Right:", "Bottom Left:"].into_iter().enumerate() {
             let Some(c) = corners.get_mut(i) else { continue };
@@ -4595,12 +4604,17 @@ fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: 
                         }
                     }
                 });
-            if i == 0 {
-                link_toggle(lang, ui, d, key, linked);
+            // Linked again, the four take Top Left's size and shape.
+            if i == 0 && link_toggle(lang, ui, d, key, linked) {
+                relinked = true;
             }
             ui.end_row();
         }
     });
+    if relinked {
+        corners = [corners[0]; 4];
+        changed = Some(0);
+    }
     if let Some(i) = changed {
         // Linked, the corner changed sets all four.
         if linked {
@@ -9235,15 +9249,39 @@ mod tests {
         retype_beside(&mut h, "Top:", 0, "3");
         assert_eq!(field(&h, "borderWeights"), json!([3.0, 3.0, 3.0, 3.0]));
         // Unlinked, Left alone takes 10 pt.
-        let links: Vec<egui::Rect> = h.get_all_by_label("Make all settings the same").map(|n| n.rect()).collect();
-        assert_eq!(links.len(), 3, "weights, corners and offsets each have a link");
-        crate::test_window::click_at(&mut h, links[0].center());
+        // The link of the weights (0), corners (1) or offsets (2), where it is now: the dialog
+        // scrolls as fields take focus.
+        let link = |h: &egui_kittest::Harness<'static, crate::test_window::Window>, n: usize| {
+            let links: Vec<egui::Rect> = h.get_all_by_label("Make all settings the same").map(|n| n.rect()).collect();
+            assert_eq!(links.len(), 3, "weights, corners and offsets each have a link");
+            links[n].center()
+        };
+        let at = link(&h, 0);
+        crate::test_window::click_at(&mut h, at);
+        retype_beside(&mut h, "Left:", 0, "10");
+        assert_eq!(field(&h, "borderWeights"), json!([3.0, 10.0, 3.0, 3.0]));
+        // Linked again, the four take Top's weight; unlinked once more for the thick left side.
+        let at = link(&h, 0);
+        crate::test_window::click_at(&mut h, at);
+        assert_eq!(field(&h, "borderWeights"), json!([3.0, 3.0, 3.0, 3.0]));
+        let at = link(&h, 0);
+        crate::test_window::click_at(&mut h, at);
         retype_beside(&mut h, "Left:", 0, "10");
         assert_eq!(field(&h, "borderWeights"), json!([3.0, 10.0, 3.0, 3.0]));
         // The corners start the same too: Top Left's size goes to all four.
         retype_beside(&mut h, "Top Left:", 0, "0p4");
         let corners = field(&h, "borderCorners");
         assert!((0..4).all(|i| corners[i]["size"] == json!(4.0)), "{corners}");
+        // Unlinked, Top Right alone takes 0p8; linked again, all four take Top Left's 4 pt.
+        let at = link(&h, 1);
+        crate::test_window::click_at(&mut h, at);
+        retype_beside(&mut h, "Top Right:", 0, "0p8");
+        assert_eq!(field(&h, "borderCorners")[1]["size"], json!(8.0));
+        assert_eq!(field(&h, "borderCorners")[0]["size"], json!(4.0));
+        let at = link(&h, 1);
+        crate::test_window::click_at(&mut h, at);
+        let corners = field(&h, "borderCorners");
+        assert!((0..4).all(|i| corners[i] == corners[0] && corners[i]["size"] == json!(4.0)), "{corners}");
         confirm(&mut h.state_mut().app).unwrap();
         let style = h.state().app.session.doc().unwrap().doc.styles.para("Ruled Child").cloned().unwrap();
         assert_eq!(style.para.border_weights, Some([3.0, 10.0, 3.0, 3.0]));
