@@ -7435,7 +7435,7 @@ mod tests {
         let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
         visible_label(&labels, screen, "Number of Recent Items to Display:");
         let count = app.ui.dialog.as_ref().unwrap().n("recentFilesMax").unwrap();
-        assert_eq!(count.fract(), 0.0);
+        assert_eq!(count, 20.0, "InDesign's default");
         visible_label(&labels, screen, &format!("{count}"));
         assert!(!labels.iter().any(|(t, _, _)| t.trim() == format!("{count:.1}")), "no decimal shown");
     }
