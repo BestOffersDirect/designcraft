@@ -2896,12 +2896,14 @@ fn fitting_options(s: &mut Session, p: &Value) -> Result<Value> {
 /// Clear Frame Fitting Options: auto-fit off, no crop, the centre reference point. The content
 /// stays where it is, as in InDesign.
 fn clear_fitting_options(s: &mut Session, p: &Value) -> Result<Value> {
-    // Locked frames (or frames on a locked layer) keep their options, as with Fit; with nothing
-    // to change, no edit (and no empty undo step).
+    // Locked frames (or frames on a locked layer) keep their options, as with Fit; frames whose
+    // options are already clear are left out; with nothing to change, no edit (and no empty undo
+    // step).
     let doc = &s.doc()?.doc;
+    let set = |g: &designcraft_doc::Graphic| g.auto_fit != designcraft_doc::Fitting::None || g.crop != [0.0; 4] || g.fit_align != 4;
     let ids: Vec<ItemId> = targets(s, p)?
         .into_iter()
-        .filter(|id| doc.item(*id).is_some_and(|it| unlocked(doc, it) && matches!(it.content, Content::Graphic(_))))
+        .filter(|id| doc.item(*id).is_some_and(|it| unlocked(doc, it) && matches!(&it.content, Content::Graphic(g) if set(g))))
         .collect();
     if ids.is_empty() {
         return Ok(json!({"changed": 0}));
@@ -4320,6 +4322,9 @@ mod fitting_tests {
         assert_eq!(g.crop, [0.0; 4]);
         assert_eq!(g.fit_align, 4, "the centre reference point");
         assert_eq!(g.xf, before.xf, "the picture stays where it is");
+        let undo = s.doc().unwrap().history.undo.len();
+        let r = s.execute("object.clearFittingOptions", &json!({"ids": [f]})).unwrap();
+        assert_eq!((r["changed"].as_u64(), s.doc().unwrap().history.undo.len()), (Some(0), undo), "already clear: no change, no step");
         s.execute("edit.undo", &json!({})).unwrap();
         assert_eq!(graphic(&s).crop, [10.0; 4], "one undo step");
         s.execute("object.lock", &json!({"ids": [f]})).unwrap();
