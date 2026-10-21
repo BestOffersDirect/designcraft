@@ -1925,6 +1925,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Object/Fitting", "كائن/ملاءمة"),
     ("Object/Pathfinder", "كائن/باحث المسارات"),
     ("Object/Paths", "كائن/مسارات"),
+    ("Object/Convert Point", "كائن/تحويل النقطة"),
     ("Object/Select", "كائن/تحديد"),
     ("Object/Transform", "كائن/تحويل"),
     ("Object/Transform Again", "كائن/تحويل مجدداً"),

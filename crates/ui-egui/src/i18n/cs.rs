@@ -1609,6 +1609,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Object/Fitting", "Objekt/Přizpůsobení"),
     ("Object/Pathfinder", "Objekt/Operace s cestami"),
     ("Object/Paths", "Objekt/Cesty"),
+    ("Object/Convert Point", "Objekt/Převést bod"),
     ("Object/Select", "Objekt/Vybrat"),
     ("Object/Transform", "Objekt/Transformace"),
     ("Object/Transform Again", "Objekt/Transformovat znovu"),

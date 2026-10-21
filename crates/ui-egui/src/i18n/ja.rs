@@ -1841,6 +1841,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Object/Fitting", "オブジェクト/オブジェクトサイズの調整"),
     ("Object/Pathfinder", "オブジェクト/パスファインダー"),
     ("Object/Paths", "オブジェクト/パス"),
+    ("Object/Convert Point", "オブジェクト/ポイントを切り換え"),
     ("Object/Select", "オブジェクト/選択"),
     ("Object/Transform", "オブジェクト/変形"),
     ("Object/Transform Again", "オブジェクト/変形を再適用"),

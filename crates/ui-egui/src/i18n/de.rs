@@ -1639,6 +1639,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Object/Fitting", "Objekt/Anpassen"),
     ("Object/Pathfinder", "Objekt/Pathfinder"),
     ("Object/Paths", "Objekt/Pfade"),
+    ("Object/Convert Point", "Objekt/Punkt konvertieren"),
     ("Object/Select", "Objekt/Auswählen"),
     ("Object/Transform", "Objekt/Transformieren"),
     ("Object/Transform Again", "Objekt/Erneut transformieren"),
