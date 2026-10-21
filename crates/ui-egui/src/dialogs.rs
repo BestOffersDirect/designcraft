@@ -6775,7 +6775,8 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
         resp.clicked()
     };
-    if pill(ui, 0, &tr("OK"), true) || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+    // The footer's padded OK key, which every catalog has.
+    if pill(ui, 0, tr("  OK  ").trim(), true) || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
         d.fields.insert("_close".into(), json!("ok"));
     }
     if pill(ui, 1, &tr("Cancel"), false) || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -10033,6 +10034,57 @@ mod tests {
     /// is on, the new colour over the old one, and the values in every space.
     /// The course's chapter 23: the Color Picker's eyedropper, dragged from the picker onto the
     /// page and let go there, takes the colour the page shows.
+    /// The eyedropper takes the colour the canvas shows: with Proof Colors the proofed colour, and
+    /// with the ink-limit preview the warning colour over the limit.
+    #[test]
+    fn the_eyedropper_samples_what_proof_colors_and_the_ink_limit_show() {
+        use egui_kittest::Harness;
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("swatch.create", json!({"name": "Vivid Green", "color": [0, 255, 0]})).unwrap();
+        let id = app.run("frame.create", json!({"rect": [36, 36, 560, 700], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.fill", json!({"ids": [id], "swatch": "Vivid Green"})).unwrap();
+        let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let ctx = ui.ctx().clone();
+                app.logic(&ctx);
+                app.ui(ui);
+            },
+            app,
+        );
+        h.run_steps(6);
+        let target = {
+            let app = h.state();
+            let doc = &app.session.doc().unwrap().doc;
+            let layout = designcraft_tools::CanvasLayout::new(doc, false);
+            let v = *app.view().unwrap();
+            crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v).to_screen(layout.slots[0].xf * designcraft_geom::Point::new(300.0, 600.0))
+        };
+        let ctx = h.ctx.clone();
+        let sample = |h: &mut Harness<'_, DesignApp>| crate::canvas::color_at(h.state_mut(), &ctx, target).expect("on the page");
+        // What a view makes of the plain colour, as the canvas texture gets it.
+        let shown = |c: [u8; 3], view: &dyn Fn(&mut designcraft_render::Rendered)| {
+            let mut img = designcraft_render::Rendered { width: 1, height: 1, pixels: vec![c[0], c[1], c[2], 255] };
+            view(&mut img);
+            [img.pixels[0], img.pixels[1], img.pixels[2]]
+        };
+        let plain = sample(&mut h);
+        h.state_mut().ui.proof_colors = true;
+        let setup = h.state().ui.proof_setup.clone();
+        let proofed = sample(&mut h);
+        assert_eq!(proofed, shown(plain, &|img| designcraft_render::proof_view(img, &setup)));
+        assert_ne!(proofed, plain, "the proof changes this green");
+        // The composite ink-limit preview: a blue over a 100% limit shows (and samples) the warning.
+        h.state_mut().ui.proof_colors = false;
+        h.state_mut().run("object.fill", json!({"ids": [id], "swatch": "C=100 M=90 Y=10 K=0"})).unwrap();
+        h.run_steps(3);
+        let blue = sample(&mut h);
+        h.state_mut().ui.ink_limit = Some(1.0);
+        let limited = sample(&mut h);
+        assert_eq!(limited, shown(blue, &|img| designcraft_render::separation_view(img, None, Some(1.0))));
+        assert_eq!(limited, [230, 40, 40]);
+    }
+
     #[test]
     fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
         use egui_kittest::{Harness, kittest::Queryable};

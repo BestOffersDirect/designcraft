@@ -660,7 +660,9 @@ pub fn color_at(app: &mut DesignApp, ctx: &egui::Context, pos: Pos2) -> Option<[
     let ppp = ctx.pixels_per_point() as f64;
     let view = Affine::scale(ppp) * Affine::scale(xf.zoom) * Affine::translate((-at.x, -at.y));
     let opts = screen_options(app, &layout, app.ui.screen_mode != ScreenMode::Normal, ppp);
-    let img = app.canvas.patcher.render(&doc, &app.session.cache, &placed, 1, 1, view, &opts);
+    let mut img = app.canvas.patcher.render(&doc, &app.session.cache, &placed, 1, 1, view, &opts);
+    // The colour as the canvas shows it: proofed, or marked over the ink limit.
+    screen_post(app, &mut img);
     let [r, g, b, a] = <[u8; 4]>::try_from(img.pixels.get(..4)?).ok()?;
     // Premultiplied over the paper.
     let paper = doc.resolve_color(designcraft_color::swatch::PAPER, 1.0).unwrap_or(designcraft_color::Color::WHITE).to_rgba8(1.0);
@@ -934,14 +936,20 @@ fn render_worker_spawn(ctx: &egui::Context) -> Option<crate::render_worker::Work
     crate::render_worker::Worker::spawn(ctx.clone())
 }
 
-fn upload(app: &mut DesignApp, ctx: &egui::Context, mut img: designcraft_render::Rendered) {
+/// What the canvas does to a render before showing it: Proof Colors, and the composite ink-limit
+/// preview. The texture and the eyedropper's sample both go through it.
+fn screen_post(app: &DesignApp, img: &mut designcraft_render::Rendered) {
     if app.ui.proof_colors {
-        designcraft_render::proof_view(&mut img, &app.ui.proof_setup);
+        designcraft_render::proof_view(img, &app.ui.proof_setup);
     }
     // Plates render from source colours; the ink limit is estimated from the composite.
     if app.ui.separation.is_none() && app.ui.ink_limit.is_some() {
-        designcraft_render::separation_view(&mut img, None, app.ui.ink_limit);
+        designcraft_render::separation_view(img, None, app.ui.ink_limit);
     }
+}
+
+fn upload(app: &mut DesignApp, ctx: &egui::Context, mut img: designcraft_render::Rendered) {
+    screen_post(app, &mut img);
     let ci = egui::ColorImage::from_rgba_premultiplied([img.width as usize, img.height as usize], &img.pixels);
     let ci = crate::widgets::fit_texture(ci, ctx.input(|i| i.max_texture_side));
     match &mut app.canvas.texture {
