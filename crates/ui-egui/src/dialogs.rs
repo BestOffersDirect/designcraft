@@ -3132,7 +3132,8 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         "ruby" => app.run("type.ruby", style_cjk::ruby_params(&d)),
         "insertPages" => {
             let n = app.session.active().map_or(1, |st| st.doc.page_count());
-            let page = d.n("page").unwrap_or(0.0).max(0.0) as usize;
+            // The page the menu shows: a page past the end is the last.
+            let page = (d.n("page").unwrap_or(0.0).max(0.0) as usize).min(n.saturating_sub(1));
             let mut p = json!({"count": d.n("count").unwrap_or(1.0).clamp(1.0, 9999.0) as u64});
             match d.s("insert").as_str() {
                 "before" => p["before"] = json!(page),
@@ -7483,6 +7484,24 @@ mod tests {
         type_slowly(&mut app, &ctx, screen, "10");
         confirm(&mut app).unwrap();
         assert!(matches!(fill(&app, id), designcraft_color::Color::Rgb { .. }), "{:?}", fill(&app, id));
+    }
+
+    /// A page past the end shows as the last page in the dialog, and Before Page puts the new
+    /// page before that one rather than at the end.
+    #[test]
+    fn insert_pages_before_a_page_past_the_end_goes_before_the_last() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({"pages": 4, "facingPages": false})).unwrap();
+        let ids = |app: &DesignApp| {
+            let d = &app.session.doc().unwrap().doc;
+            (0..d.page_count()).map(|i| d.page(i).unwrap().id).collect::<Vec<_>>()
+        };
+        let old = ids(&app);
+        app.ui.dialog = Some(Dialog::new("insertPages", json!({"count": 1, "insert": "before", "page": 100, "parent": ""})));
+        confirm(&mut app).unwrap();
+        let now = ids(&app);
+        assert_eq!(now.len(), 5);
+        assert_eq!((now[..3].to_vec(), now[4]), (old[..3].to_vec(), old[3]), "the new page is fourth, before the old last page");
     }
 
     /// The course's chapter 25: Insert Pages as InDesign's. It opens after the page in view with

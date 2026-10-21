@@ -1846,6 +1846,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
         ["Insert Math Expression…", "Insérer une expression mathématique…", "Insert Math Expression…", "Insert Math Expression…", "插入数学公式…"],
     ),
     ("Insert Pages…", ["Insert Pages…", "Insérer des pages…", "Insert Pages…", "Insert Pages…", "插入页面…"]),
+    ("Insert Pages", ["Seiten einfügen", "Insérer des pages", "Insertar páginas", "ページを挿入", "插入页面"]),
     ("Insert:", ["Einfügen:", "Insérer :", "Insertar:", "挿入:", "插入："]),
     ("Parent:", ["Vorlagenseite:", "Gabarit :", "Página principal:", "親ページ:", "主页："]),
     ("After Page", ["Nach Seite", "Après la page", "Después de la página", "ページの後", "页面后"]),

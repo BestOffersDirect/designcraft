@@ -33,7 +33,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Paste", "ჩასმა"),
     ("At End of Document", "დოკუმენტის ბოლოს"),
     ("At Start of Document", "დოკუმენტის დასაწყისში"),
-    ("Before Page", "გვერდამდე"),
+    ("Before Page", "გვერდის წინ"),
     ("After Page", "გვერდის შემდეგ"),
     ("Parent:", "საბაზო გვერდი:"),
     ("Insert:", "ჩასმა:"),

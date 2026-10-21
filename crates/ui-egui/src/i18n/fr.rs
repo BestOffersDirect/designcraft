@@ -84,7 +84,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Insert Anchored Object", "Insérer un objet ancré"),
     ("Insert Cross-Reference", "Insérer une référence croisée"),
     ("Insert Math Expression", "Insérer une expression mathématique"),
-    ("Insert Pages", "Insérer des pages"),
     ("Internet Standard RGB (sRGB)", "RVB standard Internet (sRGB)"),
     ("Join the ArtCraft Discord", "Rejoindre le Discord d'ArtCraft"),
     ("Join the community", "Rejoindre la communauté"),

@@ -118,11 +118,21 @@ pub fn specs() -> Vec<CommandSpec> {
                 let count = p.get("count").and_then(Value::as_u64).unwrap_or(1).clamp(1, 9999) as usize;
                 let st = s.doc()?;
                 let n = st.doc.page_count();
-                let index = |k: &str| p.get(k).and_then(Value::as_u64).map(|v| usize::try_from(v).unwrap_or(usize::MAX));
+                // A placement given (null included) must be a page index; only when neither is
+                // given do the pages go after the last.
+                if p.get("after").is_some() && p.get("before").is_some() {
+                    return Err(bad("layout.pages.insert", "give `after` or `before`, not both"));
+                }
+                let index = |k: &str| match p.get(k) {
+                    None => Ok(None),
+                    Some(v) => v
+                        .as_u64()
+                        .map(|v| Some(usize::try_from(v).unwrap_or(usize::MAX)))
+                        .ok_or_else(|| bad("layout.pages.insert", format!("`{k}` must be a page index, not {v}"))),
+                };
                 // The page the new ones follow; none: they go first.
-                let after = match (index("after"), index("before")) {
-                    (Some(_), Some(_)) => return Err(bad("layout.pages.insert", "give `after` or `before`, not both")),
-                    (None, Some(b)) => b.checked_sub(1),
+                let after = match (index("after")?, index("before")?) {
+                    (_, Some(b)) => b.checked_sub(1),
                     (a, None) => Some(a.unwrap_or(n.saturating_sub(1))),
                 };
                 let parent = parent_ref("layout.pages.insert", &st.doc, p.get("parent"))?.unwrap_or_else(|| st.doc.parents.first().map(|x| x.id));
@@ -1884,10 +1894,22 @@ mod parent_margin_tests {
         assert_eq!(then[..3], now[..3]);
         assert_eq!(then[5], old[2]);
         assert_eq!((parent(&s, 3), parent(&s, 4)), (None, None));
+        // Refused without a change or an undo step: both placements, even one of them null, and a
+        // placement that isn't a page index.
         let undo = s.doc().unwrap().history.undo.len();
-        assert!(s.execute("layout.pages.insert", &json!({"after": 0, "before": 1})).is_err());
-        assert_eq!(s.doc().unwrap().history.undo.len(), undo);
-        assert_eq!(ids(&s), then);
+        for bad in [
+            json!({"after": 0, "before": 1}),
+            json!({"after": 0, "before": null}),
+            json!({"after": null, "before": 1}),
+            json!({"before": -1}),
+            json!({"before": "0"}),
+            json!({"before": null}),
+            json!({"after": 1.5}),
+        ] {
+            assert!(s.execute("layout.pages.insert", &bad).is_err(), "{bad}");
+            assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{bad}");
+            assert_eq!(ids(&s), then, "{bad}");
+        }
     }
 
     #[test]
