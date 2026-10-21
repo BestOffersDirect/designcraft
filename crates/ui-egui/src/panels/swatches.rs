@@ -254,7 +254,8 @@ enum RowMode {
 
 fn row_marks(sw: &designcraft_color::swatch::Swatch) -> RowMarks {
     use designcraft_color::Color;
-    let not_editable = sw.locked && sw.name != designcraft_color::swatch::PAPER;
+    // Paper's colour can be edited, whatever the swatch is called (as the options dialog allows).
+    let not_editable = sw.locked && !matches!(sw.value, SwatchValue::Paper { .. });
     match &sw.value {
         SwatchValue::Color { color, color_type } => {
             let mode = match color {
@@ -1312,5 +1313,9 @@ mod row_mark_tests {
             ..cyan.clone()
         };
         assert_eq!(row_marks(&spot), RowMarks { not_editable: false, kind: Some(ColorType::Spot), mode: Some(RowMode::Rgb) });
+        // A locked Paper swatch under another name (a document from elsewhere) is still editable.
+        let paper = all.iter().find(|s| s.name == designcraft_color::swatch::PAPER).unwrap();
+        let renamed = designcraft_color::swatch::Swatch { name: "Papier".into(), ..paper.clone() };
+        assert!(!row_marks(&renamed).not_editable);
     }
 }
