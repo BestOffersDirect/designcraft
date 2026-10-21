@@ -548,7 +548,6 @@ fn cmyk_ramp(k: usize, x: f32) -> egui::Color32 {
     egui::Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
 }
 
-/// The spectrum ramp: hue across, light to dark down; click to apply.
 /// The Color panel on a gradient fill (or stroke): the stop selected in the Gradient panel (the
 /// stop before a selected midpoint), in the panel's colour mode, as InDesign's. Its fields and the
 /// spectrum colour that stop.
@@ -613,6 +612,7 @@ fn gradient_stop(app: &mut DesignApp, ui: &mut egui::Ui, g: &designcraft_color::
     }
 }
 
+/// The spectrum ramp: hue across, light to dark down; click to apply.
 fn spectrum(app: &mut DesignApp, ui: &mut egui::Ui, target: &str) {
     if let Some([r, g, b]) = spectrum_pick(ui) {
         let text = super::colors_affect_text(app);
