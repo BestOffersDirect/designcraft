@@ -61,18 +61,18 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!(query "find.find", "Find", ["Edit", "Find/Change"], None,
-            "{find, grep?: bool, caseSensitive?: bool, wholeWord?: bool, scope?: document|story|selection, story?, change?|first?|attrs?: ignored (find.change takes them; one request serves all three Find/Change commands)} → matches [{story, start, end, text}]",
+            "{find, grep?: bool, caseSensitive?: bool, wholeWord?: bool, scope?: document|story|selection, story?, change?|first?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} → matches [{story, start, end, text}]",
             has_doc, find),
         cmd!(
             "find.change",
             "Change All",
             ["Edit", "Find/Change"],
             None,
-            "{find, change, grep?, caseSensitive?, wholeWord?, scope?, story?, first?: bool (change only the first match), attrs?: {character attributes applied to changed text}} → {count}",
+            "{find, change, grep?, caseSensitive?, wholeWord?, scope?, story?, first?: bool (change only the first match), attrs?: {character attributes applied to changed text}, charStyle?: a character style applied to it, paraStyle?: a paragraph style applied to its paragraphs} → {count} — attrs, charStyle and paraStyle are the Change Format: with one and an empty change, the found text stays and is only formatted",
             has_doc,
             change
         ),
-        cmd!(noundo "find.next", "Find Next", ["Edit"], Some("Cmd+Alt+F"), "{find, grep?, caseSensitive?, wholeWord?, scope?: document|story|selection, story?, change?|first?|attrs?: ignored (find.change takes them; one request serves all three Find/Change commands)} — Selection starts at its original beginning; later calls advance within the scope", has_doc, find_next),
+        cmd!(noundo "find.next", "Find Next", ["Edit"], Some("Cmd+Alt+F"), "{find, grep?, caseSensitive?, wholeWord?, scope?: document|story|selection, story?, change?|first?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} — Selection starts at its original beginning; later calls advance within the scope", has_doc, find_next),
     ]
 }
 
@@ -314,8 +314,20 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
         }
     }
     super::text::validate_char_fill(&s.doc()?.doc, &over, "find.change")?;
+    let char_style = str_param(p, "charStyle").map(str::to_string);
+    let para_style = str_param(p, "paraStyle").map(str::to_string);
+    let styles = &s.doc()?.doc.styles;
+    if let Some(n) = char_style.as_ref().filter(|n| styles.char_style(n).is_none()) {
+        return Err(bad("find.change", format!("no character style `{n}`")));
+    }
+    if let Some(n) = para_style.as_ref().filter(|n| styles.para(n).is_none()) {
+        return Err(bad("find.change", format!("no paragraph style `{n}`")));
+    }
+    // InDesign: with a Change Format and nothing in Change to, the found text is only formatted.
+    let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty());
     let targets = scope(s, p)?.targets;
     s.edit(|d, sel| {
+        let styles = d.styles.clone();
         let mut count = 0usize;
         for (sid, r) in targets {
             let Some(story) = d.story(sid) else { continue };
@@ -332,9 +344,22 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
             .collect();
             let Some(st) = d.story_mut(sid) else { continue };
             for (range, new) in edits.iter().rev() {
-                st.replace(range.clone(), new);
-                if !over.is_empty() && !new.is_empty() {
-                    st.format_chars(range.start..range.start + new.len(), |f| f.over.merge(&over));
+                let changed = if format_only {
+                    range.clone()
+                } else {
+                    st.replace(range.clone(), new);
+                    range.start..range.start + new.len()
+                };
+                if !changed.is_empty() {
+                    if let Some(n) = &para_style {
+                        super::style::apply_para_style(st, &styles, n, &changed, false);
+                    }
+                    if let Some(n) = &char_style {
+                        super::style::apply_char_style(st, &styles, n, &changed);
+                    }
+                    if !over.is_empty() {
+                        st.format_chars(changed, |f| f.over.merge(&over));
+                    }
                 }
                 count += 1;
             }
@@ -431,6 +456,49 @@ mod tests {
         assert_eq!(s.execute("find.find", &json!({"find": ".^pc"})).unwrap().as_array().unwrap().len(), 1);
         s.execute("find.next", &json!({"find": "or"})).unwrap();
         assert!(s.doc().unwrap().selection.text.is_some());
+    }
+
+    #[test]
+    fn change_format_styles_the_found_text_and_keeps_it() {
+        // The course's chapter 22: every lowercase "eggs" gets the character style "eggs", with
+        // Change to empty, so the words stay.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let text = "Poached Eggs\nBreak eggs; cook until eggs are set.";
+        let r = s.execute("frame.create", &json!({"rect": [36, 36, 300, 300], "content": "text", "text": text})).unwrap();
+        let sid = designcraft_doc::StoryId(r["story"].as_u64().unwrap());
+        s.execute("style.character.create", &json!({"name": "eggs", "chars": {"fontStyle": "Bold", "fill": "C=15 M=100 Y=100 K=0"}})).unwrap();
+        s.execute("style.paragraph.create", &json!({"name": "Method"})).unwrap();
+        let undo = s.doc().unwrap().history.undo.len();
+        let r = s.execute("find.change", &json!({"find": "eggs", "change": "", "caseSensitive": true, "charStyle": "eggs"})).unwrap();
+        assert_eq!(r["count"], 2);
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
+        let style_at = |s: &Session, at: usize| s.doc().unwrap().doc.story(sid).unwrap().format_after(at).style.clone();
+        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
+        assert_eq!(story.text, text, "the words stay");
+        for at in [19, 36] {
+            assert_eq!(&story.text[at..at + 4], "eggs");
+            assert_eq!(style_at(&s, at), "eggs");
+        }
+        assert_eq!(style_at(&s, 8), designcraft_doc::NO_CHAR_STYLE, "case sensitive: not \"Eggs\"");
+        assert_eq!(style_at(&s, 25), designcraft_doc::NO_CHAR_STYLE, "only the found text");
+        // A paragraph style goes to the found text's paragraphs, with attributes over the text.
+        s.execute("find.change", &json!({"find": "cook", "change": "", "paraStyle": "Method", "attrs": {"underline": true}})).unwrap();
+        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
+        assert_eq!((story.paras[0].style.as_str(), story.paras[1].style.as_str()), (designcraft_doc::BASIC_PARAGRAPH, "Method"));
+        assert_eq!(story.format_after(25).over.underline, Some(true));
+        assert_eq!(story.format_after(19).style, "eggs", "the other text keeps its character style");
+        // Change to and a Change Format: the new text is formatted.
+        s.execute("find.change", &json!({"find": "set", "change": "firm", "charStyle": "eggs"})).unwrap();
+        assert_eq!(style_at(&s, s.doc().unwrap().doc.story(sid).unwrap().text.find("firm").unwrap()), "eggs");
+        // No such style: refused, nothing changed.
+        let before = s.doc().unwrap().doc.clone();
+        assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "charStyle": "Nope"})).is_err());
+        assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "paraStyle": "Nope"})).is_err());
+        assert_eq!(s.doc().unwrap().doc, before);
+        // With no Change Format, an empty Change to still deletes the found text.
+        s.execute("find.change", &json!({"find": "Break ", "change": ""})).unwrap();
+        assert!(!s.doc().unwrap().doc.story(sid).unwrap().text.contains("Break"));
     }
 
     #[test]
