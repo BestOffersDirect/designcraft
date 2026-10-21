@@ -260,8 +260,12 @@ fn rename_field(app: &mut DesignApp, ui: &mut egui::Ui, sw: &designcraft_color::
         let to = text.trim();
         if !ui.input(|i| i.key_pressed(egui::Key::Escape)) && !to.is_empty() && to != name {
             match app.run("swatch.options", json!({"name": name, "to": to})) {
+                // Still picked under its new name, unless the click that ended the rename picked
+                // another swatch.
                 Ok(_) => ui.data_mut(|d| {
-                    d.insert_temp(egui::Id::new(PICKED), to.to_string());
+                    if d.get_temp::<String>(egui::Id::new(PICKED)).is_none_or(|p| p == name) {
+                        d.insert_temp(egui::Id::new(PICKED), to.to_string());
+                    }
                 }),
                 Err(e) => {
                     app.status_error("Swatch Options", e);
@@ -334,6 +338,8 @@ fn swatch_row(
         // A click on the name of the swatch picked already renames it in place, as InDesign's
         // (a slow double-click), unless it turns into a double-click.
         let picked = ui.data(|d| d.get_temp::<String>(egui::Id::new(PICKED))).is_some_and(|p| p == sw.name);
+        // A click on another swatch cancels a rename still waiting.
+        ui.data_mut(|d| d.remove_temp::<(String, f64)>(egui::Id::new(RENAME_CLICK)));
         if picked && !sw.locked && resp.interact_pointer_pos().is_some_and(|p| name_rect.contains(p)) {
             let now = ui.input(|i| i.time);
             ui.data_mut(|d| d.insert_temp(egui::Id::new(RENAME_CLICK), (sw.name.clone(), now)));
@@ -348,7 +354,10 @@ fn swatch_row(
     }
     if let Some((name, at)) = ui.data(|d| d.get_temp::<(String, f64)>(egui::Id::new(RENAME_CLICK))).filter(|(n, _)| *n == sw.name) {
         let wait = ui.ctx().options(|o| o.input_options.max_double_click_delay);
-        if ui.input(|i| i.time) - at > wait {
+        if ui.data(|d| d.get_temp::<String>(egui::Id::new(PICKED))).is_none_or(|p| p != name) {
+            // Another swatch picked since: no rename.
+            ui.data_mut(|d| d.remove_temp::<(String, f64)>(egui::Id::new(RENAME_CLICK)));
+        } else if ui.input(|i| i.time) - at > wait {
             ui.data_mut(|d| {
                 d.remove_temp::<(String, f64)>(egui::Id::new(RENAME_CLICK));
                 d.insert_temp(egui::Id::new(RENAMING), (name.clone(), name));
@@ -1279,6 +1288,30 @@ mod swatches_header_tests {
         click(&mut h, at);
         h.run_steps(10);
         assert!(!field(&h));
+        // A click on another swatch while the rename waits: that one is picked, and nothing
+        // renames.
+        let picked = |h: &Harness<'_, DesignApp>| h.ctx.data(|d| d.get_temp::<String>(egui::Id::new(super::PICKED)));
+        let (lemon, paper) = (name_at(&h, "Lemon Yellow Sun"), name_at(&h, "[Paper]"));
+        h.run_steps(20);
+        click(&mut h, lemon);
+        h.run_steps(10);
+        click(&mut h, lemon);
+        click(&mut h, paper);
+        h.run_steps(10);
+        assert!(!field(&h), "the waiting rename is cancelled");
+        assert_eq!(picked(&h).as_deref(), Some("[Paper]"));
+        // Renaming, a click on another swatch renames, and picks that one (for Delete Swatch).
+        click(&mut h, lemon);
+        h.run_steps(10);
+        click(&mut h, lemon);
+        h.run_steps(10);
+        assert!(field(&h));
+        h.event(egui::Event::Text("Lemon".into()));
+        h.step();
+        click(&mut h, paper);
+        h.run_steps(5);
+        assert!(has(&h, "Lemon") && !field(&h));
+        assert_eq!(picked(&h).as_deref(), Some("[Paper]"), "the swatch clicked stays picked");
     }
 
     #[test]
