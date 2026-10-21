@@ -3362,6 +3362,7 @@ mod tests {
         };
         let mut h = panel(frame());
         double_click(&mut h, "Fill swatch");
+        assert!(h.query_by_label("Tint:").is_none(), "the swatches popup isn't left open too");
         let d = h.state().ui.dialog.clone().expect("the Color Picker");
         assert_eq!((d.id.as_str(), d.s("target"), d.s("model"), d.b("text")), ("colorPicker", "fill".into(), "cmyk".into(), false));
         assert_eq!(d.fields["cmyk"], json!([0.0, 0.0, 100.0, 0.0]));
