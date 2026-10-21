@@ -722,7 +722,7 @@ fn export_pdf(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The Transparency Flattener's resolution `p.flatten` asks for: High, Medium or Low Resolution,
 /// or a ppi; `None` when the PDF isn't flattened.
-pub(super) fn flatten_ppi(p: &Value) -> Result<Option<f64>> {
+fn flatten_ppi(p: &Value) -> Result<Option<f64>> {
     Ok(match p.get("flatten") {
         None | Some(Value::Null) | Some(Value::Bool(false)) => None,
         Some(Value::String(s)) if s == "high" => Some(300.0),
@@ -735,11 +735,49 @@ pub(super) fn flatten_ppi(p: &Value) -> Result<Option<f64>> {
     })
 }
 
+/// The catalog entries of the interactive view options in `p` (page mode and layout) and the
+/// destination the first page opens at (`view`); unknown values are refused.
+fn view_options(p: &Value) -> Result<(String, Option<&'static str>)> {
+    let mut cat = String::new();
+    if p.get("fullScreen").and_then(Value::as_bool) == Some(true) {
+        cat.push_str("/PageMode/FullScreen");
+    } else if p.get("bookmarksPanel").and_then(Value::as_bool) == Some(true) {
+        cat.push_str("/PageMode/UseOutlines");
+    }
+    match str_param(p, "pageLayout") {
+        Some("single") => cat.push_str("/PageLayout/SinglePage"),
+        Some("continuous") => cat.push_str("/PageLayout/OneColumn"),
+        Some("twoUp") => cat.push_str("/PageLayout/TwoPageLeft"),
+        Some("twoUpCover") => cat.push_str("/PageLayout/TwoPageRight"),
+        Some("twoUpContinuous") => cat.push_str("/PageLayout/TwoColumnRight"),
+        Some(o) => return Err(bad("file.exportPdf", format!("unknown pageLayout `{o}`"))),
+        None => {}
+    }
+    let dest = match str_param(p, "view") {
+        None => None,
+        Some("fitPage") => Some("/Fit"),
+        Some("fitWidth") => Some("/FitH null"),
+        Some("actual") => Some("/XYZ null null 1"),
+        Some(o) => return Err(bad("file.exportPdf", format!("unknown view `{o}` (fitPage, fitWidth, actual)"))),
+    };
+    Ok((cat, dest))
+}
+
+/// Refuses PDF options `p` that `pdf_report` would refuse for a document of `pages` pages,
+/// without exporting: `file.package` checks them before it writes anything.
+pub(super) fn check_pdf_options(p: &Value, pages: usize) -> Result<()> {
+    options(p, pages)?;
+    flatten_ppi(p)?;
+    view_options(p)?;
+    Ok(())
+}
+
 /// The PDF of `doc` as `file.exportPdf` makes it from options `p`: flattened when asked, placed
 /// PDFs with hidden layers and soft effects as images, the blend space, the view options and the
 /// page transitions. `file.package` writes its PDF with it too.
 pub(super) fn pdf_report(doc: &designcraft_doc::Document, cache: &designcraft_compose::Cache, p: &Value) -> Result<designcraft_pdf::ExportReport> {
     let opts = options(p, doc.page_count())?;
+    let (mut cat, dest) = view_options(p)?;
     let flattened = flatten_ppi(p)?.map(|ppi| flatten(doc, cache, ppi));
     // Placed PDFs with hidden layers go out as images showing just their visible layers.
     let base: &designcraft_doc::Document = flattened.as_ref().map_or(doc, |f| &f.0);
@@ -760,33 +798,12 @@ pub(super) fn pdf_report(doc: &designcraft_doc::Document, cache: &designcraft_co
             None => r.warnings.push("the transparency blend space couldn't be set".into()),
         }
     }
-    // Interactive PDF view options.
-    let mut cat = String::new();
-    if p.get("fullScreen").and_then(Value::as_bool) == Some(true) {
-        cat.push_str("/PageMode/FullScreen");
-    } else if p.get("bookmarksPanel").and_then(Value::as_bool) == Some(true) {
-        cat.push_str("/PageMode/UseOutlines");
-    }
-    match str_param(p, "pageLayout") {
-        Some("single") => cat.push_str("/PageLayout/SinglePage"),
-        Some("continuous") => cat.push_str("/PageLayout/OneColumn"),
-        Some("twoUp") => cat.push_str("/PageLayout/TwoPageLeft"),
-        Some("twoUpCover") => cat.push_str("/PageLayout/TwoPageRight"),
-        Some("twoUpContinuous") => cat.push_str("/PageLayout/TwoColumnRight"),
-        Some(o) => return Err(bad("file.exportPdf", format!("unknown pageLayout `{o}`"))),
-        None => {}
-    }
-    if let Some(v) = str_param(p, "view") {
-        // The first page opens with this view (pages are objects in order, so refer by index 0).
-        let dest = match v {
-            "fitPage" => "/Fit",
-            "fitWidth" => "/FitH null",
-            "actual" => "/XYZ null null 1",
-            o => return Err(bad("file.exportPdf", format!("unknown view `{o}` (fitPage, fitWidth, actual)"))),
-        };
-        if let Some(first) = first_page_ref(&r.bytes) {
-            cat.push_str(&format!("/OpenAction[{first} 0 R{dest}]"));
-        }
+    // Interactive PDF view options; the first page opens with the view (pages are objects in
+    // order, so refer by index 0).
+    if let Some(dest) = dest
+        && let Some(first) = first_page_ref(&r.bytes)
+    {
+        cat.push_str(&format!("/OpenAction[{first} 0 R{dest}]"));
     }
     if !cat.is_empty() {
         match designcraft_pdf::add_catalog_entries(&r.bytes, &cat) {

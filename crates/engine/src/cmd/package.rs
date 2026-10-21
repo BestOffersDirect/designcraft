@@ -395,8 +395,7 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         None | Some(Value::Null) | Some(Value::Bool(false)) => None,
         Some(Value::Bool(true)) => Some(json!({})),
         Some(o @ Value::Object(_)) => {
-            super::export::options(o, st.doc.page_count())?;
-            super::export::flatten_ppi(o)?;
+            super::export::check_pdf_options(o, st.doc.page_count())?;
             Some(o.clone())
         }
         Some(v) => return Err(bad("file.package", format!("`pdf` is true, false or PDF export options, not {v}"))),
@@ -534,9 +533,16 @@ mod tests {
         let plain = dir.join("plain");
         s.execute("file.package", &json!({"dir": plain.to_string_lossy(), "idml": false, "pdf": true})).unwrap();
         assert!(!has(&plain.join("Options.pdf"), b"GTS_PDFX"));
-        // Refused before anything is written: bad options, a bad flattener and a `pdf` that is
-        // neither a switch nor options.
-        for bad in [json!({"standard": "nope"}), json!({"flatten": "extreme"}), json!("print"), json!(3)] {
+        // Refused before anything is written: bad options, a bad flattener or view option, and a
+        // `pdf` that is neither a switch nor options.
+        for bad in [
+            json!({"standard": "nope"}),
+            json!({"flatten": "extreme"}),
+            json!({"pageLayout": "spiral"}),
+            json!({"view": "zoomed"}),
+            json!("print"),
+            json!(3),
+        ] {
             let out = dir.join("bad");
             assert!(s.execute("file.package", &json!({"dir": out.to_string_lossy(), "pdf": bad})).is_err(), "{bad}");
             assert!(!out.exists(), "{bad}: bad options write nothing");
