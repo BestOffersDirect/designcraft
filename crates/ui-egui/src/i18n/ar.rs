@@ -30,6 +30,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "قص"),
     ("Copy", "نسخ"),
     ("Paste", "لصق"),
+    ("New Paragraph Style", "نمط فقرة جديد"),
+    ("New Character Style", "نمط حرف جديد"),
     ("Next Style:", "النمط التالي:"),
     ("[Same style]", "[النمط نفسه]"),
     ("Reset To Base", "إعادة التعيين إلى الأساس"),

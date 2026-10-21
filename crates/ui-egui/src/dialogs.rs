@@ -2046,8 +2046,10 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "documentSetup" => crate::i18n::tr(&app.ui.language, "Document Setup"),
         "numberingSection" => crate::i18n::tr(&app.ui.language, "Numbering & Section Options…").trim_end_matches('…'),
         "findChange" => crate::i18n::tr(&app.ui.language, "Find/Change"),
+        "paragraphStyleOptions" if d.b("new") => crate::i18n::tr(&app.ui.language, "New Paragraph Style"),
         "paragraphStyleOptions" => crate::i18n::tr(&app.ui.language, "Paragraph Style Options"),
         "deleteParagraphStyle" => crate::i18n::tr(&app.ui.language, "Delete Paragraph Style"),
+        "characterStyleOptions" if d.b("new") => crate::i18n::tr(&app.ui.language, "New Character Style"),
         "characterStyleOptions" => crate::i18n::tr(&app.ui.language, "Character Style Options"),
         "deleteCharacterStyle" => crate::i18n::tr(&app.ui.language, "Delete Character Style"),
         "footnoteOptions" => crate::i18n::tr(&app.ui.language, "Footnote Options"),
@@ -3202,7 +3204,13 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 if let Some(b) = based.filter(|b| b != designcraft_doc::NO_CHAR_STYLE) {
                     params["basedOn"] = json!(b);
                 }
-                app.run("style.character.create", params)
+                // Apply Style to Selection.
+                app.run("style.character.create", params).and_then(|r| {
+                    if d.b("apply") && app.session.active().is_some_and(|st| st.selection.text.is_some()) {
+                        app.run("style.character.apply", json!({"name": r["name"]}))?;
+                    }
+                    Ok(r)
+                })
             } else {
                 let mut params = json!({"name": name, "chars": chars});
                 if let Some(b) = based {
@@ -5275,6 +5283,17 @@ pub fn open_new_style(app: &mut DesignApp, para: bool) {
         }
         fields["apply"] = json!(true);
     }
+    // New Character Style with text selected starts from what the text has of its own over its
+    // paragraph ("[None] + Bold + color"), applied to the selection on OK, as InDesign's.
+    if !para
+        && has_text
+        && let Some(sel) = app.session.execute("type.selectionAttrs", &json!({})).ok().filter(|v| !v.is_null())
+    {
+        for (k, v) in sel["ownChars"].as_object().into_iter().flatten().filter(|(_, v)| !v.is_null()) {
+            fields[format!("c.{k}")] = v.clone();
+        }
+        fields["apply"] = json!(true);
+    }
     app.ui.dialog = Some(Dialog::new(id, fields));
 }
 
@@ -5379,6 +5398,10 @@ fn character_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                 let mut parts = vec![crate::i18n::style_name(&lang, &based).to_string()];
                 parts.extend(own.as_object().into_iter().flatten().map(|(k, v)| format!("{}: {}", setting_label(&lang, k), setting_text(v))));
                 ui.add(egui::Label::new(egui::RichText::new(parts.join(" + ")).color(crate::theme::Tokens::get(ui.ctx()).text_dim)).wrap());
+                if new {
+                    ui.add_space(8.0);
+                    check(ui, d, "apply", crate::i18n::tr(&lang, "Apply Style to Selection"));
+                }
             }
         });
     });
@@ -7654,6 +7677,53 @@ mod tests {
         assert_eq!(s.based_on.as_deref(), Some(designcraft_doc::BASIC_PARAGRAPH));
     }
 
+    /// The course's chapter 22: "eggs" made bold and red on the page, then New Character Style
+    /// from it. The dialog is titled as InDesign's, starts from what the text has of its own
+    /// over its paragraph style ("[None] + Bold + color"), and Apply Style to Selection gives the
+    /// text the style, with no override left.
+    #[test]
+    fn a_new_character_style_starts_from_the_selected_text() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let f = app.run("frame.create", json!({"rect": [36, 36, 400, 300], "content": "text", "text": "Drop eggs into boiling water."})).unwrap();
+        app.run("text.select", json!({"story": f["story"], "anchor": 0, "focus": 29})).unwrap();
+        app.run("style.paragraph.create", json!({"name": "Recipe", "chars": {"size": 14}})).unwrap();
+        app.run("style.paragraph.apply", json!({"name": "Recipe"})).unwrap();
+        app.run("text.select", json!({"story": f["story"], "anchor": 5, "focus": 9})).unwrap();
+        app.run("type.char", json!({"attrs": {"fontStyle": "Bold", "fill": "C=15 M=100 Y=100 K=0"}})).unwrap();
+        open_new_style(&mut app, false);
+        let d = app.ui.dialog.clone().unwrap();
+        assert_eq!((d.fields["c.fontStyle"].clone(), d.fields["c.fill"].clone()), (json!("Bold"), json!("C=15 M=100 Y=100 K=0")));
+        assert!(d.b("apply"));
+        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 700.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::new("new_character_style_test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        for l in ["New Character Style", "Apply Style to Selection"] {
+            assert!(h.query_by_label(l).is_some(), "{l}");
+        }
+        let app = h.state_mut();
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("rename".into(), json!("eggs"));
+        }
+        confirm(app).unwrap();
+        let style = app.session.doc().unwrap().doc.styles.char_style("eggs").cloned().unwrap();
+        assert_eq!((style.chars.font_style.as_deref(), style.chars.fill.as_deref()), (Some("Bold"), Some("C=15 M=100 Y=100 K=0")));
+        assert_eq!(style.chars.size, None, "the size is the paragraph style's, not the text's own");
+        let a = app.run("type.selectionAttrs", json!({})).unwrap();
+        assert_eq!((a["characterStyle"].clone(), a["charOverrides"].clone()), (json!("eggs"), json!(0)), "applied to the selection");
+    }
+
     /// A Based On changed in the dialog (without Reset To Base) is what the fields are checked
     /// against: the style's own settings over the new parent.
     #[test]
@@ -9844,7 +9914,9 @@ mod tests {
         ctl(&mut app, "ui.dialog.set", json!({"field": "c.size", "value": 9}));
         assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
         let st = char_style(&app, "Character Style 1").unwrap();
-        assert_eq!((st.based_on, st.chars), (None, CharAttrs { size: Some(9.0), ..Default::default() }));
+        // The selected text's own Italic (its Emphasis style) comes along, as InDesign's New
+        // Character Style takes it.
+        assert_eq!((st.based_on, st.chars), (None, CharAttrs { size: Some(9.0), font_style: Some("Italic".into()), ..Default::default() }));
         crate::menus::activate(&mut app, "style.character.create", &Value::Null);
         assert_eq!(app.ui.dialog.as_ref().unwrap().s("rename"), "Character Style 2");
     }

@@ -31,6 +31,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "ამოჭრა"),
     ("Copy", "კოპირება"),
     ("Paste", "ჩასმა"),
+    ("New Paragraph Style", "აბზაცის ახალი სტილი"),
+    ("New Character Style", "სიმბოლოს ახალი სტილი"),
     ("Next Style:", "შემდეგი სტილი:"),
     ("[Same style]", "[იგივე სტილი]"),
     ("Reset To Base", "საბაზოზე დაბრუნება"),

@@ -31,6 +31,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Vyjmout"),
     ("Copy", "Kopírovat"),
     ("Paste", "Vložit"),
+    ("New Paragraph Style", "Nový styl odstavce"),
+    ("New Character Style", "Nový styl znaku"),
     ("Next Style:", "Další styl:"),
     ("[Same style]", "[Stejný styl]"),
     ("Reset To Base", "Obnovit podle základu"),

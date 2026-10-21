@@ -31,6 +31,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Recortar"),
     ("Copy", "Copiar"),
     ("Paste", "Colar"),
+    ("New Paragraph Style", "Novo estilo de parágrafo"),
+    ("New Character Style", "Novo estilo de caractere"),
     ("Next Style:", "Próximo estilo:"),
     ("[Same style]", "[Mesmo estilo]"),
     ("Reset To Base", "Redefinir para base"),
