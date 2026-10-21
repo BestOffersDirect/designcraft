@@ -1966,13 +1966,25 @@ fn direct_selection_marquee_selects_points_of_several_frames_and_drags_them_toge
         p["anchors"].as_array().unwrap().iter().map(|v| (v[0].as_u64().unwrap(), v[1].as_u64().unwrap(), v[2].as_u64().unwrap())).collect();
     got.sort();
     assert_eq!(got, vec![(a.0, 0, 0), (a.0, 0, 1), (b.0, 0, 0), (b.0, 0, 1)]);
+    // With another frame selected before, a marquee without Shift selects only the paths whose
+    // points it takes; with Shift the other frame stays selected.
+    let other = add_rect(&mut d, Rect::new(400.0, 400.0, 450.0, 450.0));
+    let l = CanvasLayout::new(&d, false);
+    let was = Selection { items: vec![other], ..Default::default() };
+    let shift = Mods { shift: true, ..Default::default() };
+    for (mods, want) in [(Mods::default(), serde_json::json!([a.0, b.0])), (shift, serde_json::json!([other.0, a.0, b.0]))] {
+        t.pointer(&ctx(&d, &was, &c, &l), &PointerEvent::new(PointerKind::Down, p0.x, p0.y).with_mods(mods));
+        t.pointer(&ctx(&d, &was, &c, &l), &PointerEvent::new(PointerKind::Drag, p1.x, p1.y).with_mods(mods));
+        let up = t.pointer(&ctx(&d, &was, &c, &l), &PointerEvent::new(PointerKind::Up, p1.x, p1.y).with_mods(mods));
+        let Some(Action::Exec(_, p)) = up.last() else { panic!("{up:?}") };
+        assert_eq!(p["ids"], want, "{mods:?}");
+    }
     // Those points selected: dragging one moves all four, in one preview.
     let sel = Selection { items: vec![a, b], anchors: vec![(a, 0, 0), (a, 0, 1), (b, 0, 0), (b, 0, 1)], ..Default::default() };
     let cx = ctx(&d, &sel, &c, &l);
     let at = spread_pt(&l, 200.0, 100.0);
     let down = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y));
     assert_eq!(down, vec![Action::Begin("Move Anchors".into())]);
-    let shift = Mods { shift: true, ..Default::default() };
     let drag = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, at.x + 36.0, at.y + 3.0).with_mods(shift));
     let Some(Action::Preview(cmd, p)) = drag.last() else { panic!("{drag:?}") };
     assert_eq!(cmd, "path.moveAnchors");
@@ -1981,6 +1993,7 @@ fn direct_selection_marquee_selects_points_of_several_frames_and_drags_them_toge
     assert_eq!((p["dx"].as_f64(), p["dy"].as_f64()), (Some(36.0), Some(0.0)));
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x + 36.0, at.y)), vec![Action::Commit]);
     // Shift+click on a selected point takes it out of the selection; the arrow keys move the points.
+    let shift = Mods { shift: true, ..Default::default() };
     let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(shift));
     let Some(Action::Exec(cmd, p)) = out.first() else { panic!("{out:?}") };
     assert_eq!(cmd, "selection.set");

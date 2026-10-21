@@ -213,8 +213,10 @@ fn anchors_in(cx: &ToolContext, r: Rect) -> Vec<(ItemId, usize, usize)> {
 }
 
 /// `selection.set` params selecting `points`: their paths, and those points.
-fn anchor_selection(cx: &ToolContext, points: &[(ItemId, usize, usize)]) -> Value {
-    let mut ids: Vec<u64> = cx.selection.items.iter().map(|i| i.0).collect();
+/// `keep` (Shift): the objects already selected stay selected; otherwise only the paths of
+/// `points` are.
+fn anchor_selection(cx: &ToolContext, points: &[(ItemId, usize, usize)], keep: bool) -> Value {
+    let mut ids: Vec<u64> = if keep { cx.selection.items.iter().map(|i| i.0).collect() } else { Vec::new() };
     for (i, _, _) in points {
         if !ids.contains(&i.0) {
             ids.push(i.0);
@@ -781,7 +783,7 @@ impl Tool for SelectionTool {
                             points = vec![me];
                         }
                         if points != cx.selection.anchors {
-                            out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points)));
+                            out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points, ev.mods.shift)));
                         }
                         if ev.mods.shift && was {
                             self.drag = Drag::None;
@@ -1207,7 +1209,7 @@ impl Tool for SelectionTool {
                                         }
                                     }
                                 }
-                                return vec![Action::Exec("selection.set".into(), anchor_selection(cx, &points))];
+                                return vec![Action::Exec("selection.set".into(), anchor_selection(cx, &points, ev.mods.shift))];
                             }
                         }
                         // Items whose bounds intersect the marquee.
