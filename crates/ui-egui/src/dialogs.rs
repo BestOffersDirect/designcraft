@@ -3643,8 +3643,6 @@ fn grep_error(p: &str) -> Option<String> {
     designcraft_compose::grep::Grep::new(p, Default::default()).err().map(|e| e.to_string())
 }
 
-/// The Justification spacing check of Paragraph Style Options, against what the section showed:
-/// the style's own values, or a new style's Based On.
 /// What paragraph style `style` resolves to when based on `based` (the Based On chosen in its
 /// dialog, which may not be its own yet): `based`'s chain with the style's own settings over it.
 fn style_over(
@@ -3660,6 +3658,8 @@ fn style_over(
     })
 }
 
+/// The Justification spacing check of Paragraph Style Options, against what the section showed:
+/// the style's own values, or a new style's Based On.
 fn check_paragraph_style_justification(app: &DesignApp, d: &Dialog) -> Result<(), String> {
     // After Reset To Base the style starts from its Based On (the one chosen here, if any).
     let base_of = |st: &designcraft_engine::DocState| {
@@ -3726,10 +3726,6 @@ fn confirm_paragraph_style_options(app: &mut DesignApp, d: &mut Dialog) -> Resul
         }
         let r = app.run("style.paragraph.create", params)?;
         let style = r["name"].as_str().unwrap_or_default().to_string();
-        // Apply Style to Selection.
-        if d.b("apply") && app.session.active().is_some_and(|st| st.selection.text.is_some()) {
-            app.run("style.paragraph.apply", json!({"name": style}))?;
-        }
         (r, style)
     } else {
         let mut params = json!({"name": name, "para": para, "chars": chars});
@@ -3750,9 +3746,14 @@ fn confirm_paragraph_style_options(app: &mut DesignApp, d: &mut Dialog) -> Resul
     };
     // The style now exists under `style`: if a later step fails, the dialog stays open on it and
     // a second OK edits it rather than creating another one.
+    let created = d.b("new");
     d.fields.insert("new".into(), json!(false));
     d.fields.insert("name".into(), json!(&style));
     d.fields.insert("rename".into(), json!(&style));
+    // Apply Style to Selection.
+    if created && d.b("apply") && app.session.active().is_some_and(|st| st.selection.text.is_some()) {
+        app.run("style.paragraph.apply", json!({"name": style}))?;
+    }
     if d.fields.contains_key("x.tag") {
         let tag = d.s("x.tag");
         let tag = if tag == "[Automatic]" { String::new() } else { tag };
