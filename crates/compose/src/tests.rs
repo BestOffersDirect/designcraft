@@ -3719,6 +3719,9 @@ fn paragraph_rules_have_a_type_a_gap_colour_and_keep_in_frame() {
     let gap = decos(Rule { gap_color: "[Black]".into(), gap_tint: 0.3, ..rule(StrokeType::Dotted) });
     assert_eq!((gap.len(), gap[0].color.as_str(), gap[0].tint, gap[0].path.is_none()), (2, "[Black]", 0.3, true), "the gap colour under the dots");
     assert_eq!(decos(Rule { gap_color: "[Black]".into(), ..rule(StrokeType::Solid) }).len(), 1, "a solid rule has no gaps");
+    // A gap in Text Color takes the text's colour, whatever swatch the rule itself has.
+    let gap = decos(Rule { color: "[Paper]".into(), gap_color: designcraft_doc::TEXT_COLOR.into(), ..rule(StrokeType::Dotted) });
+    assert_eq!((gap[0].color.as_str(), gap[1].color.as_str()), ("[Black]", "[Paper]"));
     // Keep In Frame: a rule above raised out of the frame comes back to its top.
     let above = |keep: bool| {
         let r = Rule { on: true, weight: 2.0, offset: 30.0, keep_in_frame: keep, ..Default::default() };

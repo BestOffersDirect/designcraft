@@ -4500,8 +4500,30 @@ fn para_sides(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &s
 /// A swatch menu with a colour chip per swatch (hidden swatches left out); returns the swatch
 /// picked.
 fn swatch_menu(ui: &mut egui::Ui, doc: &designcraft_doc::Document, id: impl egui::AsIdSalt, current: &str, width: f32) -> Option<String> {
+    swatch_menu_with(ui, doc, id, current, width, None)
+}
+
+/// [`swatch_menu`] with, given its translated label, Text Color first (a paragraph rule's
+/// colour: the text's own), as InDesign's Paragraph Rules › Color.
+fn swatch_menu_with(
+    ui: &mut egui::Ui,
+    doc: &designcraft_doc::Document,
+    id: impl egui::AsIdSalt,
+    current: &str,
+    width: f32,
+    text_color: Option<&str>,
+) -> Option<String> {
     let mut picked = None;
-    egui::ComboBox::from_id_salt(id).selected_text(current).width(width).show_ui(ui, |ui| {
+    let shown = match text_color {
+        Some(label) if current == designcraft_doc::TEXT_COLOR => label,
+        _ => current,
+    };
+    egui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
+        if let Some(label) = text_color
+            && ui.selectable_label(current == designcraft_doc::TEXT_COLOR, label).clicked()
+        {
+            picked = Some(designcraft_doc::TEXT_COLOR.to_string());
+        }
         for w in doc.swatches.iter().filter(|w| !w.hidden) {
             let (c, g) = crate::widgets::swatch_colors(doc, &w.name, 1.0);
             ui.horizontal(|ui| {
@@ -5914,7 +5936,8 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
             ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Color:"));
             let color = rule["color"].as_str().unwrap_or("").to_string();
-            if let Some(w) = doc.and_then(|doc| swatch_menu(ui, doc, ("rule_color", which), &color, 130.0)) {
+            let text_color = crate::i18n::tr(lang, "Text Color");
+            if let Some(w) = doc.and_then(|doc| swatch_menu_with(ui, doc, ("rule_color", which), &color, 130.0, Some(text_color))) {
                 d.fields.insert(key("color"), json!(w));
             }
             crate::rtl::label(ui, crate::i18n::tr(lang, "Tint:"));
@@ -7560,6 +7583,53 @@ mod tests {
         assert_eq!(app.run("type.selectionAttrs", json!({})).unwrap()["para"]["ruleBelow"], want);
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.run("type.selectionAttrs", json!({})).unwrap()["para"]["ruleBelow"], rule);
+    }
+
+    /// Paragraph Rules › Color offers Text Color above the swatches, so a rule set to a swatch can
+    /// go back to it; Gap Color lists only swatches.
+    #[test]
+    fn the_rule_colour_menu_offers_text_color() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let doc = app.session.doc().unwrap().doc.clone();
+        let menu = |ctx: &egui::Context, text: Option<&str>, click: Option<egui::Pos2>| {
+            let mut picked = None;
+            let mut labels = Vec::new();
+            let mut events = Vec::new();
+            if let Some(pos) = click {
+                events.push(egui::Event::PointerMoved(pos));
+                events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
+                events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
+            }
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 600.0))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                picked = swatch_menu_with(ui, &doc, "m", "[Black]", 130.0, text);
+            });
+            out.textures_delta.clear();
+            for s in out.shapes {
+                if let egui::Shape::Text(t) = s.shape {
+                    labels.push((t.galley.job.text.clone(), t.visual_bounding_rect().center()));
+                }
+            }
+            (picked, labels)
+        };
+        for text in [Some("Text Color"), None] {
+            let ctx = egui::Context::default();
+            let (_, labels) = menu(&ctx, text, None);
+            let combo = labels.iter().find(|(t, _)| t == "[Black]").unwrap().1;
+            menu(&ctx, text, Some(combo));
+            let (_, labels) = menu(&ctx, text, None);
+            let item = labels.iter().find(|(t, _)| t == "Text Color").map(|l| l.1);
+            assert_eq!(item.is_some(), text.is_some(), "{labels:?}");
+            if let Some(pos) = item {
+                let (picked, _) = menu(&ctx, text, Some(pos));
+                assert_eq!(picked.as_deref(), Some(designcraft_doc::TEXT_COLOR));
+            }
+        }
     }
 
     /// The course's chapter 20: a paragraph style's rule below becomes wavy, 3 pt, with a gap

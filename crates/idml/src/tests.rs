@@ -3706,6 +3706,33 @@ fn style_names_ending_in_a_space_and_partial_rule_overrides_import() {
 }
 
 #[test]
+fn a_style_setting_only_a_rules_type_gap_or_keep_in_frame_overrides_it() {
+    let styles = STYLES.replace(
+        r#"  </RootParagraphStyleGroup>"#,
+        r#"    <ParagraphStyle Self="ParagraphStyle/Base" Name="Base" RuleBelow="true" RuleBelowLineWeight="3">
+      <Properties><BasedOn type="string">$ID/[No paragraph style]</BasedOn></Properties>
+    </ParagraphStyle>
+    <ParagraphStyle Self="ParagraphStyle/Wavy" Name="Wavy" RuleBelowType="StrokeStyle/$ID/Wavy">
+      <Properties><BasedOn type="object">ParagraphStyle/Base</BasedOn></Properties>
+    </ParagraphStyle>
+    <ParagraphStyle Self="ParagraphStyle/Gap" Name="Gap" RuleBelowGapColor="Color/Black">
+      <Properties><BasedOn type="string">$ID/[No paragraph style]</BasedOn></Properties>
+    </ParagraphStyle>
+    <ParagraphStyle Self="ParagraphStyle/Kept" Name="Kept" KeepRuleAboveInFrame="true">
+      <Properties><BasedOn type="string">$ID/[No paragraph style]</BasedOn></Properties>
+    </ParagraphStyle>
+  </RootParagraphStyleGroup>"#,
+    );
+    let d = import_idml(&fixture_with_table_styles(&styles, STORY)).unwrap();
+    let style = |n: &str| d.styles.paragraph.iter().find(|s| s.name == n).unwrap().para.clone();
+    let wavy = style("Wavy").rule_below.expect("the type alone overrides the rule");
+    assert_eq!((wavy.on, wavy.weight, wavy.kind), (true, 3.0, designcraft_doc::StrokeType::Wavy), "the rest from the based-on style");
+    let gap = style("Gap").rule_below.expect("the gap colour alone, with no on or weight in the chain");
+    assert!(!gap.on && gap.gap_color != designcraft_color::swatch::NONE, "{gap:?}");
+    assert!(style("Kept").rule_above.expect("Keep In Frame alone").keep_in_frame);
+}
+
+#[test]
 fn missing_linked_graphics_show_their_preview_and_keep_their_link() {
     // InDesign's preview of the missing photo (a PNG header is all the importer reads: 4 × 3).
     let png: Vec<u8> = [b"\x89PNG\r\n\x1a\n".as_slice(), &[0, 0, 0, 13], b"IHDR", &4u32.to_be_bytes(), &3u32.to_be_bytes()].concat();
