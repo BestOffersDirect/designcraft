@@ -875,6 +875,13 @@ fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
         {
             return Err(bad("style.paragraph.create", format!("no style `{b}`")));
         }
+        // Next Style: a style of the document, or this one.
+        if let Some(n) = &next
+            && *n != name
+            && d.styles.para(n).is_none()
+        {
+            return Err(bad("style.paragraph.create", format!("no style `{n}`")));
+        }
         d.styles_mut().paragraph.push(ParagraphStyle { name: name.clone(), based_on, next_style: next, para, chars, shortcut: String::new() });
         Ok(json!({"name": name}))
     })
@@ -938,11 +945,19 @@ fn edit_para(s: &mut Session, p: &Value) -> Result<Value> {
     let based = p.get("basedOn").cloned();
     let next = p.get("nextStyle").cloned();
     let reset = p.get("resetToBase").and_then(Value::as_bool).unwrap_or(false);
+    for (key, v) in [("basedOn", &based), ("nextStyle", &next)] {
+        if v.as_ref().is_some_and(|v| !v.is_string() && !v.is_null()) {
+            return Err(bad("style.paragraph.edit", format!("`{key}` must be a style name or null")));
+        }
+    }
     s.edit(|d, _| {
-        if let Some(Value::String(b)) = &based
-            && d.styles.para_based_on_cycles(&name, b)
-        {
-            return Err(bad("style.paragraph.edit", "based-on would create a cycle"));
+        if let Some(Value::String(b)) = &based {
+            if d.styles.para(b).is_none() {
+                return Err(bad("style.paragraph.edit", format!("no style `{b}`")));
+            }
+            if d.styles.para_based_on_cycles(&name, b) {
+                return Err(bad("style.paragraph.edit", "based-on would create a cycle"));
+            }
         }
         if let Some(Value::String(n)) = &next
             && d.styles.para(n).is_none()

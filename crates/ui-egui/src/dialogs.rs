@@ -3645,6 +3645,21 @@ fn grep_error(p: &str) -> Option<String> {
 
 /// The Justification spacing check of Paragraph Style Options, against what the section showed:
 /// the style's own values, or a new style's Based On.
+/// What paragraph style `style` resolves to when based on `based` (the Based On chosen in its
+/// dialog, which may not be its own yet): `based`'s chain with the style's own settings over it.
+fn style_over(
+    styles: &designcraft_doc::Styles,
+    based: &str,
+    style: &designcraft_doc::ParagraphStyle,
+) -> (designcraft_doc::ParaProps, designcraft_doc::CharProps) {
+    styles.resolve_para(&designcraft_doc::ParaFormat {
+        style: based.into(),
+        para: style.para.clone(),
+        chars: style.chars.clone(),
+        ..Default::default()
+    })
+}
+
 fn check_paragraph_style_justification(app: &DesignApp, d: &Dialog) -> Result<(), String> {
     // After Reset To Base the style starts from its Based On (the one chosen here, if any).
     let base_of = |st: &designcraft_engine::DocState| {
@@ -3655,14 +3670,18 @@ fn check_paragraph_style_justification(app: &DesignApp, d: &Dialog) -> Result<()
         .session
         .active()
         .map(|st| {
-            let shown = if d.b("new") {
-                d.s("basedOn")
+            let pp = if d.b("new") {
+                st.doc.styles.resolve_para_style(&d.s("basedOn")).0
             } else if d.b("resetToBase") {
-                base_of(st)
+                st.doc.styles.resolve_para_style(&base_of(st)).0
             } else {
-                d.s("name")
+                // The style's own settings over the Based On chosen in the dialog.
+                match st.doc.styles.para(&d.s("name")) {
+                    Some(style) => style_over(&st.doc.styles, &base_of(st), style).0,
+                    None => st.doc.styles.resolve_para_style(&d.s("name")).0,
+                }
             };
-            serde_json::to_value(st.doc.styles.resolve_para_style(&shown).0).unwrap_or_default()
+            serde_json::to_value(pp).unwrap_or_default()
         })
         .unwrap_or_default();
     check_justification(d, "p.", &base)
@@ -3847,7 +3866,8 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
     let names: Vec<String> = doc.styles.paragraph.iter().map(|p| p.name.clone()).filter(|n| new || *n != name).collect();
     // A new style shows what it would inherit from its Based On (as does one reset to it).
     let based_name = d.fields.get("basedOn").and_then(Value::as_str).map(str::to_string).or(style.based_on.clone()).unwrap_or_default();
-    let (pp, cp) = doc.styles.resolve_para_style(if new || reset { &based_name } else { &name });
+    // An existing style shows its own settings over the Based On chosen here.
+    let (pp, cp) = if new || reset { doc.styles.resolve_para_style(&based_name) } else { style_over(&doc.styles, &based_name, &style) };
     let units = doc.settings.horizontal_units;
     let pv = serde_json::to_value(&pp).unwrap_or_default();
     let cv = serde_json::to_value(&cp).unwrap_or_default();
@@ -7632,6 +7652,21 @@ mod tests {
         let s = style(&app);
         assert_eq!((s.chars.size, s.chars.tracking, s.para.space_after), (None, Some(10.0), None), "{s:?}");
         assert_eq!(s.based_on.as_deref(), Some(designcraft_doc::BASIC_PARAGRAPH));
+    }
+
+    /// A Based On changed in the dialog (without Reset To Base) is what the fields are checked
+    /// against: the style's own settings over the new parent.
+    #[test]
+    fn a_changed_based_on_is_what_the_fields_are_checked_against() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("style.paragraph.create", json!({"name": "Loose", "para": {"wordSpaceMin": 1.2, "wordSpaceDesired": 1.3}})).unwrap();
+        app.run("style.paragraph.create", json!({"name": "Child", "basedOn": "Loose"})).unwrap();
+        let mut d = Dialog::new("paragraphStyleOptions", json!({"name": "Child"}));
+        d.fields.insert("p.wordSpaceDesired".into(), json!(1.0));
+        assert!(check_paragraph_style_justification(&app, &d).is_err(), "below Loose's minimum");
+        d.fields.insert("basedOn".into(), json!(designcraft_doc::BASIC_PARAGRAPH));
+        assert_eq!(check_paragraph_style_justification(&app, &d), Ok(()), "[Basic Paragraph]'s minimum is lower");
     }
 
     /// With Reset To Base, the justification fields are checked against the base style (the
