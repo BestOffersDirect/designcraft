@@ -333,8 +333,12 @@ impl Tool for TypeTool {
                     self.selecting = None;
                     return vec![Action::Commit];
                 }
-                // A click in an empty frame: it becomes a text frame with the caret in it.
+                // A click in an empty frame: it becomes a text frame with the caret in it. A release
+                // away from the press (with no drag in between) isn't a click: nothing changes.
                 if let Some((fid, at)) = self.convert.take() {
+                    if start.is_some_and(|a| (ev.pos - a).hypot() >= cx.tol(3.0)) {
+                        return vec![];
+                    }
                     return vec![Action::Exec("text.placeCaret".into(), json!({"frame": fid, "point": [at.x, at.y]}))];
                 }
                 // Ends a press in text: drops dragged text, or is ignored by the engine.

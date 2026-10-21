@@ -1080,6 +1080,9 @@ fn type_tool_drag_over_an_empty_frame_draws_a_new_text_frame() {
     assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y)).is_empty());
     let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x, y));
     assert!(matches!(&a[..], [Action::Exec(cmd, p)] if cmd == "text.placeCaret" && p["frame"] == id.0), "{a:?}");
+    // A release away from the press with no drag in between isn't a click: no caret, no conversion.
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y)).is_empty());
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x1, y1)).is_empty());
 }
 
 #[test]
