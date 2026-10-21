@@ -31,6 +31,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Vyjmout"),
     ("Copy", "Kopírovat"),
     ("Paste", "Vložit"),
+    ("PDF Preset:", "Předvolba PDF:"),
     ("Continue", "Pokračovat"),
     ("Printing Instructions", "Pokyny k tisku"),
     ("Show Problems Only", "Zobrazit jen problémy"),

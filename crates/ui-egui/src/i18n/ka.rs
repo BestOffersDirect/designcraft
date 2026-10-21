@@ -31,6 +31,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "ამოჭრა"),
     ("Copy", "კოპირება"),
     ("Paste", "ჩასმა"),
+    ("PDF Preset:", "PDF-ის წინასწარი პარამეტრი:"),
     ("Packaged {count} files into {dir}", "{count} ფაილი შეიფუთა {dir}-ში"),
     ("Continue", "გაგრძელება"),
     ("Printing Instructions", "ბეჭდვის ინსტრუქციები"),

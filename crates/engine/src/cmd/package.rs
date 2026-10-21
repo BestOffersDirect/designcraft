@@ -202,7 +202,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Package…",
             ["File"],
             None,
-            "{dir: folder to create, idml?: true, pdf?: false, instructions?: text} — the document (its placed files relinked to Links/), Links/, the font files that draw its text in Document Fonts/ (fallback fonts included; unless their licence restricts it), an IDML copy (linking the files in Links/, nothing embedded), an optional PDF and a report → {dir, files, report}",
+            "{dir: folder to create, idml?: true, pdf?: false|true|{…options of file.exportPdf}, instructions?: text} — the document (its placed files relinked to Links/), Links/, the font files that draw its text in Document Fonts/ (fallback fonts included; unless their licence restricts it), an IDML copy (linking the files in Links/, nothing embedded), an optional PDF and a report → {dir, files, report}",
             has_doc,
             package
         ),
@@ -389,6 +389,13 @@ fn drawn_faces(cs: &ComposedStory, depth: usize, out: &mut Vec<FaceRef>) {
 fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = PathBuf::from(str_param(p, "dir").ok_or_else(|| bad("file.package", "missing `dir`"))?);
     let st = s.doc()?;
+    // The PDF: with the default settings, or with the options of a PDF preset (as
+    // file.exportPdf's). Read first, so that bad options write nothing.
+    let pdf = match p.get("pdf") {
+        Some(o @ Value::Object(_)) => Some(super::export::options(o, st.doc.page_count())?),
+        Some(Value::Bool(true)) => Some(Default::default()),
+        _ => None,
+    };
     let root = OutputRoot::new(dir.clone())?;
     let display_title = st.doc.title.clone();
     let title = safe_component(&display_title, "Untitled");
@@ -433,9 +440,9 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         root.write(&path, &designcraft_idml::export_idml_with(&packed, &opts))?;
         files.push(path);
     }
-    if p.get("pdf").and_then(Value::as_bool).unwrap_or(false) {
+    if let Some(opts) = pdf {
         let path = package_output_path(&dir, &title, "pdf")?;
-        let bytes = designcraft_pdf::export_pdf(&super::interchange::with_pdf_boxes(&packed), &s.cache, &Default::default())
+        let bytes = designcraft_pdf::export_pdf(&super::interchange::with_pdf_boxes(&packed), &s.cache, &opts)
             .map_err(|e| EngineError::Other(e.to_string()))?;
         root.write(&path, &bytes)?;
         files.push(path);
@@ -506,6 +513,26 @@ mod tests {
             let links = opened.execute("links.list", &json!({})).unwrap();
             assert_eq!(links[0]["status"], "ok", "{extension}");
         }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// `pdf` takes file.exportPdf's options (a PDF preset's): a PDF/X-4 package PDF; `true` is the
+    /// default PDF, and bad options are refused.
+    #[test]
+    fn package_pdf_takes_export_options() {
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("dc-package-pdf-options-{}-{nonce}", std::process::id()));
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"title": "Options", "width": 72, "height": 72})).unwrap();
+        let x4 = dir.join("x4");
+        s.execute("file.package", &json!({"dir": x4.to_string_lossy(), "idml": false, "pdf": {"standard": "x4"}})).unwrap();
+        let has = |path: &std::path::Path, what: &[u8]| std::fs::read(path).unwrap().windows(what.len()).any(|w| w == what);
+        assert!(has(&x4.join("Options.pdf"), b"GTS_PDFX"));
+        let plain = dir.join("plain");
+        s.execute("file.package", &json!({"dir": plain.to_string_lossy(), "idml": false, "pdf": true})).unwrap();
+        assert!(!has(&plain.join("Options.pdf"), b"GTS_PDFX"));
+        assert!(s.execute("file.package", &json!({"dir": dir.join("bad").to_string_lossy(), "pdf": {"standard": "nope"}})).is_err());
+        assert!(!dir.join("bad").exists(), "bad options write nothing");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

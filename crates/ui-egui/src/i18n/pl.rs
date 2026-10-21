@@ -29,6 +29,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Wytnij"),
     ("Copy", "Kopiuj"),
     ("Paste", "Wklej"),
+    ("PDF Preset:", "Ustawienie predefiniowane PDF:"),
     ("Packaged {count} files into {dir}", "Spakowano {count} plików do {dir}"),
     ("Continue", "Kontynuuj"),
     ("Printing Instructions", "Instrukcje drukowania"),
