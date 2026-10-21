@@ -873,8 +873,9 @@ fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
 /// The Opacity slider that the arrow beside the field opens, as in InDesign: a drag shows the
 /// new opacity live and is one undo step when let go.
 fn opacity_slider(app: &mut DesignApp, resp: &egui::Response, opacity: f64) {
-    let (mut slid, mut held) = (None, false);
+    let (mut slid, mut held, mut shown) = (None, false, false);
     egui::Popup::menu(resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        shown = true;
         // A thin rail and a round knob, as InDesign draws it.
         ui.spacing_mut().slider_width = 130.0;
         ui.spacing_mut().slider_rail_height = 2.0;
@@ -902,6 +903,9 @@ fn opacity_slider(app: &mut DesignApp, resp: &egui::Response, opacity: f64) {
             let _ = app.run("object.opacity", json!({"opacity": v / 100.0}));
         }
         None if held => app.hold_live_preview(),
+        // Shown but let go without a change (a click outside, Escape): the drag's preview is
+        // committed now, before whatever that click does, so that keeps its own undo step.
+        None if shown => app.end_live_preview(),
         None => {}
     }
 }
