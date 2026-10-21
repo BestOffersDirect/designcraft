@@ -2315,11 +2315,19 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                 ui.end_row();
                                 crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Search:"));
                                 let cur = d.s("scope");
+                                // InDesign's names for the scopes.
+                                let scope_name = |v: &str| match v {
+                                    "story" => "Story",
+                                    "selection" => "Selection",
+                                    _ => "Document",
+                                };
                                 egui::ComboBox::from_id_salt("fcscope")
-                                    .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, &cur)))
+                                    .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, scope_name(&cur))))
                                     .show_ui(ui, |ui| {
                                         for v in ["document", "story", "selection"] {
-                                            if ui.selectable_label(cur == v, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, v))).clicked()
+                                            if ui
+                                                .selectable_label(cur == v, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, scope_name(v))))
+                                                .clicked()
                                                 && d.set_field("scope", json!(v))
                                             {
                                                 app.session.reset_find_scope();
@@ -2337,11 +2345,27 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             ui.horizontal(|ui| {
                                 let params0 = find_change_params(&d);
                                 let params = || params0.clone();
+                                // Change and Change/Find act on the text Find Next found.
+                                let mut found = params0.clone();
+                                found["found"] = json!(true);
+                                let selected = app.session.active().and_then(|st| st.selection.text).is_some_and(|t| !t.is_caret());
+                                let next_status = |app: &mut DesignApp, r: Result<Value, String>| match r {
+                                    Ok(Value::Null) => crate::i18n::tr(&app.ui.language, "No matches").to_string(),
+                                    Ok(_) => crate::i18n::tr(&app.ui.language, "Found").to_string(),
+                                    Err(e) => e,
+                                };
                                 if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Find Next"))).clicked() {
                                     let r = app.run("find.next", params());
-                                    let msg = match r {
-                                        Ok(Value::Null) => crate::i18n::tr(&app.ui.language, "No matches").to_string(),
-                                        Ok(_) => crate::i18n::tr(&app.ui.language, "Found").to_string(),
+                                    let msg = next_status(app, r);
+                                    d.fields.insert("status".into(), json!(msg));
+                                }
+                                if ui
+                                    .add_enabled(selected, egui::Button::new(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Change"))))
+                                    .clicked()
+                                {
+                                    let msg = match app.run("find.change", found.clone()) {
+                                        Ok(v) => crate::i18n::tr(&app.ui.language, "{count} replacement(s) made")
+                                            .replace("{count}", &v["count"].to_string()),
                                         Err(e) => e,
                                     };
                                     d.fields.insert("status".into(), json!(msg));
@@ -2352,6 +2376,17 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                             .replace("{count}", &v["count"].to_string()),
                                         Err(e) => e,
                                     };
+                                    d.fields.insert("status".into(), json!(msg));
+                                }
+                                if ui
+                                    .add_enabled(
+                                        selected,
+                                        egui::Button::new(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Change/Find"))),
+                                    )
+                                    .clicked()
+                                {
+                                    let r = app.run("find.change", found.clone()).and_then(|_| app.run("find.next", params()));
+                                    let msg = next_status(app, r);
                                     d.fields.insert("status".into(), json!(msg));
                                 }
                                 if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Count"))).clicked() {
@@ -8411,6 +8446,15 @@ mod tests {
         labels
     }
 
+    /// What Find/Change's Search list shows for a scope.
+    fn scope_label(scope: &str) -> &'static str {
+        match scope {
+            "story" => "Story",
+            "selection" => "Selection",
+            _ => "Document",
+        }
+    }
+
     fn visible_label(labels: &[(String, egui::Rect, egui::Rect)], screen: egui::Rect, expected: &str) -> egui::Rect {
         let (_, rect, clip) = labels.iter().find(|(text, _, _)| text.trim() == expected).unwrap_or_else(|| panic!("{expected} is painted"));
         assert!(screen.contains_rect(*rect), "{expected} must stay on screen: {rect:?}");
@@ -8492,8 +8536,8 @@ mod tests {
         for _ in 0..3 {
             dialog_frame(&mut app, &ctx, screen, vec![]);
         }
-        scope_click(&mut app, &ctx, screen, "document");
-        scope_click(&mut app, &ctx, screen, "selection");
+        scope_click(&mut app, &ctx, screen, "Document");
+        scope_click(&mut app, &ctx, screen, "Selection");
         assert_eq!(app.ui.dialog.as_ref().unwrap().s("scope"), "selection");
         (app, ctx, screen, sid)
     }
@@ -8722,8 +8766,8 @@ mod tests {
                     let cur = app.ui.dialog.as_ref().unwrap().s("scope");
                     let next = if cur == "selection" { "document" } else { "selection" };
                     if physical {
-                        scope_click(&mut app, &ctx, screen, &cur);
-                        scope_click(&mut app, &ctx, screen, next);
+                        scope_click(&mut app, &ctx, screen, scope_label(&cur));
+                        scope_click(&mut app, &ctx, screen, scope_label(next));
                     } else {
                         scope_control(&mut app, &ctx, "ui.dialog.set", json!({"field": "scope", "value": next}));
                     }
@@ -8740,8 +8784,8 @@ mod tests {
                 let cur = app.ui.dialog.as_ref().unwrap().s("scope");
                 let next = if cur == "selection" { "document" } else { "selection" };
                 if physical {
-                    scope_click(&mut app, &ctx, screen, &cur);
-                    scope_click(&mut app, &ctx, screen, next);
+                    scope_click(&mut app, &ctx, screen, scope_label(&cur));
+                    scope_click(&mut app, &ctx, screen, scope_label(next));
                 } else {
                     scope_control(&mut app, &ctx, "ui.dialog.set", json!({"field": "scope", "value": next}));
                 }
@@ -8997,6 +9041,52 @@ mod tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().s("status"), "2 replacement(s) made");
         assert_eq!(app.session.doc().unwrap().doc.story(sid).unwrap().text, "blue blue | red");
         assert_eq!(app.session.doc().unwrap().history.undo.len(), before.history.undo.len() + 1);
+    }
+
+    /// Find/Change's Change and Change/Find, as InDesign's: Find Next selects a match, Change/Find
+    /// changes it and selects the next, Change changes that one and keeps it selected. With no
+    /// text selected they're off.
+    #[test]
+    fn change_and_change_find_change_the_found_text() {
+        use egui_kittest::Harness;
+        use egui_kittest::kittest::{NodeT, Queryable};
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let f = app.run("frame.create", json!({"rect": [36, 36, 400, 300], "content": "text", "text": "red red | red"})).unwrap();
+        let sid = designcraft_doc::StoryId(f["story"].as_u64().unwrap());
+        app.run("text.select", json!({"story": sid.0, "anchor": 0, "focus": 0})).unwrap();
+        app.run("app.findChange", json!({})).unwrap();
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("find".into(), json!("red"));
+            d.fields.insert("change".into(), json!("blue"));
+        }
+        let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::new("change_find_test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        assert!(h.query_by_value("Document").is_some(), "the Search choices are InDesign's");
+        assert!(h.get_by_label("Change").accesskit_node().is_disabled(), "nothing found yet");
+        let text = |h: &Harness<'_, DesignApp>| h.state().session.doc().unwrap().doc.story(sid).unwrap().text.clone();
+        let selected = |h: &Harness<'_, DesignApp>| h.state().session.doc().unwrap().selection.text.unwrap().range();
+        h.get_by_label("Find Next").click();
+        h.run_steps(3);
+        assert_eq!(selected(&h), 0..3);
+        h.get_by_label("Change/Find").click();
+        h.run_steps(3);
+        assert_eq!((text(&h), selected(&h)), ("blue red | red".to_string(), 5..8));
+        h.get_by_label("Change").click();
+        h.run_steps(3);
+        assert_eq!((text(&h), selected(&h)), ("blue blue | red".to_string(), 5..9));
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().fields["status"], json!("1 replacement(s) made"));
     }
 
     #[test]

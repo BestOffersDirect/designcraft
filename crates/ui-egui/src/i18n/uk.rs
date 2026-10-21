@@ -29,6 +29,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Вирізати"),
     ("Copy", "Копіювати"),
     ("Paste", "Вставити"),
+    ("Change/Find", "Замінити/Знайти"),
     ("Find Format:", "Знайти формат:"),
     ("Find Format Settings", "Параметри пошуку формату"),
     ("Specify attributes to find", "Задати атрибути для пошуку"),

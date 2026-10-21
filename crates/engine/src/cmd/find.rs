@@ -61,18 +61,18 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!(query "find.find", "Find", ["Edit", "Find/Change"], None,
-            "{find, grep?: bool, caseSensitive?: bool, wholeWord?: bool, scope?: document|story|selection, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), change?|first?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} → matches [{story, start, end, text}]",
+            "{find, grep?: bool, caseSensitive?: bool, wholeWord?: bool, scope?: document|story|selection, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), change?|first?|found?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} → matches [{story, start, end, text}]",
             has_doc, find),
         cmd!(
             "find.change",
             "Change All",
             ["Edit", "Find/Change"],
             None,
-            "{find, change, grep?, caseSensitive?, wholeWord?, scope?, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), first?: bool (change only the first match), attrs?: {character attributes applied to changed text}, charStyle?: a character style applied to it, paraStyle?: a paragraph style applied to its paragraphs} → {count} — attrs, charStyle and paraStyle are the Change Format: with one and an empty change, the found text stays and is only formatted; with no find, change is literal text",
+            "{find, change, grep?, caseSensitive?, wholeWord?, scope?, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), first?: bool (change only the first match), found?: bool (Change: only the text Find Next found, while it is selected and still a match; it stays selected, and Find Next goes on after it in the same domain), attrs?: {character attributes applied to changed text}, charStyle?: a character style applied to it, paraStyle?: a paragraph style applied to its paragraphs} → {count} — attrs, charStyle and paraStyle are the Change Format: with one and an empty change, the found text stays and is only formatted; with no find, change is literal text",
             has_doc,
             change
         ),
-        cmd!(noundo "find.next", "Find Next", ["Edit"], Some("Cmd+Alt+F"), "{find, grep?, caseSensitive?, wholeWord?, scope?: document|story|selection, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), change?|first?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} — Selection starts at its original beginning; later calls advance within the scope", has_doc, find_next),
+        cmd!(noundo "find.next", "Find Next", ["Edit"], Some("Cmd+Alt+F"), "{find, grep?, caseSensitive?, wholeWord?, scope?: document|story|selection, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), change?|first?|found?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} — Selection starts at its original beginning; later calls advance within the scope", has_doc, find_next),
     ]
 }
 
@@ -346,6 +346,25 @@ impl FindContext {
         self.selection = st.selection.clone();
     }
 
+    /// After Change put `new_len` bytes in place of `old` in story `sid`: the domain keeps the
+    /// changed text and the search goes on after it.
+    fn after_change(&mut self, st: &DocState, sid: StoryId, old: &Range<usize>, new_len: usize) {
+        let moved = |x: usize| if x >= old.end { x - old.len() + new_len } else { x };
+        for (tid, r) in &mut self.targets {
+            if *tid == sid {
+                *r = moved(r.start)..moved(r.end);
+            }
+        }
+        self.offset = old.start + new_len;
+        self.last_match_end = Some(self.offset);
+        let at = self.offset;
+        if let Some(i) = self.order.iter().position(|i| self.targets.get(*i).is_some_and(|(tid, r)| *tid == sid && r.start <= at && at <= r.end)) {
+            self.target = i;
+        }
+        self.document = Arc::downgrade(&st.doc);
+        self.acknowledge(st);
+    }
+
     fn restart(&mut self, st: &DocState) -> Result<()> {
         self.target = 0;
         self.last_match_end = None;
@@ -494,19 +513,48 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // InDesign: with a Change Format and nothing in Change to, the found text is only formatted.
     let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty());
-    let targets = scope(s, p)?.targets;
-    s.edit(|d, sel| {
+    let context = scope(s, p)?;
+    let targets = context.targets.clone();
+    // Change: only the text Find Next found, the selection, while it is still a match.
+    let found = if bool_or(p, "found", false) {
+        let st = s.doc()?;
+        let selected = st.selection.text.filter(|t| t.cell.is_none() && !t.is_caret()).map(|t| (t.story, t.range()));
+        let hit = selected.filter(|(sid, range)| {
+            targets.iter().any(|(tid, r)| {
+                tid == sid
+                    && r.start <= range.start
+                    && range.end <= r.end
+                    && target_text(&st.doc, *tid, r)
+                        .and_then(|text| re.replacements(&st.doc, *tid, r, text, &rep, grep, false))
+                        .is_ok_and(|edits| edits.iter().any(|(m, _)| r.start + m.start == range.start && r.start + m.end == range.end))
+            })
+        });
+        match hit {
+            Some(hit) => Some(hit),
+            None => return Ok(json!({"count": 0})),
+        }
+    } else {
+        None
+    };
+    let (count, changed) = s.edit(|d, sel| {
         let styles = d.styles.clone();
         let mut count = 0usize;
+        let mut changed = None;
         for (sid, r) in targets {
+            if found.as_ref().is_some_and(|(at, _)| *at != sid) {
+                continue;
+            }
             let Some(story) = d.story(sid) else { continue };
             // Collect matches first (positions refer to the original text), apply back to front.
             let text = story.text.get(r.clone()).ok_or_else(|| bad("find", "invalid selection bounds or UTF-8 boundary"))?;
-            let edits: Vec<(std::ops::Range<usize>, String)> = re
+            let mut edits: Vec<(std::ops::Range<usize>, String)> = re
                 .replacements(d, sid, &r, text, &rep, grep, first_only)?
                 .into_iter()
                 .map(|(m, out)| (r.start + m.start..r.start + m.end, out))
                 .collect();
+            if let Some((_, range)) = &found {
+                edits.retain(|(m, _)| m == range);
+            }
             let Some(st) = d.story_mut(sid) else { continue };
             for (range, new) in edits.iter().rev() {
                 let changed = if format_only {
@@ -541,13 +589,29 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 (t.anchor, t.focus) = if t.anchor <= t.focus { (start, end) } else { (end, start) };
             }
+            // Change leaves the changed text selected.
+            if let Some((_, range)) = &found
+                && let Some((_, new)) = edits.first()
+                && let Some(t) = sel.text.as_mut()
+            {
+                let len = if format_only { range.len() } else { new.len() };
+                (t.anchor, t.focus) = (range.start, range.start + len);
+                changed = Some(len);
+            }
             // `first` is the first match of the whole search, not of each story.
             if first_only && count > 0 {
                 break;
             }
         }
-        Ok(json!({"count": count}))
-    })
+        Ok((count, changed))
+    })?;
+    // Change: Find Next goes on after the changed text, in the search's domain.
+    if let (Some((sid, old)), Some(len)) = (&found, changed) {
+        let mut context = context;
+        context.after_change(s.doc()?, *sid, old, len);
+        s.find_context = Some(context);
+    }
+    Ok(json!({"count": count}))
 }
 
 fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
@@ -715,6 +779,43 @@ mod tests {
         assert!(s.execute("find.next", &json!({"find": "eggs", "findFormat": {"paraStyle": "Nope"}})).is_err());
         assert!(s.execute("find.find", &json!({"find": "eggs", "findFormat": {"chars": {"bogus": 1}}})).is_err());
         assert!(s.execute("find.find", &json!({"find": ""})).is_err());
+    }
+
+    /// Change and Change/Find: only the text Find Next found changes; it stays selected and the
+    /// search goes on after it in its domain (here the original selection). A selection that
+    /// isn't a match changes nothing and makes no undo step.
+    #[test]
+    fn change_changes_the_found_text_and_the_search_goes_on() {
+        let (mut s, sid) = scope_session("red red | red");
+        scope_select(&mut s, sid, 0, 7);
+        let p = json!({"find": "red", "change": "blue", "scope": "selection"});
+        let mut change = p.clone();
+        change["found"] = json!(true);
+        scope_hit(&mut s, &p, sid, 0, 3);
+        assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
+        let text = |s: &Session| s.doc().unwrap().doc.story(sid).unwrap().text.clone();
+        assert_eq!(text(&s), "blue red | red");
+        assert_eq!(s.doc().unwrap().selection.text.unwrap().range(), 0..4, "the changed text stays selected");
+        scope_hit(&mut s, &p, sid, 5, 8);
+        s.execute("find.change", &change).unwrap();
+        assert_eq!(text(&s), "blue blue | red");
+        assert_eq!(s.execute("find.next", &p).unwrap(), serde_json::Value::Null, "the last red is outside the selection searched");
+        // Not a match: nothing changes, no undo step.
+        scope_select(&mut s, sid, 0, 4);
+        let history = s.doc().unwrap().history.undo.len();
+        assert_eq!(s.execute("find.change", &json!({"find": "red", "change": "blue", "found": true})).unwrap()["count"], 0);
+        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        // A Change Format with nothing in Change to formats the found text only.
+        scope_select(&mut s, sid, 0, 0);
+        let fmt = json!({"find": "red", "change": "", "attrs": {"underline": true}});
+        let hit = s.execute("find.next", &fmt).unwrap();
+        assert_eq!(hit["start"], 12);
+        let mut found = fmt.clone();
+        found["found"] = json!(true);
+        s.execute("find.change", &found).unwrap();
+        assert_eq!(text(&s), "blue blue | red");
+        assert_eq!(s.doc().unwrap().doc.story(sid).unwrap().format_after(12).over.underline, Some(true));
+        assert_eq!(s.doc().unwrap().selection.text.unwrap().range(), 12..15);
     }
 
     #[test]

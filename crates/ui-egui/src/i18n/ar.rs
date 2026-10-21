@@ -30,6 +30,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "قص"),
     ("Copy", "نسخ"),
     ("Paste", "لصق"),
+    ("Change/Find", "تغيير/بحث"),
     ("Find Format:", "البحث عن تنسيق:"),
     ("Find Format Settings", "إعدادات البحث عن تنسيق"),
     ("Specify attributes to find", "تحديد السمات المراد البحث عنها"),

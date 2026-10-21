@@ -31,6 +31,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "ამოჭრა"),
     ("Copy", "კოპირება"),
     ("Paste", "ჩასმა"),
+    ("Change/Find", "ჩანაცვლება/ძიება"),
     ("Find Format:", "ფორმატის ძიება:"),
     ("Find Format Settings", "ფორმატის ძიების პარამეტრები"),
     ("Specify attributes to find", "საძიებო ატრიბუტების მითითება"),

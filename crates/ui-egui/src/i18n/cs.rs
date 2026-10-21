@@ -31,6 +31,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Vyjmout"),
     ("Copy", "Kopírovat"),
     ("Paste", "Vložit"),
+    ("Change/Find", "Změnit/Najít"),
     ("Find Format:", "Hledat formát:"),
     ("Find Format Settings", "Nastavení hledání formátu"),
     ("Specify attributes to find", "Určit atributy k hledání"),

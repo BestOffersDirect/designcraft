@@ -28,6 +28,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Taglia"),
     ("Copy", "Copia"),
     ("Paste", "Incolla"),
+    ("Change/Find", "Sostituisci/Trova"),
     ("Find Format:", "Trova formato:"),
     ("Find Format Settings", "Impostazioni di ricerca formato"),
     ("Specify attributes to find", "Specifica gli attributi da trovare"),

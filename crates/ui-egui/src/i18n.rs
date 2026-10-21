@@ -821,6 +821,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Change All", ["Change All", "Tout remplacer", "Change All", "Change All", "全部更改"]),
     ("Change to:", ["Change to:", "Remplacer par :", "Change to:", "Change to:", "更改为："]),
     ("Change Format:", ["Format ersetzen:", "Remplacer le format :", "Cambiar formato:", "置換形式 :", "更改格式："]),
+    ("Change/Find", ["Ersetzen/Suchen", "Remplacer/Rechercher", "Cambiar/Buscar", "置換して検索", "更改/查找"]),
     ("Find Format:", ["Format suchen:", "Rechercher le format :", "Buscar formato:", "検索形式 :", "查找格式："]),
     (
         "Find Format Settings",
