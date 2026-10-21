@@ -389,12 +389,17 @@ fn drawn_faces(cs: &ComposedStory, depth: usize, out: &mut Vec<FaceRef>) {
 fn package(s: &mut Session, p: &Value) -> Result<Value> {
     let dir = PathBuf::from(str_param(p, "dir").ok_or_else(|| bad("file.package", "missing `dir`"))?);
     let st = s.doc()?;
-    // The PDF: with the default settings, or with the options of a PDF preset (as
-    // file.exportPdf's). Read first, so that bad options write nothing.
+    // The PDF: with the default settings, or with the options of a PDF preset, made as
+    // file.exportPdf makes it. Read first, so that bad options write nothing.
     let pdf = match p.get("pdf") {
-        Some(o @ Value::Object(_)) => Some(super::export::options(o, st.doc.page_count())?),
-        Some(Value::Bool(true)) => Some(Default::default()),
-        _ => None,
+        None | Some(Value::Null) | Some(Value::Bool(false)) => None,
+        Some(Value::Bool(true)) => Some(json!({})),
+        Some(o @ Value::Object(_)) => {
+            super::export::options(o, st.doc.page_count())?;
+            super::export::flatten_ppi(o)?;
+            Some(o.clone())
+        }
+        Some(v) => return Err(bad("file.package", format!("`pdf` is true, false or PDF export options, not {v}"))),
     };
     let root = OutputRoot::new(dir.clone())?;
     let display_title = st.doc.title.clone();
@@ -440,11 +445,9 @@ fn package(s: &mut Session, p: &Value) -> Result<Value> {
         root.write(&path, &designcraft_idml::export_idml_with(&packed, &opts))?;
         files.push(path);
     }
-    if let Some(opts) = pdf {
+    if let Some(params) = pdf {
         let path = package_output_path(&dir, &title, "pdf")?;
-        let bytes = designcraft_pdf::export_pdf(&super::interchange::with_pdf_boxes(&packed), &s.cache, &opts)
-            .map_err(|e| EngineError::Other(e.to_string()))?;
-        root.write(&path, &bytes)?;
+        root.write(&path, &super::export::pdf_report(&packed, &s.cache, &params)?.bytes)?;
         files.push(path);
     }
     // The report: fonts (missing first), links, preflight, the user's instructions.
@@ -531,8 +534,33 @@ mod tests {
         let plain = dir.join("plain");
         s.execute("file.package", &json!({"dir": plain.to_string_lossy(), "idml": false, "pdf": true})).unwrap();
         assert!(!has(&plain.join("Options.pdf"), b"GTS_PDFX"));
-        assert!(s.execute("file.package", &json!({"dir": dir.join("bad").to_string_lossy(), "pdf": {"standard": "nope"}})).is_err());
-        assert!(!dir.join("bad").exists(), "bad options write nothing");
+        // Refused before anything is written: bad options, a bad flattener and a `pdf` that is
+        // neither a switch nor options.
+        for bad in [json!({"standard": "nope"}), json!({"flatten": "extreme"}), json!("print"), json!(3)] {
+            let out = dir.join("bad");
+            assert!(s.execute("file.package", &json!({"dir": out.to_string_lossy(), "pdf": bad})).is_err(), "{bad}");
+            assert!(!out.exists(), "{bad}: bad options write nothing");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A preset that flattens transparency (Screen and Email's `flatten: low`) gives the packaged
+    /// PDF the flattening `file.exportPdf` does.
+    #[test]
+    fn the_packaged_pdf_is_flattened_as_export_flattens_it() {
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("dc-package-pdf-flatten-{}-{nonce}", std::process::id()));
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"title": "Flat", "width": 144, "height": 144})).unwrap();
+        let id = s.execute("frame.create", &json!({"rect": [10, 10, 100, 100], "content": "unassigned"})).unwrap()["id"].clone();
+        s.execute("object.fill", &json!({"ids": [id], "swatch": "[Black]"})).unwrap();
+        s.execute("object.opacity", &json!({"ids": [id], "opacity": 0.5})).unwrap();
+        let exported = super::super::base64_decode(s.execute("file.exportPdf", &json!({"flatten": "low"})).unwrap()["base64"].as_str().unwrap());
+        s.execute("file.package", &json!({"dir": dir.to_string_lossy(), "idml": false, "pdf": {"flatten": "low"}})).unwrap();
+        let packaged = std::fs::read(dir.join("Flat.pdf")).unwrap();
+        let images = |pdf: &[u8]| pdf.windows(b"/Subtype/Image".len()).filter(|w| *w == b"/Subtype/Image").count();
+        assert!(images(&exported) > 0, "the export rasterises the transparent object");
+        assert_eq!(images(&packaged), images(&exported), "so does the package");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

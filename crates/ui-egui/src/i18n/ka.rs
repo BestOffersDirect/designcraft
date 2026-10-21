@@ -41,7 +41,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Create Printing Instructions", "ბეჭდვის ინსტრუქციების შექმნა"),
     ("Entire Publication", "მთელი პუბლიკაცია"),
     ("Scope:", "არეალი:"),
-    ("Spot", "ლაქა"),
+    ("Spot", "სპოტ-საღებავი"),
     ("Process", "პროცესი"),
     ("Source", "წყარო"),
     ("Installed", "დაყენებული"),
@@ -49,7 +49,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Substituted", "ჩანაცვლებული"),
     ("Modified", "შეცვლილი"),
     ("Missing", "აკლია"),
-    ("Colors and Inks: {process} Process Inks; {spot} Spot Inks", "ფერები და მელნები: {process} პროცესის; {spot} ლაქის"),
+    ("Colors and Inks: {process} Process Inks; {spot} Spot Inks", "ფერები და მელნები: {process} პროცესის მელანი; {spot} სპოტ-საღებავი"),
     ("Images: {embedded} Embedded", "გამოსახულებები: ჩაშენებულია {embedded}"),
     (
         "Links and Images: {found} Links Found; {modified} Modified, {missing} Missing",
