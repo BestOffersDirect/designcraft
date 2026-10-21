@@ -3599,8 +3599,22 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         }
         "alert" => Ok(Value::Null),
         crate::effects_dialog::ID => crate::effects_dialog::confirm(app, &d),
-        crate::package_dialog::ID => crate::package_dialog::confirm(app, &d),
-        crate::package_dialog::INSTRUCTIONS => crate::package_dialog::confirm_instructions(app, &d),
+        crate::package_dialog::ID | crate::package_dialog::INSTRUCTIONS => {
+            let r = if d.id == crate::package_dialog::ID {
+                crate::package_dialog::confirm(app, &d)
+            } else {
+                crate::package_dialog::confirm_instructions(app, &d)
+            };
+            // Packaging failed: the dialog stays open with its options and instructions, and the
+            // status line says why.
+            if let Err(e) = &r
+                && app.ui.dialog.is_none()
+            {
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+            }
+            r
+        }
         "findChange" => {
             let result = if d.b("objectMode") { Ok(Value::Null) } else { app.run("find.change", find_change_params(&d)) };
             // Confirmation consumes retained bounds before closing, even on an error.

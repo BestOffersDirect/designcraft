@@ -33,9 +33,9 @@ const INSTRUCTION_FIELDS: [(&str, &str, usize); 7] = [
 ];
 
 /// Open the Package dialog on its Summary, with the document's fonts, links and spot inks.
-pub fn open(app: &mut DesignApp) {
+pub fn open(app: &mut DesignApp) -> Result<(), String> {
     if app.session.active().is_none() {
-        return;
+        return Err("no document open".into());
     }
     let fonts: Vec<Value> = app
         .session
@@ -89,6 +89,7 @@ pub fn open(app: &mut DesignApp) {
         json!({"page": "summary", "fonts": fonts, "links": links, "spot": spot, "instructions": false, "idml": true, "pdf": false,
             "pdfPreset": preset, "problemsOnly": false}),
     ));
+    Ok(())
 }
 
 fn rows(d: &Dialog, key: &str) -> Vec<Value> {
@@ -232,7 +233,9 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                 "inks" => {
                     let mut cells: Vec<_> = PROCESS_INKS.iter().map(|n| (vec![tr(n), tr("Process")], None)).collect();
                     cells.extend(rows(d, "spot").iter().filter_map(Value::as_str).map(|n| (vec![n.to_string(), tr("Spot")], None)));
-                    table(ui, "package_inks", &[tr("Name"), tr("Type")], &cells);
+                    // The ink's kind: the "Type:" key (the "Type" key is the menu's, which reads Text).
+                    let kind = tr("Type:").trim_end_matches([':', '：']).trim_end().to_string();
+                    table(ui, "package_inks", &[tr("Name"), kind], &cells);
                 }
                 _ => {
                     ui.horizontal(|ui| {
@@ -469,7 +472,7 @@ mod tests {
         let out = dir.join("Packed Folder");
         let picked = out.to_string_lossy().to_string();
         app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
-        open(&mut app);
+        open(&mut app).unwrap();
         let mut h = harness(app);
         h.run_steps(3);
         h.get_by_label("Include IDML").click();
@@ -487,6 +490,29 @@ mod tests {
         assert!(out.join("Packed.pdf").exists() && !out.join("Packed.idml").exists());
         let pdf = std::fs::read(out.join("Packed.pdf")).unwrap();
         assert!(pdf.windows(8).any(|w| w == b"GTS_PDFX"), "the PDF/X-4 preset's PDF");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Packaging that fails (here, into a folder under a file) keeps the dialog open with its
+    /// options, and the status line says why. Without a document there's nothing to open.
+    #[test]
+    fn a_failed_package_keeps_the_dialog_open() {
+        let dir = temp_dir("fails");
+        let mut app = app_with_missing_link(&dir);
+        let blocker = dir.join("blocker");
+        std::fs::write(&blocker, b"a file, not a folder").unwrap();
+        let picked = blocker.join("Packed Folder").to_string_lossy().to_string();
+        app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+        open(&mut app).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("pdf".into(), json!(true));
+        assert!(crate::dialogs::confirm(&mut app).is_err());
+        let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+        assert_eq!((d.id.as_str(), d.b("pdf")), (ID, true), "with its options");
+        assert!(!app.ui.status.is_empty());
+        app.run("file.close", json!({})).unwrap();
+        app.ui.dialog = None;
+        assert!(app.run("app.packageDialog", json!({})).is_err());
+        assert!(app.ui.dialog.is_none());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

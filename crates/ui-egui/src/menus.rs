@@ -1149,10 +1149,7 @@ fn run_ui_inner(app: &mut DesignApp, id: &str, p: &Value) -> Option<Result<Value
             Ok(Value::Null)
         }
         "app.exportText" => export_bytes(app, p, "rtf", "file.exportText"),
-        "app.packageDialog" => {
-            crate::package_dialog::open(app);
-            Ok(Value::Null)
-        }
+        "app.packageDialog" => crate::package_dialog::open(app).map(|()| Value::Null),
         "app.language" => {
             let Some(v) = p.get("lang").and_then(Value::as_str) else { return Some(app.run("app.preferences", json!({}))) };
             if !crate::i18n::LANGUAGES.iter().any(|(c, _)| *c == v) {
