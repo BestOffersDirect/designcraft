@@ -32,6 +32,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Copy", "Kopírovat"),
     ("Paste", "Vložit"),
     ("Double Column", "Dvojitý sloupec"),
+    ("Single Column", "Jednoduchý sloupec"),
     ("Tools Panel:", "Panel nástrojů:"),
     ("Color Theme:", "Barevný motiv:"),
     ("Reverse Path", "Obrátit cestu"),

@@ -32,6 +32,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Copy", "კოპირება"),
     ("Paste", "ჩასმა"),
     ("Double Column", "ორმაგი სვეტი"),
+    ("Single Column", "ერთმაგი სვეტი"),
     ("Tools Panel:", "ხელსაწყოების პანელი:"),
     ("Color Theme:", "ფერთა თემა:"),
     ("Inches Decimal", "ინჩები (ათობითი)"),

@@ -30,6 +30,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Copy", "Kopiuj"),
     ("Paste", "Wklej"),
     ("Double Column", "Podwójna kolumna"),
+    ("Single Column", "Pojedyncza kolumna"),
     ("Tools Panel:", "Panel narzędzi:"),
     ("Color Theme:", "Motyw kolorów:"),
     ("Clear", "Wyczyść"),
