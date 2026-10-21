@@ -5956,9 +5956,9 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
             });
             crate::rtl::label(ui, crate::i18n::tr(lang, "Gap Tint:"));
             ui.add_enabled_ui(gaps && gap != designcraft_color::swatch::NONE, |ui| {
-                if let Some(v) =
-                    sized(ui, &mut |ui| crate::widgets::number(ui, &key("gapTint"), rule["gapTint"].as_f64().map(|t| t * 100.0), "%", 80.0, 0))
-                {
+                // A full gap tint is left out of the rule's JSON: it reads 100%.
+                let gap_tint = rule["gapTint"].as_f64().unwrap_or(1.0) * 100.0;
+                if let Some(v) = sized(ui, &mut |ui| crate::widgets::number(ui, &key("gapTint"), Some(gap_tint), "%", 80.0, 0)) {
                     d.fields.insert(key("gapTint"), json!((v / 100.0).clamp(0.0, 1.0)));
                 }
             });
@@ -7649,6 +7649,29 @@ mod tests {
         confirm(&mut app).unwrap();
         let r = app.session.doc().unwrap().doc.styles.resolve_para_style("Ruled Child").0.rule_below;
         assert_eq!((r.kind, r.weight, r.gap_color.as_str()), (designcraft_doc::StrokeType::Wavy, 3.0, "[Paper]"));
+    }
+
+    /// A rule's Gap Tint shows 100% at its default (the rule's JSON leaves a full gap tint out).
+    #[test]
+    fn a_rules_default_gap_tint_shows_100() {
+        use egui_kittest::kittest::Queryable;
+        let (mut app, _) = ruled_paragraph();
+        app.run(
+            "style.paragraph.edit",
+            json!({"name": "Ruled Child", "para": {"ruleBelow": {"type": {"kind": "dashed", "pattern": [4.0, 2.0]}, "gapColor": "[Paper]"}}}),
+        )
+        .unwrap();
+        let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
+        h.state_mut().app.ui.dialog =
+            Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "rules", "rule": "ruleBelow"})));
+        h.run_steps(4);
+        let label = h.get_by_label("Gap Tint:").rect();
+        let field = h
+            .get_all_by(|n| n.role() == egui::accesskit::Role::TextInput)
+            .filter(|n| n.rect().center().x > label.max.x && (n.rect().center().y - label.center().y).abs() < 8.0)
+            .min_by(|a, b| a.rect().min.x.total_cmp(&b.rect().min.x))
+            .and_then(|n| n.value());
+        assert_eq!(field.as_deref(), Some("100%"));
     }
 
     #[test]
