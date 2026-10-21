@@ -33,6 +33,13 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Вырезать"),
     ("Copy", "Копировать"),
     ("Paste", "Вставить"),
+    ("Find Format:", "Найти формат:"),
+    ("Find Format Settings", "Параметры поиска формата"),
+    ("Specify attributes to find", "Задать атрибуты для поиска"),
+    (
+        "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it",
+        "С форматом поиска находится только текст с этим форматом; если поле «Найти» пусто — весь такой текст",
+    ),
     ("Change Format:", "Заменить формат:"),
     ("Change Format Settings", "Параметры замены формата"),
     ("Style Options", "Параметры стиля"),

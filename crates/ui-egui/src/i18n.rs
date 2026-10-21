@@ -821,6 +821,31 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Change All", ["Change All", "Tout remplacer", "Change All", "Change All", "全部更改"]),
     ("Change to:", ["Change to:", "Remplacer par :", "Change to:", "Change to:", "更改为："]),
     ("Change Format:", ["Format ersetzen:", "Remplacer le format :", "Cambiar formato:", "置換形式 :", "更改格式："]),
+    ("Find Format:", ["Format suchen:", "Rechercher le format :", "Buscar formato:", "検索形式 :", "查找格式："]),
+    (
+        "Find Format Settings",
+        ["Einstellungen für Format suchen", "Paramètres de recherche de format", "Ajustes de búsqueda de formato", "検索形式の設定", "查找格式设置"],
+    ),
+    (
+        "Specify attributes to find",
+        [
+            "Zu suchende Attribute festlegen",
+            "Indiquer les attributs à rechercher",
+            "Especificar atributos que buscar",
+            "検索する属性を指定",
+            "指定要查找的属性",
+        ],
+    ),
+    (
+        "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it",
+        [
+            "Mit einem Suchformat wird nur Text gefunden, der es hat; bei leerem Feld „Suchen nach“ jeder Text, der es hat",
+            "Avec un format de recherche, seul le texte qui l’a est trouvé ; si « Rechercher » est vide, tout le texte qui l’a",
+            "Con un formato de búsqueda solo se encuentra el texto que lo tiene; con «Buscar» vacío, todo el texto que lo tiene",
+            "検索形式があるときは、その書式のテキストだけが見つかります。検索文字列が空のときは、その書式のテキストすべてが見つかります",
+            "设置了查找格式时，只查找具有该格式的文本；“查找内容”为空时，查找所有具有该格式的文本",
+        ],
+    ),
     (
         "Change Format Settings",
         [

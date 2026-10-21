@@ -29,6 +29,13 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Вирізати"),
     ("Copy", "Копіювати"),
     ("Paste", "Вставити"),
+    ("Find Format:", "Знайти формат:"),
+    ("Find Format Settings", "Параметри пошуку формату"),
+    ("Specify attributes to find", "Задати атрибути для пошуку"),
+    (
+        "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it",
+        "З форматом пошуку знаходиться лише текст із цим форматом; якщо поле «Знайти» порожнє — увесь такий текст",
+    ),
     ("Change Format:", "Замінити формат:"),
     ("Change Format Settings", "Параметри заміни формату"),
     ("Style Options", "Параметри стилю"),

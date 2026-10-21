@@ -2281,9 +2281,21 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             });
                             ui.label(d.s("status"));
                         } else {
-                            let formatted = d.fields.get(CHANGE_FORMAT).and_then(Value::as_object).is_some_and(|f| !f.is_empty());
+                            let (find_formatted, formatted) = (format_set(&d, FIND_FORMAT), format_set(&d, CHANGE_FORMAT));
                             egui::Grid::new("fc").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                                crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Find what:"));
+                                ui.horizontal(|ui| {
+                                    crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Find what:"));
+                                    // InDesign's ⓘ: a Find Format narrows what is found.
+                                    if find_formatted {
+                                        info_icon(
+                                            ui,
+                                            crate::i18n::tr(
+                                                &app.ui.language,
+                                                "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it",
+                                            ),
+                                        );
+                                    }
+                                });
                                 text_field(ui, &mut d, "find", 260.0);
                                 ui.end_row();
                                 ui.horizontal(|ui| {
@@ -2320,7 +2332,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                 check(ui, &mut d, "caseSensitive", crate::i18n::tr(&app.ui.language, "Case sensitive"));
                                 check(ui, &mut d, "wholeWord", crate::i18n::tr(&app.ui.language, "Whole word"));
                             });
-                            change_format_box(&app.ui.language, ui, &mut d);
+                            format_box(&app.ui.language, ui, &mut d, true);
+                            format_box(&app.ui.language, ui, &mut d, false);
                             ui.horizontal(|ui| {
                                 let params0 = find_change_params(&d);
                                 let params = || params0.clone();
@@ -2887,7 +2900,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         crate::new_document::preview(app, &mut d, ctx);
     }
     if d.id == "findChange" && result.is_none() && d.fields.get(FORMAT_EDIT).is_some_and(Value::is_object) {
-        change_format_settings(app, ctx, &mut d);
+        format_settings(app, ctx, &mut d);
     }
     app.ui.dialog = Some(d);
     match result {
@@ -3044,6 +3057,10 @@ fn find_change_params(d: &Dialog) -> Value {
     if let Some(story) = d.fields.get("story") {
         p["story"] = story.clone();
     }
+    // Find Format: only text with it is found (with nothing in Find what, all text with it).
+    if let Some(f) = d.fields.get(FIND_FORMAT).and_then(Value::as_object).filter(|f| !f.is_empty()) {
+        p["findFormat"] = Value::Object(f.clone());
+    }
     // Change Format: find.change applies it to the changed text (the other commands ignore it).
     if let Some(f) = d.fields.get(CHANGE_FORMAT) {
         for key in ["charStyle", "paraStyle"] {
@@ -3058,14 +3075,21 @@ fn find_change_params(d: &Dialog) -> Value {
     p
 }
 
-/// Find/Change's Change Format ({charStyle?, paraStyle?, chars?}), as Change Format Settings set
-/// it; absent when there is none.
+/// Find/Change's Find Format and Change Format ({charStyle?, paraStyle?, chars?}), as their
+/// settings set them; absent when there is none.
+const FIND_FORMAT: &str = "findFormat";
 const CHANGE_FORMAT: &str = "changeFormat";
-/// The fields of Change Format Settings while it is open (its section, `charStyle`, `paraStyle`
-/// and `c.<attr>`), until OK makes them the Change Format.
+/// The fields of Find or Change Format Settings while it is open (`for`: find|change, its
+/// section, `charStyle`, `paraStyle` and `c.<attr>`), until OK makes them the format.
 const FORMAT_EDIT: &str = "formatEdit";
 
-/// The sections of Change Format Settings: Style Options, then those of Character Style Options.
+/// Whether the dialog has a Find (`FIND_FORMAT`) or Change Format.
+fn format_set(d: &Dialog, key: &str) -> bool {
+    d.fields.get(key).and_then(Value::as_object).is_some_and(|f| !f.is_empty())
+}
+
+/// The sections of Find and Change Format Settings: Style Options, then those of Character Style
+/// Options.
 const FORMAT_SECTIONS: &[(&str, &str)] = &[
     ("style", "Style Options"),
     ("chars", "Basic Character Formats"),
@@ -3084,8 +3108,8 @@ fn info_icon(ui: &mut egui::Ui, tip: &str) {
     resp.on_hover_text(tip);
 }
 
-/// What the Change Format box shows: "Character Style: eggs + …".
-fn change_format_summary(lang: &str, format: Option<&Value>) -> String {
+/// What a Find or Change Format box shows: "Character Style: eggs + …".
+fn format_summary(lang: &str, format: Option<&Value>) -> String {
     let Some(f) = format else { return String::new() };
     let mut parts = Vec::new();
     for (key, label) in [("charStyle", "Character Style:"), ("paraStyle", "Paragraph Style:")] {
@@ -3099,23 +3123,30 @@ fn change_format_summary(lang: &str, format: Option<&Value>) -> String {
     parts.join(" + ")
 }
 
-/// Find/Change's Change Format, as InDesign's: a box with what Change All also gives the changed
-/// text, a button that opens Change Format Settings and one that clears it.
-fn change_format_box(lang: &str, ui: &mut egui::Ui, d: &mut Dialog) {
+/// Find/Change's Find Format (`find`) or Change Format, as InDesign's: a box with what the found
+/// text must have or what Change All also gives the changed text, a button that opens its
+/// settings and one that clears it.
+fn format_box(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, find: bool) {
+    let (key, label, specify) = if find {
+        (FIND_FORMAT, "Find Format:", "Specify attributes to find")
+    } else {
+        (CHANGE_FORMAT, "Change Format:", "Specify attributes to change")
+    };
     ui.add_space(6.0);
-    crate::rtl::label(ui, crate::i18n::tr(lang, "Change Format:"));
+    crate::rtl::label(ui, crate::i18n::tr(lang, label));
     ui.horizontal_top(|ui| {
         let t = crate::theme::Tokens::get(ui.ctx());
         egui::Frame::new().fill(t.input).stroke(egui::Stroke::new(1.0, t.input_border)).inner_margin(6.0).show(ui, |ui| {
             ui.set_width(340.0);
             ui.set_min_height(40.0);
-            let summary = change_format_summary(lang, d.fields.get(CHANGE_FORMAT));
+            let summary = format_summary(lang, d.fields.get(key));
             ui.add(egui::Label::new(egui::RichText::new(summary).color(t.text)).wrap());
         });
         ui.vertical(|ui| {
-            if crate::icons::button(ui, "find-format", 22.0, false, crate::i18n::tr(lang, "Specify attributes to change")).clicked() {
-                let f = d.fields.get(CHANGE_FORMAT).cloned().unwrap_or_default();
+            if crate::icons::button(ui, "find-format", 22.0, false, crate::i18n::tr(lang, specify)).clicked() {
+                let f = d.fields.get(key).cloned().unwrap_or_default();
                 let mut edit = Map::new();
+                edit.insert("for".into(), json!(if find { "find" } else { "change" }));
                 edit.insert("section".into(), json!("style"));
                 for key in ["charStyle", "paraStyle"] {
                     if let Some(v) = f.get(key) {
@@ -3128,16 +3159,17 @@ fn change_format_box(lang: &str, ui: &mut egui::Ui, d: &mut Dialog) {
                 d.fields.insert(FORMAT_EDIT.into(), Value::Object(edit));
             }
             if crate::icons::button(ui, "trash", 22.0, false, crate::i18n::tr(lang, "Clear specified attributes")).clicked() {
-                d.fields.remove(CHANGE_FORMAT);
+                d.fields.remove(key);
             }
         });
     });
 }
 
-/// Find/Change › Change Format Settings, over Find/Change as InDesign's: Style Options (the
-/// character and paragraph style to apply, [Any Style] for none), then the character sections of
-/// Character Style Options with every field blank (left as it is). OK makes it the Change Format.
-fn change_format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dialog) {
+/// Find/Change › Find or Change Format Settings, over Find/Change as InDesign's: Style Options
+/// (the character and paragraph style the found text has or the changed text gets, [Any Style]
+/// for none), then the character sections of Character Style Options with every field blank (any
+/// value, or left as it is). OK makes it the Find or Change Format.
+fn format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dialog) {
     let lang = app.ui.language.clone();
     let Some(doc) = app.session.active().map(|st| st.doc.clone()) else {
         d.fields.remove(FORMAT_EDIT);
@@ -3147,12 +3179,14 @@ fn change_format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dial
         Dialog { id: "changeFormat".into(), fields: d.fields.get(FORMAT_EDIT).and_then(Value::as_object).cloned().unwrap_or_default(), unit: d.unit };
     let base = json!({});
     let cf = CharFields { base: &base, sparse: true };
+    let find = fd.s("for") == "find";
     let popup_open = egui::Popup::is_any_open(ctx);
     let mut result = None;
-    let host = egui::Id::new("change_format_settings");
+    let host = egui::Id::new("format_settings");
     crate::modal_drag::modal(ctx, host, host).backdrop_color(egui::Color32::TRANSPARENT).show(ctx, |ui| {
         let title_top = ui.cursor().top();
-        crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Change Format Settings")).font(semibold(16.0)));
+        let title = if find { "Find Format Settings" } else { "Change Format Settings" };
+        crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, title)).font(semibold(16.0)));
         let margin = egui::Frame::popup(ui.style()).inner_margin;
         let title_row = egui::Rect::from_min_max(
             egui::pos2(ui.max_rect().left() - margin.leftf(), title_top - margin.topf()),
@@ -3212,10 +3246,11 @@ fn change_format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dial
             if !chars.is_empty() {
                 f.insert("chars".into(), Value::Object(chars));
             }
+            let key = if find { FIND_FORMAT } else { CHANGE_FORMAT };
             if f.is_empty() {
-                d.fields.remove(CHANGE_FORMAT);
+                d.fields.remove(key);
             } else {
-                d.fields.insert(CHANGE_FORMAT.into(), Value::Object(f));
+                d.fields.insert(key.into(), Value::Object(f));
             }
         }
         Some(false) => {
@@ -3227,8 +3262,8 @@ fn change_format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dial
     }
 }
 
-/// Change Format Settings › Style Options: the character and paragraph style the changed text
-/// gets ([Any Style]: as it is).
+/// Find or Change Format Settings › Style Options: the character and paragraph style the found
+/// text has or the changed text gets ([Any Style]: any, or as it is).
 fn format_style_options(lang: &str, ui: &mut egui::Ui, fd: &mut Dialog, styles: &designcraft_doc::Styles) {
     crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(lang, "Style Options")).font(semibold(13.0)));
     ui.add_space(6.0);
@@ -8553,8 +8588,8 @@ mod tests {
             [8, 19, 36].map(|at| story.format_after(at).style.clone()),
             [designcraft_doc::NO_CHAR_STYLE.to_string(), "eggs".into(), "eggs".into()]
         );
-        // The trash clears it.
-        h.get_by_label("Clear specified attributes").click();
+        // The trash clears it (the second: the first is the Find Format's).
+        h.get_all_by_label("Clear specified attributes").nth(1).unwrap().click();
         h.run_steps(3);
         assert_eq!(field(&h, CHANGE_FORMAT), None);
         assert!(h.query_by_label(TIP).is_none());
@@ -8571,8 +8606,72 @@ mod tests {
             (p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()),
             (json!("eggs"), json!("Method"), json!({"underline": true}))
         );
-        assert_eq!(change_format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
+        assert_eq!(format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
         assert!(find_change_params(&Dialog::new("findChange", json!({"find": "cook"}))).get("attrs").is_none());
+        // A Find Format goes with every search.
+        d.fields.insert(FIND_FORMAT.into(), json!({"paraStyle": "Method"}));
+        assert_eq!(find_change_params(&d)["findFormat"], json!({"paraStyle": "Method"}));
+    }
+
+    /// Find/Change › Find Format, as InDesign's: Find Format Settings sets the character style the
+    /// found text must have, the box shows it with Find what's ⓘ, and Count counts only "eggs" in
+    /// it; with nothing in Find what, Find Next finds the text in the style; the first trash clears
+    /// it.
+    #[test]
+    fn find_format_finds_only_text_with_it() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let f = app.run("frame.create", json!({"rect": [36, 36, 400, 300], "content": "text", "text": "Break eggs; cook eggs."})).unwrap();
+        app.run("style.character.create", json!({"name": "eggs", "chars": {"fontStyle": "Bold"}})).unwrap();
+        app.run("text.select", json!({"story": f["story"], "anchor": 6, "focus": 10})).unwrap();
+        app.run("style.character.apply", json!({"name": "eggs"})).unwrap();
+        app.run("text.select", json!({"story": f["story"], "anchor": 0, "focus": 0})).unwrap();
+        app.run("app.findChange", json!({})).unwrap();
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("find".into(), json!("eggs"));
+        }
+        let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::new("find_format_test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(4);
+        const TIP: &str = "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it";
+        assert!(h.query_by_label("Find Format:").is_some() && h.query_by_label(TIP).is_none());
+        h.get_by_label("Specify attributes to find").click();
+        h.run_steps(3);
+        assert!(h.query_by_label("Find Format Settings").is_some());
+        h.get_all_by_value("[Any Style]").next().unwrap().click();
+        h.run_steps(3);
+        h.get_by_label("eggs").click();
+        h.run_steps(3);
+        h.get_all_by_label("  OK  ").last().unwrap().click();
+        h.run_steps(3);
+        let field = |h: &Harness<'_, DesignApp>, k: &str| h.state().ui.dialog.as_ref().unwrap().fields.get(k).cloned();
+        assert_eq!((field(&h, FIND_FORMAT), field(&h, CHANGE_FORMAT)), (Some(json!({"charStyle": "eggs"})), None));
+        assert!(h.query_by_label("Character Style: eggs").is_some() && h.query_by_label(TIP).is_some());
+        h.get_by_label("Count").click();
+        h.run_steps(3);
+        assert_eq!(field(&h, "status"), Some(json!("1 match(es)")), "only the \"eggs\" in the style");
+        // Nothing in Find what: the text in the style.
+        h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("find".into(), json!(""));
+        h.run_steps(2);
+        h.get_by_label("Find Next").click();
+        h.run_steps(3);
+        let sel = h.state().session.doc().unwrap().selection.text.unwrap();
+        assert_eq!(sel.range(), 6..10);
+        // The first trash is the Find Format's.
+        h.get_all_by_label("Clear specified attributes").next().unwrap().click();
+        h.run_steps(3);
+        assert_eq!(field(&h, FIND_FORMAT), None);
     }
 
     #[test]
