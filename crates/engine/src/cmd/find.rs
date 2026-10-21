@@ -121,18 +121,29 @@ impl FindFormat {
     fn from_params(p: &Value) -> Result<Option<Self>> {
         let Some(f) = p.get("findFormat").filter(|f| !f.is_null()) else { return Ok(None) };
         let o = f.as_object().ok_or_else(|| bad("find", "`findFormat` is an object"))?;
-        let name = |k: &str| o.get(k).and_then(Value::as_str).map(str::to_string);
+        // A style is named; a null asks for none. Any other value is refused rather than
+        // searched without.
+        let name = |k: &str| match o.get(k) {
+            None | Some(Value::Null) => Ok(None),
+            Some(Value::String(n)) => Ok(Some(n.clone())),
+            Some(v) => Err(bad("find", format!("findFormat: `{k}` is a style name, not {v}"))),
+        };
+        let chars = match o.get("chars") {
+            None | Some(Value::Null) => None,
+            Some(Value::Object(m)) => Some(m),
+            Some(v) => return Err(bad("find", format!("findFormat: `chars` is an object of character attributes, not {v}"))),
+        };
         // Only attributes text has, kept as the document writes them: `font_style` and
         // `fontStyle`, or 12 and 12.0, then find the same text. A null asks for nothing.
         let mut known = designcraft_doc::CharAttrs::default();
-        for (k, v) in o.get("chars").and_then(Value::as_object).into_iter().flatten() {
+        for (k, v) in chars.into_iter().flatten() {
             known.set_json(k, v).map_err(|e| bad("find", format!("findFormat: {e}")))?;
         }
         let chars = match serde_json::to_value(&known) {
             Ok(Value::Object(m)) => m,
             _ => serde_json::Map::new(),
         };
-        let f = Self { char_style: name("charStyle"), para_style: name("paraStyle"), chars };
+        let f = Self { char_style: name("charStyle")?, para_style: name("paraStyle")?, chars };
         Ok((f != Self::default()).then_some(f))
     }
 
@@ -749,6 +760,10 @@ mod tests {
         assert!(s.execute("find.find", &json!({"find": "", "findFormat": {"charStyle": "Nope"}})).is_err());
         assert!(s.execute("find.next", &json!({"find": "eggs", "findFormat": {"paraStyle": "Nope"}})).is_err());
         assert!(s.execute("find.find", &json!({"find": "eggs", "findFormat": {"chars": {"bogus": 1}}})).is_err());
+        // Malformed fields are refused, not searched without.
+        for f in [json!({"chars": [1]}), json!({"chars": 12}), json!({"charStyle": 3}), json!({"paraStyle": ["Body"]})] {
+            assert!(s.execute("find.find", &json!({"find": "eggs", "findFormat": f})).is_err(), "{f}");
+        }
         assert!(s.execute("find.find", &json!({"find": ""})).is_err());
     }
 
