@@ -122,12 +122,16 @@ impl FindFormat {
         let Some(f) = p.get("findFormat").filter(|f| !f.is_null()) else { return Ok(None) };
         let o = f.as_object().ok_or_else(|| bad("find", "`findFormat` is an object"))?;
         let name = |k: &str| o.get(k).and_then(Value::as_str).map(str::to_string);
-        let chars = o.get("chars").and_then(Value::as_object).cloned().unwrap_or_default();
-        // Only attributes text has.
+        // Only attributes text has, kept as the document writes them: `font_style` and
+        // `fontStyle`, or 12 and 12.0, then find the same text. A null asks for nothing.
         let mut known = designcraft_doc::CharAttrs::default();
-        for (k, v) in &chars {
+        for (k, v) in o.get("chars").and_then(Value::as_object).into_iter().flatten() {
             known.set_json(k, v).map_err(|e| bad("find", format!("findFormat: {e}")))?;
         }
+        let chars = match serde_json::to_value(&known) {
+            Ok(Value::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        };
         let f = Self { char_style: name("charStyle"), para_style: name("paraStyle"), chars };
         Ok((f != Self::default()).then_some(f))
     }
@@ -147,14 +151,20 @@ impl FindFormat {
     /// stretches, each paragraph's apart (a paragraph's `\n` isn't in one).
     fn spans(&self, styles: &Styles, story: &Story, r: &Range<usize>) -> Vec<Range<usize>> {
         let mut out: Vec<Range<usize>> = Vec::new();
+        // Paragraphs and runs both go in text order: the runs before a paragraph are passed once.
+        let runs: Vec<_> = story.runs().collect();
+        let mut first = 0;
         for (pi, pr) in story.para_ranges().into_iter().enumerate() {
             let (a, b) = (pr.start.max(r.start), pr.end.min(r.end));
             let Some(pf) = story.paras.get(pi) else { continue };
             if a >= b || self.para_style.as_ref().is_some_and(|n| *n != pf.style) {
                 continue;
             }
+            while runs.get(first).is_some_and(|(run, _)| run.end <= a) {
+                first += 1;
+            }
             let base = (!self.chars.is_empty()).then(|| styles.resolve_para(pf).1);
-            for (run, cf) in story.runs() {
+            for (run, cf) in runs[first..].iter().take_while(|(run, _)| run.start < b) {
                 let (x, y) = (run.start.max(a), run.end.min(b));
                 if x >= y || self.char_style.as_ref().is_some_and(|n| *n != cf.style) {
                     continue;
@@ -175,10 +185,16 @@ impl FindFormat {
     }
 }
 
-/// Attribute values alike: numbers to within rounding, the rest exactly.
+/// Attribute values alike: numbers to within rounding (inside objects and lists too), the rest
+/// exactly.
 fn same_value(a: &Value, b: &Value) -> bool {
-    match (a.as_f64(), b.as_f64()) {
-        (Some(x), Some(y)) => (x - y).abs() < 1e-6,
+    match (a, b) {
+        (Value::Number(_), Value::Number(_)) => match (a.as_f64(), b.as_f64()) {
+            (Some(x), Some(y)) => (x - y).abs() < 1e-6,
+            _ => a == b,
+        },
+        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(a, b)| same_value(a, b)),
+        (Value::Object(x), Value::Object(y)) => x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same_value(v, w))),
         _ => a == b,
     }
 }
@@ -764,14 +780,33 @@ mod tests {
         let next = json!({"find": "", "findFormat": {"charStyle": "eggs"}});
         assert_eq!(s.execute("find.next", &next).unwrap()["start"], 6);
         assert_eq!(s.execute("find.next", &next).unwrap()["start"], 12);
+        // Equivalent spellings the attributes accept find the same text: a snake_case key, and a
+        // nested number written as an integer (14 pt leading on the second paragraph).
+        s.execute("text.select", &json!({"story": sid, "anchor": 23, "focus": 36})).unwrap();
+        s.execute("type.char", &json!({"leading": {"kind": "points", "value": 14.0}})).unwrap();
+        for (a, b) in [
+            (json!({"fontStyle": "Bold"}), json!({"font_style": "Bold"})),
+            (json!({"leading": {"kind": "points", "value": 14.0}}), json!({"leading": {"kind": "points", "value": 14}})),
+        ] {
+            let (a, b) = (json!({"find": "", "findFormat": {"chars": a}}), json!({"find": "", "findFormat": {"chars": b}}));
+            let all = found(&mut s, a.clone());
+            assert!(!all.is_empty(), "{a}");
+            assert_eq!(found(&mut s, b.clone()), all, "{b}");
+            for p in [&a, &b] {
+                s.execute("text.select", &json!({"story": sid, "anchor": 0, "focus": 0})).unwrap();
+                assert_eq!(s.execute("find.next", p).unwrap()["start"].as_u64(), Some(all[0].0), "{p}");
+            }
+        }
+        // A null attribute asks for nothing.
+        assert_eq!(found(&mut s, json!({"find": "eggs", "findFormat": {"charStyle": "eggs", "chars": {"size": null}}})), [(6, 10)]);
         // With a Change Format: the text in the style goes back to [None], underlined.
         let r = s
             .execute(
                 "find.change",
-                &json!({"find": "", "change": "", "findFormat": {"charStyle": "eggs"}, "charStyle": "[None]", "attrs": {"underline": true}}),
+                &json!({"find": "", "change": "", "findFormat": {"charStyle": "eggs", "chars": {"font_style": "Bold"}}, "charStyle": "[None]", "attrs": {"underline": true}}),
             )
             .unwrap();
-        assert_eq!(r["count"], 2);
+        assert_eq!(r["count"], 2, "a snake_case attribute changes the same text");
         assert!(found(&mut s, json!({"find": "", "findFormat": {"charStyle": "eggs"}})).is_empty());
         assert_eq!(found(&mut s, json!({"find": "", "findFormat": {"chars": {"underline": true}}})), [(6, 10), (12, 16)]);
         // Unknown styles and attributes are refused; an empty search needs a Find Format.
