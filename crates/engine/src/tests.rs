@@ -527,6 +527,10 @@ Y: 100.00%")),
     s.pointer(&PointerEvent::new(PointerKind::Up, 102.5, 501.25), v).unwrap();
     let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
     assert_eq!(it.bounds(), designcraft_geom::Rect::new(100.0, 500.0, 140.0, 520.0), "actual size at the press");
+    // With no graphic loaded there's no thumbnail to show: the crosshair, before any press too.
+    s.loaded = None;
+    s.set_tool("placeGun");
+    assert_eq!(s.cursor(p(300.0, 300.0), Mods::default(), v), Cursor::Crosshair);
 }
 
 #[test]
