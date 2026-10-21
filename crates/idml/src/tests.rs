@@ -327,6 +327,10 @@ fn indesign_text_defaults() -> Vec<AttrRow> {
         "RuleBelow": "false" => false, "true" => true, |r| r.0.rule_below.on;
         "RuleBelowColor": "Text Color" => designcraft_doc::TEXT_COLOR, "Color/Black" => "[Black]", |r| r.0.rule_below.color;
         "RuleBelowTint": "-1" => 1.0f32, "50" => 0.5f32, |r| r.0.rule_below.tint;
+        "RuleBelowType": "StrokeStyle/$ID/Solid" => designcraft_doc::StrokeType::Solid, "StrokeStyle/$ID/Wavy" => designcraft_doc::StrokeType::Wavy, |r| r.0.rule_below.kind;
+        "RuleBelowGapColor": "Swatch/None" => "[None]", "Color/Black" => "[Black]", |r| r.0.rule_below.gap_color;
+        "RuleBelowGapTint": "-1" => 1.0f32, "50" => 0.5f32, |r| r.0.rule_below.gap_tint;
+        "KeepRuleAboveInFrame": "false" => false, "true" => true, |r| r.0.rule_above.keep_in_frame;
         "ParagraphShadingOn": "false" => false, "true" => true, |r| r.0.shading_on;
         "ParagraphShadingColor": "Color/Black" => "[Black]", "Swatch/None" => "[None]", |r| r.0.shading_color;
         "ParagraphShadingTint": "20" => 0.2f32, "50" => 0.5f32, |r| r.0.shading_tint;

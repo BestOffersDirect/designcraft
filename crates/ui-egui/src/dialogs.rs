@@ -5882,22 +5882,64 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
     });
     ui.add_space(6.0);
     let on = rule["on"].as_bool().unwrap_or(false);
+    let kind: designcraft_doc::StrokeType = serde_json::from_value(rule["type"].clone()).unwrap_or_default();
+    let doc = app.session.active().map(|st| &st.doc);
+    // As InDesign's: Weight and Type, Color and Tint, Gap Color and Gap Tint, Width and Offset,
+    // Left and Right Indent, then Keep In Frame (rule above).
     ui.add_enabled_ui(on, |ui| {
         egui::Grid::new(("rules", which)).num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
             crate::rtl::label(ui, crate::i18n::tr(lang, "Weight:"));
-            if let Some(v) = sized(ui, &mut |ui| crate::widgets::number(ui, &key("weight"), rule["weight"].as_f64(), " pt", 80.0, 2)) {
+            if let Some(v) = sized(ui, &mut |ui| {
+                crate::widgets::NumField::number(&key("weight"), rule["weight"].as_f64(), " pt", 2).width(80.0).spinner().range(0.0, 1000.0).show(ui)
+            }) {
                 d.fields.insert(key("weight"), json!(v.clamp(0.0, 1000.0)));
             }
+            crate::rtl::label(ui, crate::i18n::tr(lang, "Type:"));
+            let custom: Vec<String> = doc.map_or_else(Vec::new, |doc| doc.stroke_styles.iter().map(|s| s.name.clone()).collect());
+            let shown = match &kind {
+                designcraft_doc::StrokeType::Style { name } => name.clone(),
+                k => crate::i18n::tr(lang, k.label()).to_string(),
+            };
+            egui::ComboBox::from_id_salt(("rule_type", which)).selected_text(crate::rtl::widget(ui, shown)).width(130.0).show_ui(ui, |ui| {
+                for k in rule_types().into_iter().chain(custom.into_iter().map(|name| designcraft_doc::StrokeType::Style { name })) {
+                    let label = match &k {
+                        designcraft_doc::StrokeType::Style { name } => name.clone(),
+                        k => crate::i18n::tr(lang, k.label()).to_string(),
+                    };
+                    if ui.selectable_label(k == kind, crate::rtl::widget(ui, label)).clicked() {
+                        d.fields.insert(key("type"), serde_json::to_value(&k).unwrap_or_default());
+                    }
+                }
+            });
+            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Color:"));
             let color = rule["color"].as_str().unwrap_or("").to_string();
-            if let Some(w) = app.session.active().and_then(|st| swatch_menu(ui, &st.doc, ("rule_color", which), &color, 130.0)) {
+            if let Some(w) = doc.and_then(|doc| swatch_menu(ui, doc, ("rule_color", which), &color, 130.0)) {
                 d.fields.insert(key("color"), json!(w));
             }
-            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Tint:"));
             if let Some(v) = sized(ui, &mut |ui| crate::widgets::number(ui, &key("tint"), rule["tint"].as_f64().map(|t| t * 100.0), "%", 80.0, 0)) {
                 d.fields.insert(key("tint"), json!((v / 100.0).clamp(0.0, 1.0)));
             }
+            ui.end_row();
+            // A solid rule has no gaps.
+            let gaps = !matches!(kind, designcraft_doc::StrokeType::Solid);
+            crate::rtl::label(ui, crate::i18n::tr(lang, "Gap Color:"));
+            let gap = rule["gapColor"].as_str().unwrap_or(designcraft_color::swatch::NONE).to_string();
+            ui.add_enabled_ui(gaps, |ui| {
+                if let Some(w) = doc.and_then(|doc| swatch_menu(ui, doc, ("rule_gap", which), &gap, 130.0)) {
+                    d.fields.insert(key("gapColor"), json!(w));
+                }
+            });
+            crate::rtl::label(ui, crate::i18n::tr(lang, "Gap Tint:"));
+            ui.add_enabled_ui(gaps && gap != designcraft_color::swatch::NONE, |ui| {
+                if let Some(v) =
+                    sized(ui, &mut |ui| crate::widgets::number(ui, &key("gapTint"), rule["gapTint"].as_f64().map(|t| t * 100.0), "%", 80.0, 0))
+                {
+                    d.fields.insert(key("gapTint"), json!((v / 100.0).clamp(0.0, 1.0)));
+                }
+            });
+            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Width:"));
             let column = rule["columnWidth"].as_bool().unwrap_or(true);
             egui::ComboBox::from_id_salt(("rule_width", which))
@@ -5910,21 +5952,48 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
                         }
                     }
                 });
-            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Offset:"));
-            if let Some(v) = sized(ui, &mut |ui| crate::widgets::measure(ui, &key("offset"), rule["offset"].as_f64(), v_units, 80.0)) {
+            if let Some(v) = sized(ui, &mut |ui| {
+                crate::widgets::NumField::measure(&key("offset"), rule["offset"].as_f64(), v_units).width(80.0).spinner().show(ui)
+            }) {
                 d.fields.insert(key("offset"), json!(v));
             }
             ui.end_row();
             for (label, field) in [("Left Indent:", "leftIndent"), ("Right Indent:", "rightIndent")] {
                 crate::rtl::label(ui, crate::i18n::tr(lang, label));
-                if let Some(v) = sized(ui, &mut |ui| crate::widgets::measure(ui, &key(field), rule[field].as_f64(), h_units, 80.0)) {
+                if let Some(v) =
+                    sized(ui, &mut |ui| crate::widgets::NumField::measure(&key(field), rule[field].as_f64(), h_units).width(80.0).spinner().show(ui))
+                {
                     d.fields.insert(key(field), json!(v));
                 }
             }
             ui.end_row();
         });
+        if which == "ruleAbove" {
+            let mut keep = rule["keepInFrame"].as_bool().unwrap_or(false);
+            if ui.checkbox(&mut keep, crate::rtl::widget(ui, crate::i18n::tr(lang, "Keep In Frame"))).changed() {
+                d.fields.insert(key("keepInFrame"), json!(keep));
+            }
+        }
     });
+}
+
+/// The built-in stroke types a paragraph rule can have (Paragraph Rules › Type).
+fn rule_types() -> Vec<designcraft_doc::StrokeType> {
+    use designcraft_doc::StrokeType as T;
+    vec![
+        T::Solid,
+        T::ThickThick,
+        T::ThickThin,
+        T::ThickThinThick,
+        T::ThinThick,
+        T::ThinThickThin,
+        T::ThinThin,
+        T::Dashed { pattern: vec![12.0, 4.0] },
+        T::Dotted,
+        T::Hashed,
+        T::Wavy,
+    ]
 }
 
 /// Document Footnote Options: Numbering and Formatting / Layout tabs.
@@ -7491,6 +7560,25 @@ mod tests {
         assert_eq!(app.run("type.selectionAttrs", json!({})).unwrap()["para"]["ruleBelow"], want);
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.run("type.selectionAttrs", json!({})).unwrap()["para"]["ruleBelow"], rule);
+    }
+
+    /// The course's chapter 20: a paragraph style's rule below becomes wavy, 3 pt, with a gap
+    /// colour, from Paragraph Rules › Type and Gap Color.
+    #[test]
+    fn paragraph_style_rules_take_a_type_and_a_gap_colour() {
+        let (mut app, _) = ruled_paragraph();
+        let ctx = egui::Context::default();
+        app.ui.dialog = Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "rules", "rule": "ruleBelow"})));
+        draw(&mut app, &ctx);
+        if let Some(d) = app.ui.dialog.as_mut() {
+            d.fields.insert("p.ruleBelow.type".into(), json!({"kind": "wavy"}));
+            d.fields.insert("p.ruleBelow.weight".into(), json!(3.0));
+            d.fields.insert("p.ruleBelow.gapColor".into(), json!("[Paper]"));
+        }
+        draw(&mut app, &ctx);
+        confirm(&mut app).unwrap();
+        let r = app.session.doc().unwrap().doc.styles.resolve_para_style("Ruled Child").0.rule_below;
+        assert_eq!((r.kind, r.weight, r.gap_color.as_str()), (designcraft_doc::StrokeType::Wavy, 3.0, "[Paper]"));
     }
 
     #[test]

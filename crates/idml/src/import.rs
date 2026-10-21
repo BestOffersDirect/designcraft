@@ -1959,6 +1959,19 @@ impl<'r> Importer<'r> {
         r.offset = num(5).unwrap_or(0.0);
         r.left_indent = num(6).unwrap_or(0.0);
         r.right_indent = num(7).unwrap_or(0.0);
+        // Type, gap colour and tint, Keep In Frame (rule above).
+        if let Some(t) = self.para_setting(e, &format!("{k}Type")) {
+            r.kind = names::stroke_type_in(t.trim());
+        }
+        if let Some(c) = self.para_setting(e, &format!("{k}GapColor")).filter(|c| c.contains('/')) {
+            r.gap_color = self.swatch_ref(c.trim());
+        }
+        if let Some(t) = tint(self.para_setting(e, &format!("{k}GapTint")).and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite())) {
+            r.gap_tint = t;
+        }
+        if k == "RuleAbove" {
+            r.keep_in_frame = self.para_setting(e, "KeepRuleAboveInFrame").is_some_and(|v| v.trim() == "true");
+        }
         if let Some(c) = get(2) {
             let c = c.trim();
             if c == designcraft_doc::TEXT_COLOR {
