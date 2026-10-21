@@ -523,6 +523,7 @@ Y: 100.00%")),
     s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 500.0), v).unwrap();
     s.pointer(&PointerEvent::new(PointerKind::Drag, 102.5, 501.25), v).unwrap();
     assert!(!s.overlays(v).iter().any(|o| matches!(o, Overlay::Marquee(_))), "no frame yet");
+    assert_eq!(s.cursor(p(102.5, 501.25), Mods::default(), v), Cursor::LoadedGraphic, "the thumbnail stays");
     s.pointer(&PointerEvent::new(PointerKind::Up, 102.5, 501.25), v).unwrap();
     let it = s.doc().unwrap().doc.spreads[0].items.last().unwrap().clone();
     assert_eq!(it.bounds(), designcraft_geom::Rect::new(100.0, 500.0, 140.0, 520.0), "actual size at the press");

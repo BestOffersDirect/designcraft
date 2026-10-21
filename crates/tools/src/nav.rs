@@ -188,9 +188,12 @@ Y: {pct}"
             _ => vec![],
         }
     }
-    fn cursor(&self, _cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
+    fn cursor(&self, cx: &ToolContext, _p: Point, _m: Mods) -> Cursor {
         // Drawing the frame: the crosshair (the loaded graphic's thumbnail would hide the frame).
-        if self.start.is_some() { Cursor::Crosshair } else { Cursor::LoadedGraphic }
+        // Under the drag threshold no frame is drawn yet (the release is a click), so the
+        // thumbnail stays, as the overlay does.
+        let drawing = self.start.is_some_and(|a| cx.loaded.is_none() || (self.cur - a).hypot() >= cx.tol(3.0));
+        if drawing { Cursor::Crosshair } else { Cursor::LoadedGraphic }
     }
 }
 
