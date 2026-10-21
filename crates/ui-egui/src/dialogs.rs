@@ -648,6 +648,11 @@ fn text_frame_preview(app: &mut DesignApp, d: &mut Dialog) {
     let params = match text_frame_params(app, d) {
         Ok(p) => Value::Object(p),
         Err(e) => {
+            // Values OK would refuse don't stay on the page: it goes back to how it was.
+            if shown.is_some() {
+                app.session.cancel_interaction();
+                d.fields.remove(PREVIEWED);
+            }
             d.fields.insert("status".into(), json!(e));
             return;
         }
@@ -8075,6 +8080,17 @@ mod tests {
         d.fields.insert("preview".into(), json!(false));
         text_frame_preview(&mut app, &mut d);
         assert_eq!(opts(&app).columns, 1, "Preview off: the page as it was");
+        // A value OK would refuse: the page goes back while the status says why.
+        d.fields.insert("preview".into(), json!(true));
+        text_frame_preview(&mut app, &mut d);
+        assert_eq!(opts(&app).columns, 3);
+        let gutter = d.fields.get("gutter").cloned().unwrap_or_default();
+        d.fields.insert("gutter".into(), json!("wide"));
+        text_frame_preview(&mut app, &mut d);
+        assert_eq!(opts(&app).columns, 1, "the page as it was");
+        assert!(!d.fields.contains_key(PREVIEWED) && !d.s("status").is_empty());
+        d.fields.insert("gutter".into(), gutter);
+        d.fields.remove("status");
         // Cancel after a preview: back as it was.
         d.fields.insert("preview".into(), json!(true));
         text_frame_preview(&mut app, &mut d);
