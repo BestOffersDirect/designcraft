@@ -724,8 +724,11 @@ fn paint_stroke_type(p: &egui::Painter, r: Rect, kind: &str, c: egui::Color32) {
 /// wide), then its name. Selected rows are highlighted.
 fn preview_row(ui: &mut Ui, selected: bool, label: &str, preview_w: f32, paint: impl FnOnce(&egui::Painter, Rect, egui::Color32)) -> egui::Response {
     let t = Tokens::get(ui.ctx());
-    // As wide as the preview and the longest name (the popup otherwise grows to all it's offered).
-    let w = preview_w + 130.0;
+    // As wide as the preview and its name, translated (at least 130 pt for the name), and as the
+    // popup once its widest row has set it: the rows' highlights then end together.
+    let font = egui::FontId::proportional(12.0);
+    let text_w = ui.fonts_mut(|f| f.layout_no_wrap(label.to_string(), font, egui::Color32::WHITE).size().x);
+    let w = (preview_w + 12.0 + text_w + 12.0).max(preview_w + 130.0).max(ui.available_width().min(600.0));
     let (r, resp) = ui.allocate_exact_size(vec2(w, 22.0), Sense::click());
     if selected || resp.hovered() {
         ui.painter().rect_filled(r, 2.0, if selected { t.row_selected } else { t.hover });
@@ -3387,6 +3390,24 @@ mod tests {
 
     /// The corner shape list shows each shape's glyph beside its name, as InDesign's; a row picks
     /// the shape and the current one is marked.
+    /// A row is as wide as its translated name needs: a long one isn't cut at a fixed width.
+    #[test]
+    fn preview_rows_fit_long_translated_names() {
+        let ctx = egui::Context::default();
+        let long = "Скругленный прямоугольник с обратным углом";
+        let mut widths = (0.0, 0.0);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::Area::new(egui::Id::new("rows")).show(ui.ctx(), |ui| {
+                ui.set_max_width(10.0);
+                let r = preview_row(ui, false, long, 40.0, |_, _, _| {});
+                let text = ui.fonts_mut(|f| f.layout_no_wrap(long.to_string(), egui::FontId::proportional(12.0), egui::Color32::WHITE).size().x);
+                widths = (r.rect.width(), 40.0 + 12.0 + text);
+            });
+        });
+        out.textures_delta.clear();
+        assert!(widths.0 >= widths.1, "{widths:?}");
+    }
+
     #[test]
     fn the_corner_shape_list_has_glyph_rows_and_picks_a_shape() {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
