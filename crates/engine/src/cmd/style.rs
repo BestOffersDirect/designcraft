@@ -955,6 +955,15 @@ fn edit_para(s: &mut Session, p: &Value) -> Result<Value> {
             st.para = ParaAttrs::default();
             st.chars = CharAttrs::default();
         }
+        // A new Based On first, so the fields below resolve over the new parent.
+        if based.is_some() {
+            let st = d.styles_mut().para_mut(&name).ok_or_else(|| bad("style.paragraph.edit", format!("no style `{name}`")))?;
+            match &based {
+                Some(Value::String(b)) => st.based_on = Some(b.clone()),
+                Some(Value::Null) => st.based_on = None,
+                _ => {}
+            }
+        }
         // A rule object changes only the rule fields it names, over the style's resolved rule.
         let (current, _) = d.styles.resolve_para_style(&name);
         let mut para: ParaAttrs = attrs("style.paragraph.edit", "para", p, |a: &mut ParaAttrs, k, v| a.set_json_over(k, v, &current))?;
@@ -964,11 +973,6 @@ fn edit_para(s: &mut Session, p: &Value) -> Result<Value> {
         let st = d.styles_mut().para_mut(&name).ok_or_else(|| bad("style.paragraph.edit", format!("no style `{name}`")))?;
         st.para.merge(&para);
         st.chars.merge(&chars);
-        match based {
-            Some(Value::String(b)) => st.based_on = Some(b),
-            Some(Value::Null) => st.based_on = None,
-            _ => {}
-        }
         match next {
             Some(Value::String(n)) => st.next_style = Some(n),
             Some(Value::Null) => st.next_style = None,

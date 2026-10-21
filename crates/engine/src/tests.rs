@@ -1650,3 +1650,18 @@ fn a_line_fits_when_its_baseline_does() {
     assert!(!overset(&mut s, 78.5), "the line is set; its descenders hang below the frame");
     assert!(overset(&mut s, 50.0), "a baseline below the frame still oversets the line");
 }
+
+/// Reset To Base with a new Based On: a partial rule edit resolves over the new parent, not the
+/// old one.
+#[test]
+fn reset_to_base_with_a_new_parent_resolves_rule_edits_over_it() {
+    let mut s = session();
+    let rule = |weight: f64, offset: f64| json!({"on": true, "weight": weight, "color": "[Black]", "offset": offset});
+    s.execute("style.paragraph.create", &json!({"name": "Old", "para": {"ruleBelow": rule(3.0, 1.0)}})).unwrap();
+    s.execute("style.paragraph.create", &json!({"name": "New", "para": {"ruleBelow": rule(1.0, 9.0)}})).unwrap();
+    s.execute("style.paragraph.create", &json!({"name": "Child", "basedOn": "Old"})).unwrap();
+    s.execute("style.paragraph.edit", &json!({"name": "Child", "resetToBase": true, "basedOn": "New", "para": {"ruleBelow": {"weight": 2}}}))
+        .unwrap();
+    let r = s.doc().unwrap().doc.styles.resolve_para_style("Child").0.rule_below;
+    assert_eq!((r.weight, r.offset), (2.0, 9.0), "the offset is the new parent's");
+}
