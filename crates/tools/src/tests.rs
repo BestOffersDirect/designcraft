@@ -93,6 +93,32 @@ fn frame_tool_readout_shows_the_size_in_the_document_units() {
     assert_eq!(texts, vec!["W: 6.08 cm\nH: 6.08 cm".to_string()]);
 }
 
+/// The Line tool's readout measures the line as drawn: Shift makes it level, so it has no
+/// height, wherever the pointer is.
+#[test]
+fn line_tool_readout_measures_the_line_as_drawn() {
+    let mut d = Document::new(&NewDocument::default());
+    d.settings.horizontal_units = Unit::Centimeters;
+    d.settings.vertical_units = Unit::Centimeters;
+    let (s, c, l) = (Selection::default(), Cache::new(), CanvasLayout::new(&d, false));
+    let cx = ctx(&d, &s, &c, &l);
+    let mut t = create("line");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 10.0, 10.0));
+    let mut drag = PointerEvent::new(PointerKind::Drag, 182.35, 15.0);
+    drag.mods.shift = true;
+    t.pointer(&cx, &drag);
+    let texts: Vec<String> = t
+        .overlays(&cx)
+        .into_iter()
+        .filter_map(|o| match o {
+            Overlay::Measure { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), 1, "{texts:?}");
+    assert_eq!(texts[0], "W: 6.08 cm\nH: 0 cm", "level, as drawn, not 5 pt down to the pointer");
+}
+
 #[test]
 fn selection_click_and_marquee() {
     let mut d = Document::new(&NewDocument::default());
