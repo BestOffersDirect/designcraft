@@ -172,12 +172,15 @@ pub fn specs() -> Vec<CommandSpec> {
                 if p.get("after").is_some() && p.get("before").is_some() {
                     return Err(bad("layout.pages.insert", "give `after` or `before`, not both"));
                 }
+                // A page of the document: one past the last isn't, and would insert at the end.
                 let index = |k: &str| match p.get(k) {
                     None => Ok(None),
                     Some(v) => v
                         .as_u64()
-                        .map(|v| Some(usize::try_from(v).unwrap_or(usize::MAX)))
-                        .ok_or_else(|| bad("layout.pages.insert", format!("`{k}` must be a page index, not {v}"))),
+                        .and_then(|v| usize::try_from(v).ok())
+                        .filter(|&i| i < n)
+                        .map(Some)
+                        .ok_or_else(|| bad("layout.pages.insert", format!("`{k}` must be the index of one of the {n} pages, not {v}"))),
                 };
                 // The page the new ones follow; none: they go first.
                 let after = match (index("after")?, index("before")?) {
@@ -2207,6 +2210,9 @@ mod parent_margin_tests {
             json!({"before": "0"}),
             json!({"before": null}),
             json!({"after": 1.5}),
+            json!({"before": 6}),
+            json!({"after": 6}),
+            json!({"before": 99}),
         ] {
             assert!(s.execute("layout.pages.insert", &bad).is_err(), "{bad}");
             assert_eq!(s.doc().unwrap().history.undo.len(), undo, "{bad}");
