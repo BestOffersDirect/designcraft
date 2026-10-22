@@ -3426,7 +3426,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 app.run("window.brightness", json!({"brightness": b}))?;
             }
             if d.fields.contains_key("toolsColumns") {
-                app.ui.tools_double_column = d.s("toolsColumns") == "double";
+                app.run("window.toolsDoubleColumn", json!({"on": d.s("toolsColumns") == "double"}))?;
             }
             if let Some(v) = d.n("uiScale") {
                 app.run("window.uiScale", json!({"scale": v / 100.0}))?;
@@ -7531,6 +7531,10 @@ mod tests {
         assert!(h.state().ui.dialog.is_none());
         assert_eq!(h.state().ui.brightness, Brightness::Dark);
         assert!(h.state().ui.tools_double_column);
+        // The same command the Window menu toggles, with an explicit state for Preferences.
+        assert_eq!(h.state_mut().run("window.toolsDoubleColumn", json!({"on": false})).unwrap(), json!(false));
+        assert_eq!(h.state_mut().run("window.toolsDoubleColumn", json!({"on": false})).unwrap(), json!(false), "set, not toggled");
+        assert_eq!(h.state_mut().run("window.toolsDoubleColumn", json!({})).unwrap(), json!(true), "toggled without `on`");
         // UI Size has a section of its own.
         open(h.state_mut());
         h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("uiScaling"));

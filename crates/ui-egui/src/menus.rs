@@ -291,7 +291,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
         None,
         "{open?: true, tab?: \"about\"|\"contributors\"|\"models\"} — the About window: splash with community links, contributor and model credits (open: false closes it)",
     ),
-    ("window.toolsDoubleColumn", "Tools: Double Column", None, "{}"),
+    ("window.toolsDoubleColumn", "Tools: Double Column", None, "{on?: bool (default: toggle)} → whether the Tools panel has two columns"),
     (
         "window.workspace",
         "Workspace",
@@ -1829,7 +1829,10 @@ fn run_ui_inner(app: &mut DesignApp, id: &str, p: &Value) -> Option<Result<Value
             app.ui.pending_urls.push(url.clone());
             Ok(json!({"url": url}))
         }
-        "window.toolsDoubleColumn" => flag(&mut app.ui.tools_double_column),
+        "window.toolsDoubleColumn" => {
+            app.ui.tools_double_column = p.get("on").and_then(Value::as_bool).unwrap_or(!app.ui.tools_double_column);
+            Ok(json!(app.ui.tools_double_column))
+        }
         "window.collapseToIcons" => {
             app.ui.dock_expanded = false;
             app.ui.open_panel = None;
