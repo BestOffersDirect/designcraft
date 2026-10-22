@@ -1002,6 +1002,11 @@ const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     ("Load Styles", ["Formate laden", "Charger les styles", "Cargar estilos", "スタイルを読み込み", "加载样式"]),
+    ("Overprint", ["Überdrucken", "Surimpression", "Sobreimprimir", "オーバープリント", "叠印"]),
+    ("Top Left Corner", ["Ecke oben links", "Angle supérieur gauche", "Esquina superior izquierda", "左上角", "左上角"]),
+    ("Top Right Corner", ["Ecke oben rechts", "Angle supérieur droit", "Esquina superior derecha", "右上角", "右上角"]),
+    ("Bottom Left Corner", ["Ecke unten links", "Angle inférieur gauche", "Esquina inferior izquierda", "左下角", "左下角"]),
+    ("Bottom Right Corner", ["Ecke unten rechts", "Angle inférieur droit", "Esquina inferior derecha", "右下角", "右下角"]),
     (
         "Differs from this document",
         ["Weicht von diesem Dokument ab", "Diffère de ce document", "Difiere de este documento", "このドキュメントと異なります", "与此文档不同"],

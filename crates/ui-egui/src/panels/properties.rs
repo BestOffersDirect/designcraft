@@ -753,7 +753,13 @@ fn paint_stroke_type(p: &egui::Painter, r: Rect, kind: &str, c: egui::Color32) {
 
 /// A row of a preview dropdown's list, as InDesign's: a small preview of the choice (`preview_w`
 /// wide), then its name. Selected rows are highlighted.
-fn preview_row(ui: &mut Ui, selected: bool, label: &str, preview_w: f32, paint: impl FnOnce(&egui::Painter, Rect, egui::Color32)) -> egui::Response {
+pub(crate) fn preview_row(
+    ui: &mut Ui,
+    selected: bool,
+    label: &str,
+    preview_w: f32,
+    paint: impl FnOnce(&egui::Painter, Rect, egui::Color32),
+) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     // As wide as the preview and its name, translated (at least 130 pt for the name), and as the
     // popup once its widest row has set it: the rows' highlights then end together.
@@ -779,7 +785,7 @@ fn preview_row(ui: &mut Ui, selected: bool, label: &str, preview_w: f32, paint: 
 }
 
 /// A dropdown whose face is a light preview box (stroke type, corner shape).
-fn preview_dropdown(ui: &mut Ui, w: f32, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) -> egui::Response {
+pub(crate) fn preview_dropdown(ui: &mut Ui, w: f32, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(w, FIELD_H), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, label));
@@ -795,7 +801,7 @@ fn preview_dropdown(ui: &mut Ui, w: f32, label: &str, paint: impl FnOnce(&egui::
 
 /// A corner shape's glyph, as InDesign draws it in its corner lists: the top edge running into the
 /// corner and the right edge leaving it, in a square centred in `r`.
-fn paint_corner_shape(p: &egui::Painter, r: Rect, shape: CornerShape, c: egui::Color32) {
+pub(crate) fn paint_corner_shape(p: &egui::Painter, r: Rect, shape: CornerShape, c: egui::Color32) {
     let side = (r.width() - 3.0).min(r.height() - 3.0).max(4.0);
     let o = pos2(r.center().x - side / 2.0, r.center().y - side / 2.0);
     let at = |x: f32, y: f32| pos2(o.x + x * side, o.y + y * side);

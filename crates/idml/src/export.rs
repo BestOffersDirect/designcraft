@@ -1641,6 +1641,7 @@ impl<'a> Ex<'a> {
             props.push(p("ParagraphShadingColor", "object", self.sw(c)));
         }
         n!(shading_tint, "ParagraphShadingTint", pct);
+        b!(shading_overprint, "ParagraphShadingOverprint");
         const SIDES: [&str; 4] = ["Top", "Left", "Bottom", "Right"];
         if let Some(o) = a.shading_offsets {
             for (i, side) in SIDES.iter().enumerate() {
@@ -1652,6 +1653,7 @@ impl<'a> Ex<'a> {
             props.push(p("ParagraphBorderColor", "object", self.sw(c)));
         }
         n!(border_tint, "ParagraphBorderTint", pct);
+        b!(border_overprint, "ParagraphBorderOverprint");
         if let Some(w) = a.border_weights {
             for (i, side) in SIDES.iter().enumerate() {
                 el.set(&format!("ParagraphBorder{side}LineWeight"), num(w[i]));
@@ -1695,6 +1697,7 @@ impl<'a> Ex<'a> {
             props.push(p("ParagraphBorderGapColor", "object", self.sw(c)));
         }
         n!(border_gap_tint, "ParagraphBorderGapTint", pct);
+        b!(border_gap_overprint, "ParagraphBorderGapOverprint");
         if let Some(w) = a.shading_width {
             el.set("ParagraphShadingWidth", names::box_width_out(w));
         }
