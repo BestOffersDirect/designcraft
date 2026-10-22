@@ -1279,6 +1279,8 @@ fn draw_selection(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc: &Docum
     }
     let direct = matches!(app.session.tool_id(), "directSelection" | "pen" | "addAnchor" | "deleteAnchor" | "convertDirection");
     if direct {
+        // Looked up once per anchor drawn: a large marquee selection stays linear.
+        let chosen_set: std::collections::HashSet<(designcraft_doc::ItemId, usize, usize)> = sel.anchors.iter().copied().collect();
         for id in &sel.items {
             let (Some(it), Some((a, _))) = (doc.item(*id), item_canvas_xf(doc, layout, *id)) else { continue };
             let m = a * it.xf;
@@ -1287,7 +1289,7 @@ fn draw_selection(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc: &Docum
                 for (ai, an) in sp.anchors.iter().enumerate() {
                     let p = xf.to_screen(m * an.p);
                     // A selected anchor point is solid, the others hollow (InDesign).
-                    let chosen = sel.anchors.contains(&(*id, si, ai));
+                    let chosen = chosen_set.contains(&(*id, si, ai));
                     for (h, has) in [(an.h_in, an.has_in()), (an.h_out, an.has_out())] {
                         if has {
                             let hp = xf.to_screen(m * h);
