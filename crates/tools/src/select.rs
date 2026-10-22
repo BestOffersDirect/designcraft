@@ -1232,7 +1232,7 @@ impl Tool for SelectionTool {
                     // A Shift-click on a selected point that never became a drag takes it away.
                     Drag::Anchor { .. } if anchor_release.is_some() => {
                         let points: Vec<_> = cx.selection.anchors.iter().copied().filter(|a| Some(*a) != anchor_release).collect();
-                        vec![Action::Commit, Action::Exec("selection.set".into(), anchor_selection(cx, &points))]
+                        vec![Action::Commit, Action::Exec("selection.set".into(), anchor_selection(cx, &points, true))]
                     }
                     Drag::Move { .. }
                     | Drag::Resize { .. }
