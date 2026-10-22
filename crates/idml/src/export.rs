@@ -8,7 +8,7 @@ use designcraft_doc::{
     CharAttrs, CharFormat, ColumnsKind, Content, Document, Item, ListType, PageSide, ParaAttrs, ParaFormat, Rule, Shape, SpanColumns, Spread, Story,
     TextFrameOptions, story as st,
 };
-use designcraft_geom::{Affine, PathData, Rect};
+use designcraft_geom::{Affine, PathData};
 
 use crate::names::{self, CHAR_BUILTINS, OBJECT_BUILTINS, PARA_BUILTINS, escape_id, num, pt};
 use crate::xml::{El, Node, document, document_with_pi};
@@ -769,7 +769,7 @@ impl<'a> Ex<'a> {
                     },
                 )
                 .attr("CreatePrimaryTextFrame", bool_s(s.primary_text_frame))
-                .attr("ColumnGuideLocked", "true")
+                .attr("ColumnGuideLocked", bool_s(s.column_guides_locked))
                 .attr("MasterTextFrame", bool_s(s.primary_text_frame))
                 .attr("SnippetImportUsesOriginalLocation", "false"),
         );
@@ -922,6 +922,12 @@ impl<'a> Ex<'a> {
             }
             if let Some(vj) = cs.vj {
                 el.set("VerticalJustification", names::vj_out(vj));
+            }
+            if let Some(fb) = cs.first_baseline {
+                el.set("FirstBaselineOffset", names::first_baseline_out(fb));
+            }
+            if let Some(min) = cs.first_baseline_min {
+                el.set("MinimumFirstBaselineOffset", num(min));
             }
             if let Some(st) = &cs.stroke {
                 for side in ["TopEdge", "LeftEdge", "BottomEdge", "RightEdge"] {
@@ -2083,9 +2089,17 @@ impl<'a> Ex<'a> {
 
     fn image_el(&mut self, asset: &designcraft_doc::Asset, g: &designcraft_doc::Graphic) -> El {
         let is_pdf = asset.mime == "application/pdf";
-        let mut el = El::new(if is_pdf { "PDF" } else { "Image" }).attr("Self", self.fresh());
+        let is_eps = asset.mime == "application/postscript" || designcraft_images::is_eps(&asset.data);
+        let mut el = El::new(if is_eps {
+            "EPS"
+        } else if is_pdf {
+            "PDF"
+        } else {
+            "Image"
+        })
+        .attr("Self", self.fresh());
         // A PDF is vector: its page size in `pixels` isn't a resolution, and a cropped graphic
-        // spans less than the page.
+        // spans less than the page. An EPS's `pixels` is its preview raster, so it still counts.
         if let Some((pw, ph)) = asset.pixels.filter(|_| !is_pdf)
             && g.size.0 > 0.0
             && g.size.1 > 0.0
@@ -2125,7 +2139,7 @@ impl<'a> Ex<'a> {
                 .attr("AssetURL", "$ID/")
                 .attr("AssetID", "$ID/")
                 .attr("LinkResourceURI", uri)
-                .attr("LinkResourceFormat", format!("$ID/{}", format_name(&asset.mime)))
+                .attr("LinkResourceFormat", format!("$ID/{}", format_name(if is_eps { "application/postscript" } else { &asset.mime })))
                 .attr("StoredState", if embed { "Embedded" } else { "Normal" })
                 .attr("LinkClassID", "35906")
                 .attr("LinkClientID", "257")
@@ -2762,6 +2776,8 @@ impl<'a> Ex<'a> {
                     .attr("BottomInset", num(cell.insets[2]))
                     .attr("RightInset", num(cell.insets[3]))
                     .attr("VerticalJustification", vj)
+                    .attr("FirstBaselineOffset", names::first_baseline_out(cell.first_baseline))
+                    .attr("MinimumFirstBaselineOffset", num(cell.first_baseline_min))
                     .attr("RotationAngle", num(cell.rotation));
                 for (i, side) in ["TopEdge", "LeftEdge", "BottomEdge", "RightEdge"].iter().enumerate() {
                     // Do not turn absent native defaults into explicit shared-edge candidates.
@@ -2885,8 +2901,9 @@ impl Group {
 
 fn margin_el(pg: &designcraft_doc::Page) -> El {
     let m = pg.margin_rect();
-    let cols = designcraft_doc::column_rects(Rect::new(0.0, 0.0, m.width(), m.height()), pg.columns.count.max(1), pg.columns.gutter);
-    let pos: Vec<String> = cols.iter().flat_map(|c| [num(c.x0), num(c.x1)]).collect();
+    // Dragged column guides that still fit the margin box are written as they stand, so they
+    // survive the round trip; otherwise the even split, which InDesign writes for unmoved columns.
+    let pos: Vec<String> = pg.columns.edges(m.width()).into_iter().map(num).collect();
     El::new("MarginPreference")
         .attr("ColumnCount", pg.columns.count.max(1))
         .attr("ColumnGutter", num(pg.columns.gutter))
@@ -3027,6 +3044,7 @@ fn format_name(mime: &str) -> &'static str {
         "image/gif" => "GIF",
         "image/tiff" => "TIFF",
         "application/pdf" => "Adobe Portable Document Format (PDF)",
+        "application/postscript" => "Encapsulated PostScript (EPS)",
         _ => "Portable Network Graphics (PNG)",
     }
 }

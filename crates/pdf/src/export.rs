@@ -254,7 +254,7 @@ fn export_pdf_with_report_inner(doc: &Document, cache: &Cache, opts: &PdfOptions
     }
     if opts.standard == Standard::PdfX4 {
         // Output intent and PDF/X identification, then check the result.
-        match crate::pdfx::make_pdfx4(&bytes, &title) {
+        match crate::pdfx::make_pdfx4(&bytes, &title, created) {
             Some(b) => bytes = b,
             None => warnings.push("PDF/X-4: the output intent couldn't be added".into()),
         }
@@ -436,20 +436,14 @@ fn date_time(t: i64) -> krilla::metadata::DateTime {
         .utc_offset_minute(0)
 }
 
-/// Unix seconds (UTC) → (year, month, day, hour, minute, second), proleptic Gregorian.
+/// Unix seconds (UTC) → (year, month, day, hour, minute, second), proleptic Gregorian. A time
+/// outside chrono's year range still converts (the calendar repeats every 400 years, so the
+/// instant is moved into range by whole cycles and only the year is carried, matching the old
+/// `civil`), rather than resetting to the epoch. `date_time` applies the PDF `0..=9999` year clamp.
 pub(crate) fn civil(t: i64) -> (i64, u8, u8, u8, u8, u8) {
-    let days = t.div_euclid(86_400);
-    let secs = t.rem_euclid(86_400);
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    (year, month as u8, day as u8, (secs / 3600) as u8, (secs / 60 % 60) as u8, (secs % 60) as u8)
+    use chrono::{Datelike, Timelike};
+    let (y, t) = designcraft_doc::time::utc_parts(t, 0);
+    (y, t.month() as u8, t.day() as u8, t.hour() as u8, t.minute() as u8, t.second() as u8)
 }
 
 /// A successful conversion and its name-independent diagnostic. Replayed once for each asset.
@@ -1318,7 +1312,18 @@ impl Exporter<'_> {
             return i.clone();
         }
         let asset = self.doc.assets.get(&id)?.clone();
-        let data = asset.data.clone();
+        // Use the same EPS preview as the renderer, preserving CMYK TIFF inks below. The
+        // content cache is keyed on the bytes actually converted, so equal previews share one.
+        let data = if designcraft_images::is_eps(&asset.data) {
+            let Some((proxy, _)) = designcraft_images::eps_proxy(&asset.data) else {
+                self.warn(format!("image `{}` could not be decoded and was skipped", asset.name));
+                self.images.insert(id, None);
+                return None;
+            };
+            Arc::new(proxy)
+        } else {
+            asset.data.clone()
+        };
         if let Some(converted) = self.images_by_content.get(&data).cloned() {
             if let Some(warning) = converted.warning {
                 self.warn(format!("{}: {warning}", asset.name));
@@ -2034,5 +2039,91 @@ mod unwind_tests {
             assert!(!hayro_syntax::Pdf::new(Arc::new(fresh)).unwrap().pages().is_empty(), "fresh {entry} export must still work");
         }
         println!("all three export entry points recovered");
+    }
+}
+
+#[cfg(test)]
+mod eps_tests {
+    use super::*;
+    use hayro_syntax::object::Name;
+
+    #[test]
+    fn eps_tiff_preview_keeps_cmyk_inks_in_pdf() {
+        let pixels = vec![0u8, 0, 0, 255, 0, 255, 255, 0];
+        let mut tiff = Vec::new();
+        tiff::encoder::TiffEncoder::new(std::io::Cursor::new(&mut tiff))
+            .unwrap()
+            .write_image::<tiff::encoder::colortype::CMYK8>(2, 1, &pixels)
+            .unwrap();
+        let ps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 2 1\n%%EOF\n";
+        let mut eps = vec![0xC5, 0xD0, 0xD3, 0xC6];
+        for value in [30usize, ps.len(), 0, 0, 30 + ps.len(), tiff.len()] {
+            eps.extend((value as u32).to_le_bytes());
+        }
+        eps.extend([0xFF, 0xFF]);
+        eps.extend_from_slice(ps);
+        eps.extend_from_slice(&tiff);
+        assert_eq!(designcraft_images::eps_proxy(&eps).unwrap().0, tiff);
+        let mut doc = Document::new(&designcraft_doc::build::NewDocument::default());
+        let aid = AssetId(doc.alloc());
+        doc.assets.insert(
+            aid,
+            Arc::new(designcraft_doc::Asset {
+                id: aid,
+                name: "cmyk.eps".into(),
+                mime: "application/postscript".into(),
+                link: None,
+                data: Arc::new(eps),
+                pixels: Some((2, 1)),
+                page: 0,
+                ..Default::default()
+            }),
+        );
+        let mut item = Item::new(
+            designcraft_doc::ItemId(doc.alloc()),
+            doc.default_layer(),
+            designcraft_doc::Shape::Rectangle,
+            designcraft_geom::shapes::rectangle(Rect::new(72.0, 72.0, 272.0, 172.0)),
+        );
+        item.content = Content::Graphic(designcraft_doc::Graphic {
+            asset: aid,
+            size: (2.0, 1.0),
+            xf: Affine::translate((72.0, 72.0)) * Affine::scale(100.0),
+            auto_fit: Default::default(),
+            fit_align: 4,
+            crop: [0.0; 4],
+            clip: None,
+            wrap: Default::default(),
+            fill: Default::default(),
+        });
+        doc.insert_item(designcraft_doc::SpreadRef::Doc(0), item, None).unwrap();
+        for standard in [Standard::None, Standard::PdfX4] {
+            let report = export_pdf_with_report(&doc, &Cache::new(), &PdfOptions { standard, ..Default::default() }).unwrap();
+            assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+            let pdf = hayro_syntax::Pdf::new(report.bytes).unwrap();
+            let images: Vec<_> = pdf
+                .objects()
+                .into_iter()
+                .filter_map(|o| o.into_stream())
+                .filter(|s| s.dict().get::<Name>("Subtype").is_some_and(|n| n.as_str() == "Image"))
+                .map(|s| (s.dict().get::<Name>("ColorSpace").unwrap().as_str().to_string(), s.decoded().unwrap().into_owned()))
+                .collect();
+            assert_eq!(images, vec![("DeviceCMYK".to_string(), pixels.clone())], "{standard:?}");
+        }
+    }
+
+    #[test]
+    fn civil_dates_match_the_old_cycle_conversion_including_beyond_chrono() {
+        use super::civil;
+        assert_eq!(civil(0), (1970, 1, 1, 0, 0, 0));
+        assert_eq!(civil(951_782_400), (2000, 2, 29, 0, 0, 0));
+        assert_eq!(civil(1_791_504_000 + 3_723), (2026, 10, 9, 1, 2, 3));
+        // Beyond chrono's year range the old `civil` still converted; pin that output, never the
+        // epoch. `date_time` is what clamps the year to the PDF `0..=9999` range afterwards.
+        assert_eq!(civil(253_402_300_800), (10000, 1, 1, 0, 0, 0));
+        assert_eq!(civil(10_000_000_000_000), (318857, 5, 20, 17, 46, 40));
+        assert_eq!(civil(-10_000_000_000_000), (-314918, 8, 13, 6, 13, 20));
+        assert_eq!(civil(i64::MAX), (292277026596, 12, 4, 15, 30, 7));
+        assert_eq!(civil(i64::MIN), (-292277022657, 1, 27, 8, 29, 52));
     }
 }

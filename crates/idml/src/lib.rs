@@ -17,7 +17,8 @@
 //! ## Supported subset
 //! Swatches (process/spot CMYK, RGB and Lab colours, tints, linear/radial gradients), paragraph,
 //! character and object styles (with `BasedOn` and style groups), fonts, document preferences
-//! (page size, facing pages, bleed/slug, margins and columns, units, grids), layers, sections,
+//! (page size, facing pages, bleed/slug, margins and columns including dragged column positions,
+//! units, grids), ruler guides, layers, sections,
 //! parent (master) spreads and applied parents, spreads and pages, page items (`TextFrame`,
 //! `Rectangle`, `Oval`, `Polygon`, `GraphicLine`, `Group`) with fill/stroke, corner options, text
 //! frame options (with column rules), text wrap, transparency (opacity, blend mode, drop shadow,
@@ -126,8 +127,11 @@ pub(crate) fn base64_decode(s: &str) -> Vec<u8> {
     out
 }
 
-/// Sniff an image's MIME type and pixel size from its header (PNG, JPEG, GIF, WebP, TIFF).
+/// Sniff an image's MIME type and pixel size (PNG, JPEG, GIF, WebP, TIFF, PDF, EPS).
 pub(crate) fn sniff_image(b: &[u8]) -> (Option<&'static str>, Option<(u32, u32)>) {
+    if designcraft_images::is_eps(b) {
+        return (Some("application/postscript"), designcraft_images::eps_pixel_size(b));
+    }
     let be32 = |i: usize| b.get(i..i + 4).map(|s| u32::from_be_bytes([s[0], s[1], s[2], s[3]]));
     if b.starts_with(b"\x89PNG\r\n\x1a\n") {
         return (Some("image/png"), be32(16).zip(be32(20)));
