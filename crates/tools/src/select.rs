@@ -1181,6 +1181,9 @@ impl Tool for SelectionTool {
                     let mut d = p - start;
                     if d.hypot() >= cx.tol(3.0) {
                         self.anchor_release = None;
+                    } else if self.anchor_release.is_some() {
+                        // A Shift-press on a selected point is still a click: nothing moves yet.
+                        return vec![];
                     }
                     // Shift: horizontal, vertical or at 45°.
                     if ev.mods.shift {
