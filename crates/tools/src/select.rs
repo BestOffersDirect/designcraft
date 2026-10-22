@@ -281,6 +281,8 @@ pub struct SelectionTool {
     guides: Vec<Overlay>,
     /// Selected item to toggle if this Shift press never becomes a drag.
     shift_release: Option<u64>,
+    /// Selected anchor point to take away if this Shift press never becomes a drag.
+    anchor_release: Option<(ItemId, usize, usize)>,
     /// The loaded text cursor.
     loaded: Option<Loaded>,
     /// Frame whose live corners are being edited (diamonds shown).
@@ -289,7 +291,7 @@ pub struct SelectionTool {
 
 impl SelectionTool {
     pub fn new(direct: bool) -> Self {
-        Self { direct, drag: Drag::None, hover_handle: None, guides: vec![], shift_release: None, loaded: None, live: None }
+        Self { direct, drag: Drag::None, hover_handle: None, guides: vec![], shift_release: None, anchor_release: None, loaded: None, live: None }
     }
 
     /// [`bracket_at`] for this tool. With Direct Selection an anchor under the pointer wins: the
@@ -813,7 +815,9 @@ impl Tool for SelectionTool {
                         let mut points = cx.selection.anchors.clone();
                         let was = points.contains(&me);
                         if ev.mods.shift && was {
-                            points.retain(|a| *a != me);
+                            // Kept selected so a Shift-drag can constrain it; a click still takes it
+                            // away, on release, as for objects.
+                            self.anchor_release = Some(me);
                         } else if ev.mods.shift {
                             points.push(me);
                         } else if !was {
@@ -821,10 +825,6 @@ impl Tool for SelectionTool {
                         }
                         if points != cx.selection.anchors {
                             out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points, ev.mods.shift)));
-                        }
-                        if ev.mods.shift && was {
-                            self.drag = Drag::None;
-                            return out;
                         }
                         others = points.iter().filter(|a| **a != me).map(|(i, s, a)| (i.0, *s, *a)).collect();
                     }
@@ -1167,6 +1167,9 @@ impl Tool for SelectionTool {
                 }
                 Drag::Anchor { id, si, ai, handle, start, at, others } => {
                     let mut d = p - start;
+                    if d.hypot() >= cx.tol(3.0) {
+                        self.anchor_release = None;
+                    }
                     // Shift: horizontal, vertical or at 45°.
                     if ev.mods.shift {
                         d = constrain_45(d);
@@ -1198,13 +1201,15 @@ impl Tool for SelectionTool {
                             },
                         );
                         // dx and dy stay in canvas space. Snap.delta is spread space.
-                        let corr = spread_delta_to_canvas(cx.layout.xf(spread), hit.delta);
-                        if corr.x.is_finite() {
-                            dx += corr.x;
+                        let mut corr = spread_delta_to_canvas(cx.layout.xf(spread), hit.delta);
+                        corr = Vec2::new(if corr.x.is_finite() { corr.x } else { 0.0 }, if corr.y.is_finite() { corr.y } else { 0.0 });
+                        // Shift: the snap moves the points along the constrained direction only.
+                        if ev.mods.shift && d.hypot() > 1e-9 {
+                            let dir = d / d.hypot();
+                            corr = dir * corr.dot(dir);
                         }
-                        if corr.y.is_finite() {
-                            dy += corr.y;
-                        }
+                        dx += corr.x;
+                        dy += corr.y;
                         self.guides = hit.guides;
                     }
                     let mut params = json!({"id": id, "anchors": [[si, ai]], "dx": dx, "dy": dy});
@@ -1221,8 +1226,14 @@ impl Tool for SelectionTool {
             PointerKind::Up => {
                 self.guides.clear();
                 let release = self.shift_release.take();
+                let anchor_release = self.anchor_release.take();
                 let d = std::mem::replace(&mut self.drag, Drag::None);
                 match d {
+                    // A Shift-click on a selected point that never became a drag takes it away.
+                    Drag::Anchor { .. } if anchor_release.is_some() => {
+                        let points: Vec<_> = cx.selection.anchors.iter().copied().filter(|a| Some(*a) != anchor_release).collect();
+                        vec![Action::Commit, Action::Exec("selection.set".into(), anchor_selection(cx, &points))]
+                    }
                     Drag::Move { .. }
                     | Drag::Resize { .. }
                     | Drag::ContentResize { .. }

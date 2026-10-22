@@ -3302,7 +3302,7 @@ fn path_reverse(s: &mut Session, p: &Value) -> Result<Value> {
     {
         path_editable(doc, *id, "path.reverse")?;
     }
-    s.edit(|d, _| {
+    s.edit(|d, sel| {
         let mut reversed = 0;
         for id in &editable {
             let Some(it) = d.item_mut(*id) else { continue };
@@ -3312,6 +3312,11 @@ fn path_reverse(s: &mut Session, p: &Value) -> Result<Value> {
             for (i, sp) in it.path.subpaths.iter_mut().enumerate() {
                 if only.is_some_and(|o| o != i) {
                     continue;
+                }
+                // Selected points keep pointing at the same points, now counted from the other end.
+                let n = sp.anchors.len();
+                for a in sel.anchors.iter_mut().filter(|a| a.0 == *id && a.1 == i && a.2 < n) {
+                    a.2 = n - 1 - a.2;
                 }
                 sp.anchors.reverse();
                 for a in &mut sp.anchors {

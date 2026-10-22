@@ -1992,10 +1992,19 @@ fn direct_selection_marquee_selects_points_of_several_frames_and_drags_them_toge
     // Shift keeps the move horizontal.
     assert_eq!((p["dx"].as_f64(), p["dy"].as_f64()), (Some(36.0), Some(0.0)));
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x + 36.0, at.y)), vec![Action::Commit]);
-    // Shift+click on a selected point takes it out of the selection; the arrow keys move the points.
-    let shift = Mods { shift: true, ..Default::default() };
+    // A Shift-drag that starts on a selected point keeps it: all four move, constrained.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(shift));
+    let drag = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, at.x + 3.0, at.y + 30.0).with_mods(shift));
+    let Some(Action::Preview(_, p)) = drag.last() else { panic!("{drag:?}") };
+    assert_eq!(p["points"].as_array().map(Vec::len), Some(4), "{p}");
+    assert!(p["dx"].as_f64().unwrap().abs() < 1e-9 && (p["dy"].as_f64().unwrap() - 30.0).abs() < 1e-9, "vertical: {p}");
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x, at.y + 30.0).with_mods(shift)), vec![Action::Commit]);
+    // Shift+click on a selected point takes it out of the selection, on release; the arrow keys
+    // move the points.
     let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(shift));
-    let Some(Action::Exec(cmd, p)) = out.first() else { panic!("{out:?}") };
+    assert!(!out.iter().any(|a| matches!(a, Action::Exec(..))), "kept while it may become a drag: {out:?}");
+    let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(shift));
+    let Some(Action::Exec(cmd, p)) = out.last() else { panic!("{out:?}") };
     assert_eq!(cmd, "selection.set");
     assert_eq!(p["anchors"].as_array().map(Vec::len), Some(3), "{p}");
     let keys = t.key(&cx, ToolKey::Right, Mods::default());
