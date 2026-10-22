@@ -160,6 +160,22 @@ pub fn guide_field(app: &DesignApp) -> Option<GuideField> {
     value.is_finite().then_some(GuideField { guide: *g, orientation: guide.orientation, value, origin, unit })
 }
 
+/// The anchor points selected with Direct Selection, each with where it is in its spread.
+pub fn selected_anchor_points(app: &DesignApp) -> Vec<((designcraft_doc::ItemId, usize, usize), designcraft_geom::Point)> {
+    let Some(st) = app.session.active() else { return vec![] };
+    let d = &st.doc;
+    st.selection
+        .anchors
+        .iter()
+        .filter_map(|&(id, si, ai)| {
+            let loc = d.find(id)?;
+            let it = d.item(id)?;
+            let a = it.path.subpaths.get(si)?.anchors.get(ai)?;
+            Some(((id, si, ai), (d.parent_xf(&loc) * it.xf) * a.p))
+        })
+        .collect()
+}
+
 pub fn sel_info(app: &DesignApp) -> Option<SelInfo> {
     let st = app.session.active()?;
     if st.selection.items.is_empty() {
@@ -181,7 +197,12 @@ pub fn sel_info(app: &DesignApp) -> Option<SelInfo> {
         };
         b = Some(b.map_or(ib, |r| r.union(ib)));
     }
-    let b = b?;
+    // Points selected with Direct Selection: Transform measures the points, not their paths.
+    let points = selected_anchor_points(app);
+    let b = match points.split_first() {
+        Some(((_, p0), rest)) => rest.iter().fold(Rect::from_points(*p0, *p0), |r, (_, p)| r.union_pt(*p)),
+        None => b?,
+    };
     let first = d.item(st.selection.items[0])?;
     let loc = d.find(first.id)?;
     let o = d.ruler_origin(loc.spread, b.center().x)?;

@@ -1990,14 +1990,18 @@ fn direct_selection_marquee_selects_points_of_several_frames_and_drags_them_toge
     assert_eq!(cmd, "path.moveAnchors");
     assert_eq!(p["points"].as_array().map(Vec::len), Some(4), "{p}");
     // Shift keeps the move horizontal.
-    assert_eq!((p["dx"].as_f64(), p["dy"].as_f64()), (Some(36.0), Some(0.0)));
+    // Each point carries its own movement (in its spread): here all the same.
+    let moves = |p: &serde_json::Value| -> Vec<(f64, f64)> {
+        p["points"].as_array().unwrap().iter().map(|v| (v[3].as_f64().unwrap(), v[4].as_f64().unwrap())).collect()
+    };
+    assert!(moves(p).iter().all(|&(x, y)| (x - 36.0).abs() < 1e-9 && y.abs() < 1e-9), "{p}");
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x + 36.0, at.y)), vec![Action::Commit]);
     // A Shift-drag that starts on a selected point keeps it: all four move, constrained.
     t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(shift));
     let drag = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, at.x + 3.0, at.y + 30.0).with_mods(shift));
     let Some(Action::Preview(_, p)) = drag.last() else { panic!("{drag:?}") };
     assert_eq!(p["points"].as_array().map(Vec::len), Some(4), "{p}");
-    assert!(p["dx"].as_f64().unwrap().abs() < 1e-9 && (p["dy"].as_f64().unwrap() - 30.0).abs() < 1e-9, "vertical: {p}");
+    assert!(moves(p).iter().all(|&(x, y)| x.abs() < 1e-9 && (y - 30.0).abs() < 1e-9), "vertical: {p}");
     assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x, at.y + 30.0).with_mods(shift)), vec![Action::Commit]);
     // Shift+click on a selected point takes it out of the selection, on release; the arrow keys
     // move the points.
@@ -2012,4 +2016,18 @@ fn direct_selection_marquee_selects_points_of_several_frames_and_drags_them_toge
         matches!(keys.as_slice(), [Action::Exec(cmd, p)] if cmd == "path.moveAnchors" && p["points"].as_array().map(Vec::len) == Some(4)),
         "{keys:?}"
     );
+    // Delete deletes the selected points, not their paths.
+    assert_eq!(t.key(&cx, ToolKey::Delete, Mods::default()), vec![Action::Exec("path.deletePoints".into(), serde_json::json!({}))]);
+    // On a spread turned a quarter on screen, → moves the points right on screen: up or down in
+    // the spread, not across it.
+    let mut turned = d.clone();
+    std::sync::Arc::make_mut(&mut turned.spreads[0]).pages[0].view_rotation = 1;
+    let lt = CanvasLayout::new(&turned, false);
+    let cxt = ctx(&turned, &sel, &c, &lt);
+    let keys = t.key(&cxt, ToolKey::Right, Mods::default());
+    let [Action::Exec(_, p)] = keys.as_slice() else { panic!("{keys:?}") };
+    let inc = turned.settings.keyboard_increment;
+    let want = lt.delta_to_spread(SpreadRef::Doc(0), designcraft_geom::Vec2::new(inc, 0.0));
+    assert!(want.x.abs() < 1e-9 && (want.y.abs() - inc).abs() < 1e-9, "a quarter turn: {want:?}");
+    assert!(moves(p).iter().all(|&(x, y)| (x - want.x).abs() < 1e-9 && (y - want.y).abs() < 1e-9), "{p}");
 }

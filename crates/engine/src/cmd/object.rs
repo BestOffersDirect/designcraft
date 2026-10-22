@@ -685,7 +685,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{id, anchors: [[subpath, index]], dx, dy, handle?: in|out} | {points: [[id, subpath, index]], dx, dy} (anchors of several paths, as Direct Selection drags them: one step)",
+            "{id, anchors: [[subpath, index]], dx, dy, handle?: in|out} | {points: [[id, subpath, index, dx?, dy?]], dx?, dy?} (anchors of several paths, as Direct Selection drags them: one step; a point's own dx, dy win over the shared ones) — spread space",
             has_doc,
             path_move_anchors
         ),
@@ -3352,22 +3352,31 @@ fn path_close(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn path_move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // The anchors to move, by path: `points` (several paths) or `id` with `anchors`.
-    let mut targets: Vec<(ItemId, Vec<(usize, usize)>)> = Vec::new();
+    // Each anchor with its own spread-space movement, when the points give one.
+    let mut targets: Vec<(ItemId, Vec<(usize, usize, Option<Vec2>)>)> = Vec::new();
     if let Some(points) = p.get("points").and_then(Value::as_array) {
         for v in points {
             let n = |i: usize| v.get(i).and_then(Value::as_u64).and_then(|x| usize::try_from(x).ok());
             let (Some(id), Some(si), Some(ai)) = (v.get(0).and_then(Value::as_u64), n(1), n(2)) else {
-                return Err(bad("path.moveAnchors", "each point is [id, subpath, index]"));
+                return Err(bad("path.moveAnchors", "each point is [id, subpath, index] or [id, subpath, index, dx, dy]"));
+            };
+            let own = match (v.get(3), v.get(4)) {
+                (None, None) => None,
+                (Some(x), Some(y)) => match (x.as_f64(), y.as_f64()) {
+                    (Some(x), Some(y)) if x.is_finite() && y.is_finite() => Some(Vec2::new(x, y)),
+                    _ => return Err(bad("path.moveAnchors", "a point's dx and dy are finite numbers")),
+                },
+                _ => return Err(bad("path.moveAnchors", "a point gives both dx and dy, or neither")),
             };
             match targets.iter_mut().find(|(i, _)| i.0 == id) {
-                Some((_, which)) => which.push((si, ai)),
-                None => targets.push((ItemId(id), vec![(si, ai)])),
+                Some((_, which)) => which.push((si, ai, own)),
+                None => targets.push((ItemId(id), vec![(si, ai, own)])),
             }
         }
     } else {
         let id = super::id_param(p, "id").ok_or_else(|| bad("path.moveAnchors", "missing id"))?;
         let which: Vec<(usize, usize)> = p.get("anchors").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
-        targets.push((id, which));
+        targets.push((id, which.into_iter().map(|(s, a)| (s, a, None)).collect()));
     }
     let d0 = Vec2::new(f64_or(p, "dx", 0.0), f64_or(p, "dy", 0.0));
     let handle = str_param(p, "handle").map(str::to_string);
@@ -3381,9 +3390,10 @@ fn path_move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
             let m = d.parent_xf(&loc) * d.item_at(&loc).map(|i| i.xf).unwrap_or_default();
             // Spread-space delta → inner-space delta (linear part only).
             let inv = m.inverse();
-            let dv = (inv * Point::new(d0.x, d0.y)) - (inv * Point::ZERO);
+            let inner = |d: Vec2| (inv * Point::new(d.x, d.y)) - (inv * Point::ZERO);
             let it = d.item_mut(id).ok_or(designcraft_doc::DocError::NoItem(id))?;
-            for (si, ai) in which {
+            for (si, ai, own) in which {
+                let dv = inner(own.unwrap_or(d0));
                 let Some(a) = it.path.anchor_mut(*si, *ai) else { continue };
                 match handle.as_deref() {
                     Some("in") => {

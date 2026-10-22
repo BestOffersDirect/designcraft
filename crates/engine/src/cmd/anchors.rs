@@ -501,6 +501,27 @@ mod tests {
     }
 
     /// Join Path closes one open path, and joins two open paths at their nearest ends.
+    /// `path.moveAnchors` points may each carry their own movement (Direct Selection sends each
+    /// point's in its own spread); without one a point takes the shared `dx`, `dy`.
+    #[test]
+    fn move_anchors_takes_a_movement_per_point() {
+        let mut s = crate::Session::new();
+        s.execute("file.new", &serde_json::json!({})).unwrap();
+        let id = s.execute("frame.create", &serde_json::json!({"rect": [100, 100, 200, 200]})).unwrap()["id"].as_u64().unwrap();
+        let at = |s: &crate::Session, i: usize| {
+            let d = &s.doc().unwrap().doc;
+            let it = d.item(designcraft_doc::ItemId(id)).unwrap();
+            it.xf * it.path.subpaths[0].anchors[i].p
+        };
+        let (a0, a1) = (at(&s, 0), at(&s, 1));
+        s.execute("path.moveAnchors", &serde_json::json!({"points": [[id, 0, 0, 5, 0], [id, 0, 1]], "dx": 0, "dy": 7})).unwrap();
+        assert_eq!(at(&s, 0) - a0, designcraft_geom::Vec2::new(5.0, 0.0), "its own");
+        assert_eq!(at(&s, 1) - a1, designcraft_geom::Vec2::new(0.0, 7.0), "the shared one");
+        for bad in [serde_json::json!([[id, 0, 0, "x", 1]]), serde_json::json!([[id, 0, 0, 5]])] {
+            assert!(s.execute("path.moveAnchors", &serde_json::json!({"points": bad})).is_err(), "{bad}");
+        }
+    }
+
     #[test]
     fn join_path_closes_one_path_and_joins_two() {
         let mut s = Session::new();
