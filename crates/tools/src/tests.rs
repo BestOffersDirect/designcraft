@@ -1991,7 +1991,10 @@ fn direct_selection_marquee_selects_points_of_several_frames_and_drags_them_toge
     // move the points.
     let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, at.x, at.y).with_mods(shift));
     assert!(!out.iter().any(|a| matches!(a, Action::Exec(..))), "kept while it may become a drag: {out:?}");
-    let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x, at.y).with_mods(shift));
+    // A jiggle inside the drag tolerance moves nothing: it is still a click.
+    let jiggle = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, at.x + 1.0, at.y + 1.0).with_mods(shift));
+    assert!(jiggle.is_empty(), "{jiggle:?}");
+    let out = t.pointer(&cx, &PointerEvent::new(PointerKind::Up, at.x + 1.0, at.y + 1.0).with_mods(shift));
     let Some(Action::Exec(cmd, p)) = out.last() else { panic!("{out:?}") };
     assert_eq!(cmd, "selection.set");
     assert_eq!(p["anchors"].as_array().map(Vec::len), Some(3), "{p}");
