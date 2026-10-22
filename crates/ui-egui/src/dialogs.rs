@@ -3389,20 +3389,32 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 app.run("view.snapPreferences", snap)?;
             }
             if d.b("defaults") {
-                // No document open: the Units & Increments new documents start with.
+                // No document open: the Units & Increments new documents start with. A value that
+                // doesn't read, or that `prefs.set` refuses, keeps the dialog open to be fixed.
                 let mut du = json!({});
                 for k in ["horizontalUnits", "verticalUnits", "rulerOrigin"] {
                     if let Some(v) = d.fields.get(k).filter(|v| v.is_string()) {
                         du[k] = v.clone();
                     }
                 }
-                if let Some(v) = d.fields.get("keyboardIncrement").and_then(Value::as_str).and_then(|s| parse_measure(s, Unit::Points).ok()) {
-                    du["keyboardIncrement"] = json!(v.clamp(0.001, 1000.0));
+                let mut read = || -> Result<(), String> {
+                    if let Some(t) = d.fields.get("keyboardIncrement").and_then(Value::as_str) {
+                        du["keyboardIncrement"] = json!(parse_measure(t, Unit::Points).map_err(|_| format!("Cursor Key: `{t}` is not a measurement"))?);
+                    }
+                    if let Some(v) = d.fields.get("kerningIncrement").filter(|v| !v.is_null()) {
+                        let n = d.n("kerningIncrement").filter(|v| v.is_finite());
+                        du["kerningIncrement"] = json!(n.ok_or_else(|| format!("Kerning/Tracking: `{}` is not a number", v.as_str().unwrap_or_default()))?);
+                    }
+                    Ok(())
+                };
+                let r = read().and_then(|()| app.run("prefs.set", json!({"defaultUnits": du})));
+                if let Err(e) = &r {
+                    let mut d = d.clone();
+                    d.fields.insert("status".into(), json!(e));
+                    app.status(e.clone());
+                    app.ui.dialog = Some(d);
+                    return Err(e.clone());
                 }
-                if let Some(v) = d.n("kerningIncrement").filter(|v| v.is_finite()) {
-                    du["kerningIncrement"] = json!(v.clamp(1.0, 1000.0));
-                }
-                app.run("prefs.set", json!({"defaultUnits": du}))?;
                 return Ok(Value::Null);
             }
             let Some(horizontal) = d.fields.get("horizontalUnits") else { return Ok(Value::Null) };
@@ -7261,6 +7273,21 @@ mod tests {
         let du = app.session.prefs.default_units;
         assert_eq!((du.horizontal_units, du.vertical_units, du.keyboard_increment), (Unit::Inches, Unit::Inches, 0.5));
         assert!(app.session.active().is_none(), "no document made");
+        // A Cursor Key of 0 or text that isn't a measure is refused, keeping the dialog open and
+        // the saved value; a Kerning/Tracking of 0.5 is kept as it is.
+        for bad in [json!({"keyboardIncrement": "0 pt"}), json!({"keyboardIncrement": "wide"}), json!({"kerningIncrement": "lots"})] {
+            let mut d = Dialog::new("preferences", json!({"defaults": true, "horizontalUnits": "inches"}));
+            for (k, v) in bad.as_object().unwrap() {
+                d.fields.insert(k.clone(), v.clone());
+            }
+            app.ui.dialog = Some(d);
+            assert!(confirm(&mut app).is_err(), "{bad}");
+            assert!(app.ui.dialog.as_ref().is_some_and(|d| d.id == "preferences"), "still open: {bad}");
+            assert_eq!(app.session.prefs.default_units.keyboard_increment, 0.5, "{bad}");
+        }
+        app.ui.dialog = Some(Dialog::new("preferences", json!({"defaults": true, "horizontalUnits": "inches", "kerningIncrement": "0.5"})));
+        confirm(&mut app).unwrap();
+        assert_eq!(app.session.prefs.default_units.kerning_increment, 0.5, "not rounded up to 1");
         // New Document opens in inches, and the document it makes has inch rulers.
         crate::menus::activate(&mut app, "app.newDocumentDialog", &Value::Null);
         let nd = app.ui.dialog.clone().expect("New Document");

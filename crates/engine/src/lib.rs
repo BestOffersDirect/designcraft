@@ -277,11 +277,11 @@ impl Default for DefaultUnits {
 }
 
 impl DefaultUnits {
-    /// Gives a new document made in `units` these defaults. Its vertical ruler follows the
-    /// preference while the document keeps the default horizontal units (units picked in New
-    /// Document set both rulers).
-    pub fn apply(&self, settings: &mut designcraft_doc::DocSettings) {
-        if settings.horizontal_units == self.horizontal_units {
+    /// Gives a new document these defaults. Unless it was made from a preset (whose units are its
+    /// own), its vertical ruler follows the preference while it keeps the default horizontal
+    /// units (units picked in New Document set both rulers).
+    pub fn apply(&self, settings: &mut designcraft_doc::DocSettings, preset: bool) {
+        if !preset && settings.horizontal_units == self.horizontal_units {
             settings.vertical_units = self.vertical_units;
         }
         settings.ruler_origin = self.ruler_origin;

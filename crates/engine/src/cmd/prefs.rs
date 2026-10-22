@@ -172,9 +172,14 @@ mod tests {
         s.execute("file.new", &json!({"units": "points"})).unwrap();
         let st = s.doc().unwrap().doc.settings.clone();
         assert_eq!((st.horizontal_units, st.vertical_units), (Unit::Points, Unit::Points));
-        // A preset keeps its own units.
+        // A preset keeps its own units, both of them, even when the default horizontal units are
+        // the preset's.
+        s.execute("prefs.set", &json!({"defaultUnits": {"horizontalUnits": "millimeters", "verticalUnits": "inches"}})).unwrap();
         s.execute("file.new", &json!({"preset": "A4"})).unwrap();
-        assert_eq!(s.doc().unwrap().doc.settings.horizontal_units, Unit::Millimeters);
+        let st = s.doc().unwrap().doc.settings.clone();
+        assert_eq!((st.horizontal_units, st.vertical_units), (Unit::Millimeters, Unit::Millimeters));
+        assert_eq!(st.keyboard_increment, 0.5, "the increments still apply");
+        s.execute("prefs.set", &json!({"defaultUnits": {"horizontalUnits": "inches", "verticalUnits": "millimeters"}})).unwrap();
         // New Document opens with them; bad values are refused and change nothing.
         assert_eq!(s.default_new_document().units, Unit::Inches);
         for bad in [json!({"horizontalUnits": "furlongs"}), json!({"keyboardIncrement": 0}), json!({"kerningIncrement": -5})] {

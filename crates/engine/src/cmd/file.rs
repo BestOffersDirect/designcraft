@@ -237,7 +237,7 @@ fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     s.untitled += 1;
     nd.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| format!("Untitled-{}", s.untitled));
     let mut d = Document::new(&nd);
-    s.prefs.default_units.apply(&mut d.settings);
+    s.prefs.default_units.apply(&mut d.settings, p.get("preset").is_some_and(|v| !v.is_null()));
     let i = s.add_document(DocState::new(d, None));
     Ok(json!({"index": i}))
 }
@@ -268,7 +268,7 @@ impl Session {
         }
         nd.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| self.next_untitled_title());
         let mut d = Document::new(&nd);
-        self.prefs.default_units.apply(&mut d.settings);
+        self.prefs.default_units.apply(&mut d.settings, p.get("preset").is_some_and(|v| !v.is_null()));
         let st = DocState::new(d, None);
         let uid = st.uid;
         match replace.and_then(|i| self.docs.get_mut(i).map(|d| (i, d))) {
