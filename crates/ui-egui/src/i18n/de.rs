@@ -31,6 +31,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Ausschneiden"),
     ("Copy", "Kopieren"),
     ("Paste", "Einfügen"),
+    ("Stroke Type", "Konturtyp"),
+    ("Corner Shape", "Eckenform"),
     ("Inches Decimal", "Zoll dezimal"),
     ("Back", "Zurück"),
     ("Warning", "Warnung"),

@@ -29,6 +29,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Вирізати"),
     ("Copy", "Копіювати"),
     ("Paste", "Вставити"),
+    ("Stroke Type", "Тип обведення"),
+    ("Corner Shape", "Форма кута"),
     ("Paste Vector Art", "Вставити векторну графіку"),
     ("Baseline Options", "Параметри базової лінії"),
     ("Fixed Number", "Фіксована кількість"),
