@@ -1562,10 +1562,11 @@ fn confirm_document_setup(app: &mut DesignApp, d: &Dialog) -> Result<Value, Stri
     app.run("layout.documentSetup", p)
 }
 
-/// Preferences: a section list and the section's options. Application options always; units and
-/// increments when a document is open (InDesign keeps those with the document).
+/// Preferences: a section list and the section's options. Application options always; with a
+/// document open, its own settings (InDesign keeps those with the document); with none, Units &
+/// Increments for new documents.
 fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_height: f32) {
-    let has_doc = d.fields.contains_key("horizontalUnits");
+    let has_doc = d.fields.contains_key("horizontalUnits") && !d.b("defaults");
     let sections: &[(&str, &str)] = if has_doc {
         &[
             ("general", "General"),
@@ -1592,6 +1593,7 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
             ("interface", "Interface"),
             ("type", "Type"),
             ("composition", "Composition"),
+            ("units", "Units & Increments"),
             ("spelling", "Spelling"),
             ("autocorrect", "Autocorrect"),
             ("notes", "Notes"),
@@ -3385,6 +3387,23 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                     snap["zone"] = json!(zone);
                 }
                 app.run("view.snapPreferences", snap)?;
+            }
+            if d.b("defaults") {
+                // No document open: the Units & Increments new documents start with.
+                let mut du = json!({});
+                for k in ["horizontalUnits", "verticalUnits", "rulerOrigin"] {
+                    if let Some(v) = d.fields.get(k).filter(|v| v.is_string()) {
+                        du[k] = v.clone();
+                    }
+                }
+                if let Some(v) = d.fields.get("keyboardIncrement").and_then(Value::as_str).and_then(|s| parse_measure(s, Unit::Points).ok()) {
+                    du["keyboardIncrement"] = json!(v.clamp(0.001, 1000.0));
+                }
+                if let Some(v) = d.n("kerningIncrement").filter(|v| v.is_finite()) {
+                    du["kerningIncrement"] = json!(v.clamp(1.0, 1000.0));
+                }
+                app.run("prefs.set", json!({"defaultUnits": du}))?;
+                return Ok(Value::Null);
             }
             let Some(horizontal) = d.fields.get("horizontalUnits") else { return Ok(Value::Null) };
             let mut doc = json!({"horizontalUnits": horizontal});
@@ -7216,6 +7235,43 @@ mod tests {
             let saved = serde_json::to_vec(&app.ui).unwrap();
             assert_eq!(crate::UiState::from_preferences_json(&saved).unwrap().story_editor_size, want);
         }
+    }
+
+    /// With no document open, Preferences has Units & Increments, as InDesign's: OK keeps them
+    /// for new documents, and New Document opens in them (Lollo's inches, set once).
+    #[test]
+    fn preferences_with_no_document_set_the_units_of_new_documents() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        crate::menus::activate(&mut app, "app.preferences", &Value::Null);
+        let mut d = app.ui.dialog.take().expect("Preferences");
+        assert!(d.b("defaults"), "for new documents");
+        let ctx = dialog_context("en");
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1178.0, 814.0));
+        app.ui.dialog = Some(d.clone());
+        let mut labels = vec![];
+        for _ in 0..3 {
+            labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+        }
+        assert!(labels.iter().any(|(t, _, _)| t == "Units & Increments"), "listed with no document: {labels:?}");
+        d.fields.insert("horizontalUnits".into(), json!("inches"));
+        d.fields.insert("verticalUnits".into(), json!("inches"));
+        d.fields.insert("keyboardIncrement".into(), json!("0.5 pt"));
+        app.ui.dialog = Some(d);
+        confirm(&mut app).unwrap();
+        let du = app.session.prefs.default_units;
+        assert_eq!((du.horizontal_units, du.vertical_units, du.keyboard_increment), (Unit::Inches, Unit::Inches, 0.5));
+        assert!(app.session.active().is_none(), "no document made");
+        // New Document opens in inches, and the document it makes has inch rulers.
+        crate::menus::activate(&mut app, "app.newDocumentDialog", &Value::Null);
+        let nd = app.ui.dialog.clone().expect("New Document");
+        assert_eq!(nd.fields["units"], json!("inches"));
+        assert_eq!(nd.s("width"), designcraft_geom::format_measure(612.0, Unit::Inches));
+        confirm(&mut app).unwrap();
+        let st = &app.session.doc().unwrap().doc.settings;
+        assert_eq!((st.horizontal_units, st.vertical_units, st.keyboard_increment), (Unit::Inches, Unit::Inches, 0.5));
+        // With the document open, Preferences edits that document's units, not the defaults.
+        crate::menus::activate(&mut app, "app.preferences", &Value::Null);
+        assert!(!app.ui.dialog.as_ref().unwrap().b("defaults"));
     }
 
     #[test]
