@@ -7327,3 +7327,23 @@ fn an_object_wraps_the_frame_its_anchor_lands_in_after_an_earlier_object_pushed_
     // Deterministic: the same lines again.
     assert_eq!(line_layout(&compose_story(&d, sid, &ComposeOptions::default())), line_layout(&cs));
 }
+
+/// Rule Above's offset runs from the first line's baseline up to the rule's bottom edge, as in
+/// InDesign: a rule set clear of the cap height sits between the rows, not across the row above
+/// (an INDD project list whose rules crossed the previous paragraph's text).
+#[test]
+fn rule_above_offset_is_measured_from_the_baseline() {
+    use designcraft_doc::Rule;
+    let rule = Rule { on: true, weight: 1.5, offset: 10.0, ..Default::default() };
+    let para = ParaAttrs { rule_above: Some(rule), ..Default::default() };
+    let (d, sid, fid) = doc_with("Row one\nRow two", Rect::new(0.0, 0.0, 300.0, 200.0), para);
+    let cs = compose_story(&d, sid, &ComposeOptions::default());
+    let lines = all_lines(&cs);
+    let (first, second) = (lines[0], lines[1]);
+    let mut decos: Vec<Rect> = cs.frame(fid).unwrap().decos.iter().map(|dc| dc.rect).collect();
+    decos.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+    let rule = decos[1];
+    assert!((rule.y1 - (second.baseline - 10.0)).abs() < 1e-6, "{rule:?}, baseline {}", second.baseline);
+    assert!((rule.height() - 1.5).abs() < 1e-6);
+    assert!(rule.y0 > first.baseline, "the rule stays below the row above: {rule:?}, its baseline {}", first.baseline);
+}
