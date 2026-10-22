@@ -1970,8 +1970,10 @@ impl<'r> Importer<'r> {
         if let Some(t) = self.para_setting(e, &format!("{k}Type")) {
             r.kind = names::stroke_type_in(t.trim());
         }
-        if let Some(c) = self.para_setting(e, &format!("{k}GapColor")).filter(|c| c.contains('/')) {
-            r.gap_color = self.swatch_ref(c.trim());
+        if let Some(c) = self.para_setting(e, &format!("{k}GapColor"))
+            && let Some(c) = self.rule_color_ref(&c)
+        {
+            r.gap_color = c;
         }
         if let Some(t) = tint(self.para_setting(e, &format!("{k}GapTint")).and_then(|v| v.trim().parse::<f64>().ok()).filter(|v| v.is_finite())) {
             r.gap_tint = t;
@@ -1979,15 +1981,21 @@ impl<'r> Importer<'r> {
         if k == "RuleAbove" {
             r.keep_in_frame = self.para_setting(e, "KeepRuleAboveInFrame").is_some_and(|v| v.trim() == "true");
         }
-        if let Some(c) = get(2) {
-            let c = c.trim();
-            if c == designcraft_doc::TEXT_COLOR {
-                r.color = c.to_string();
-            } else if c.contains('/') {
-                r.color = self.swatch_ref(c);
-            }
+        if let Some(c) = get(2).and_then(|c| self.rule_color_ref(&c)) {
+            r.color = c;
         }
         Some(r)
+    }
+
+    /// A rule's colour or gap colour: Text Color (written `Text Color` or `$ID/Text Color`), or
+    /// a swatch reference; anything else leaves the default.
+    fn rule_color_ref(&mut self, c: &str) -> Option<String> {
+        let c = c.trim();
+        if c == designcraft_doc::TEXT_COLOR || c.strip_prefix("$ID/") == Some(designcraft_doc::TEXT_COLOR) {
+            Some(designcraft_doc::TEXT_COLOR.to_string())
+        } else {
+            c.contains('/').then(|| self.swatch_ref(c))
+        }
     }
 
     /// Paragraph setting `k` of `e` (a paragraph style or a range): its own, else from its

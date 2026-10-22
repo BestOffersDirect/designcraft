@@ -3733,6 +3733,9 @@ fn a_style_setting_only_a_rules_type_gap_or_keep_in_frame_overrides_it() {
     <ParagraphStyle Self="ParagraphStyle/Kept" Name="Kept" KeepRuleAboveInFrame="true">
       <Properties><BasedOn type="string">$ID/[No paragraph style]</BasedOn></Properties>
     </ParagraphStyle>
+    <ParagraphStyle Self="ParagraphStyle/TextGap" Name="TextGap" RuleBelowGapColor="$ID/Text Color" RuleAboveColor="$ID/Text Color">
+      <Properties><BasedOn type="string">$ID/[No paragraph style]</BasedOn><RuleAboveGapColor type="string">Text Color</RuleAboveGapColor></Properties>
+    </ParagraphStyle>
   </RootParagraphStyleGroup>"#,
     );
     let d = import_idml(&fixture_with_table_styles(&styles, STORY)).unwrap();
@@ -3742,6 +3745,15 @@ fn a_style_setting_only_a_rules_type_gap_or_keep_in_frame_overrides_it() {
     let gap = style("Gap").rule_below.expect("the gap colour alone, with no on or weight in the chain");
     assert!(!gap.on && gap.gap_color != designcraft_color::swatch::NONE, "{gap:?}");
     assert!(style("Kept").rule_above.expect("Keep In Frame alone").keep_in_frame);
+    // Text Color, in either spelling, for a gap and a rule colour.
+    let text = style("TextGap");
+    let (below, above) = (text.rule_below.expect("rule below"), text.rule_above.expect("rule above"));
+    assert_eq!(below.gap_color, designcraft_doc::TEXT_COLOR);
+    assert_eq!((above.gap_color.as_str(), above.color.as_str()), (designcraft_doc::TEXT_COLOR, designcraft_doc::TEXT_COLOR));
+    // And it is written back as Text Color, not as no swatch.
+    let back = import_idml(&export_idml(&d)).unwrap();
+    let below = back.styles.paragraph.iter().find(|s| s.name == "TextGap").unwrap().para.rule_below.clone().unwrap();
+    assert_eq!(below.gap_color, designcraft_doc::TEXT_COLOR, "round-trips");
 }
 
 #[test]

@@ -1873,8 +1873,9 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                     .map(|l| if r.column_width { (l.x0, l.x1) } else { (l.x0, l.end_x) })
                     .unwrap_or((0.0, 0.0));
                 let (color, tint) = rule_color(r, &above);
-                // Keep In Frame: not above the frame's text area.
-                let top = frames.get(fi).map_or(f64::NEG_INFINITY, |f| f.area.y0);
+                // Keep In Frame: not above the frame, as InDesign's (its top, not the text area's
+                // below the top inset).
+                let top = frames.get(fi).map_or(f64::NEG_INFINITY, |f| f.area.y0 - if f.vertical { 0.0 } else { f.opts.inset[0] });
                 let y = if r.keep_in_frame && y - r.weight < top { top + r.weight } else { y };
                 let rect = Rect::new(col.0 + r.left_indent, y - r.weight, col.1 - r.right_indent, y);
                 ft.decos.extend(rule_decos(doc, r, rect, (color, tint), &above));

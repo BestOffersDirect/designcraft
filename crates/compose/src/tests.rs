@@ -3731,6 +3731,17 @@ fn paragraph_rules_have_a_type_a_gap_colour_and_keep_in_frame() {
     };
     assert!(above(false).y0 < 50.0, "{:?}", above(false));
     assert!((above(true).y0 - 50.0).abs() < 1e-6, "{:?}", above(true));
+    // With a top inset the rule may still rise into it: raised out of the frame, it comes back
+    // to the frame's edge, not to the text area's below the inset.
+    let r = Rule { on: true, weight: 2.0, offset: 60.0, keep_in_frame: true, ..Default::default() };
+    let para = ParaAttrs { rule_above: Some(r), ..Default::default() };
+    let (mut d, sid, fid) = doc_with("Title", Rect::new(0.0, 50.0, 300.0, 200.0), para);
+    if let Some(tf) = d.item_mut(fid).and_then(|it| it.text_frame_mut()) {
+        tf.options.inset = [20.0, 0.0, 0.0, 0.0];
+    }
+    let cs = compose_story(&d, sid, &ComposeOptions::default());
+    let rule = cs.frame(fid).unwrap().decos[0].rect;
+    assert!((rule.y0 - 50.0).abs() < 1e-6, "kept at the frame's top, in the inset: {rule:?}");
 }
 
 /// A rule in Text Color takes the colour of the paragraph's text: the first character's for the
