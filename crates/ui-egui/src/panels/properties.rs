@@ -1064,9 +1064,14 @@ fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     ui.add_space(4.0);
     let b = block(ui, 2.0 * FIELD_H + 5.0);
     let mut set = None;
+    // The link's state belongs to the selection: another selection starts linked again when its
+    // four offsets are the same.
+    let selected: Vec<u64> = app.session.active().map(|st| st.selection.items.iter().map(|i| i.0).collect()).unwrap_or_default();
+    let link_id = egui::Id::new(("prop_wrap_linked", selected));
     ui.add_enabled_ui(enabled, |ui| {
         // Linked while the four are the same, until the link is clicked.
-        let linked = temp_bool(ui, "prop_wrap_linked", offsets.iter().all(|v| (v - offsets[0]).abs() < 1e-9));
+        let same = offsets.iter().all(|v| (v - offsets[0]).abs() < 1e-9);
+        let linked = ui.data(|d| d.get_temp::<bool>(link_id)).unwrap_or(same);
         // Offsets are [top, left, bottom, right].
         for (k, key, icon, tip, x, y) in [
             (0, "wrapTop", "margin-top", "Top", 0.0, 0.0),
@@ -1083,11 +1088,12 @@ fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
                 NumField::measure(key, Some(offsets[k]), u).width(76.0).spinner().range(-8000.0, 8000.0).enabled(enabled).show(ui)
             });
             if let Some(v) = nv {
-                let mut o = offsets;
+                // Linked, all four; else this side alone, each object keeping its other offsets.
+                let mut o = [None; 4];
                 if linked {
-                    o = [v; 4];
+                    o = [Some(v); 4];
                 } else {
-                    o[k] = v;
+                    o[k] = Some(v);
                 }
                 set = Some(o);
             }
@@ -1096,7 +1102,7 @@ fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
             widgets::icon_toggle_sized(ui, if linked { "link" } else { "link-broken" }, linked, &tr("Make all settings the same"), vec2(22.0, 21.0))
                 .clicked()
         }) {
-            set_temp_bool(ui, "prop_wrap_linked", !linked);
+            ui.data_mut(|d| d.insert_temp(link_id, !linked));
         }
     });
     if let Some(o) = set {
@@ -3471,6 +3477,26 @@ mod tests {
         let f = fields(&h);
         type_in(&mut h, f[2], "6pt");
         assert_eq!(offsets(h.state()), [12.0, 12.0, 6.0, 12.0], "[top, left, bottom, right]");
+        // Two objects with different offsets: a side typed in changes that side on each, and
+        // each keeps its other three.
+        let other = h.state_mut().run("frame.create", json!({"rect": [72, 300, 300, 400], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+        h.state_mut().run("object.textWrap", json!({"mode": "boundingBox", "offset": [3, 4, 5, 6], "ids": [other]})).unwrap();
+        let of = |h: &Harness<'_, DesignApp>, id: u64| {
+            h.state().session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().wrap.offsets
+        };
+        h.state_mut().run("selection.set", json!({"ids": [id, other]})).unwrap();
+        h.run_steps(3);
+        let f = fields(&h);
+        type_in(&mut h, f[0], "9pt");
+        assert_eq!((of(&h, id), of(&h, other)), ([9.0, 12.0, 6.0, 12.0], [9.0, 4.0, 5.0, 6.0]), "the top alone, on each");
+        // An object whose offsets are the same starts linked, though the link was off before.
+        let third = h.state_mut().run("frame.create", json!({"rect": [320, 72, 500, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+        h.state_mut().run("object.textWrap", json!({"mode": "boundingBox", "offset": 4, "ids": [third]})).unwrap();
+        h.state_mut().run("selection.set", json!({"ids": [third]})).unwrap();
+        h.run_steps(3);
+        let f = fields(&h);
+        type_in(&mut h, f[2], "8pt");
+        assert_eq!(of(&h, third), [8.0; 4], "linked again for this selection");
     }
 
     const CYAN: &str = "C=100 M=0 Y=0 K=0";

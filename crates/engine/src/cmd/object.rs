@@ -616,7 +616,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Text Wrap",
             ["Window"],
             Some("Cmd+Alt+W"),
-            "{mode?: none|boundingBox|contour|jumpObject|jumpToNextColumn (boundingBox when absent, unless side or contour is given: then unchanged), offset?: number|[t,l,b,r], invert?: bool, side?: bothSides|leftSide|rightSide|towardsSpine|awayFromSpine|largestArea, contour?: boundingBox|graphicFrame|sameAsClipping, content?: bool (the placed graphic instead of its frame; default: whether the selection is the frame's content), ids?}; offset or contour drops an imported custom wrap boundary",
+            "{mode?: none|boundingBox|contour|jumpObject|jumpToNextColumn (boundingBox when absent, unless side or contour is given: then unchanged), offset?: number|[t,l,b,r] (a null side keeps each object's own), invert?: bool, side?: bothSides|leftSide|rightSide|towardsSpine|awayFromSpine|largestArea, contour?: boundingBox|graphicFrame|sameAsClipping, content?: bool (the placed graphic instead of its frame; default: whether the selection is the frame's content), ids?}; offset or contour drops an imported custom wrap boundary",
             has_selection,
             text_wrap
         ),
@@ -2104,8 +2104,10 @@ fn text_wrap(s: &mut Session, p: &Value) -> Result<Value> {
         None if side.is_some() || contour.is_some() => None,
         None => Some(WrapMode::BoundingBox),
     };
-    let off = match p.get("offset") {
-        Some(Value::Number(n)) => Some([n.as_f64().unwrap_or(0.0); 4]),
+    // Per side [top, left, bottom, right]; a null side keeps each object's own offset there, so
+    // an edit of one side keeps the others of every object.
+    let off: Option<[Option<f64>; 4]> = match p.get("offset") {
+        Some(Value::Number(n)) => Some([n.as_f64(); 4]),
         Some(v) => serde_json::from_value(v.clone()).ok(),
         None => None,
     };
@@ -2126,7 +2128,11 @@ fn text_wrap(s: &mut Session, p: &Value) -> Result<Value> {
                 w.mode = m;
             }
             if let Some(o) = off {
-                w.offsets = o;
+                for (w, v) in w.offsets.iter_mut().zip(o) {
+                    if let Some(v) = v {
+                        *w = v;
+                    }
+                }
             }
             if let Some(v) = invert {
                 w.invert = v;
