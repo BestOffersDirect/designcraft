@@ -3361,7 +3361,23 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
             if d.b("cjkFeatures") != d.b("cjkFeatures.initial") {
                 prefs["cjkFeatures"] = json!(d.b("cjkFeatures"));
             }
-            app.run("prefs.set", prefs)?;
+            // No document open: the Units & Increments new documents start with, saved with the
+            // rest in one `prefs.set` (which checks everything before it changes anything). A value
+            // that doesn't read, or that it refuses, keeps the dialog open to be fixed, with no
+            // preference changed.
+            let saved = default_units_of(&d).and_then(|du| {
+                if let Some(du) = du {
+                    prefs["defaultUnits"] = du;
+                }
+                app.run("prefs.set", prefs)
+            });
+            if let Err(e) = saved {
+                let mut d = d.clone();
+                d.fields.insert("status".into(), json!(e));
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+                return Err(e);
+            }
             app.ui.dynamic_spelling = d.b("dynamicSpelling");
             if d.fields.contains_key("userWords") {
                 let words: Vec<String> = d.s("userWords").lines().map(str::to_string).collect();
@@ -3396,32 +3412,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 app.run("view.snapPreferences", snap)?;
             }
             if d.b("defaults") {
-                // No document open: the Units & Increments new documents start with. A value that
-                // doesn't read, or that `prefs.set` refuses, keeps the dialog open to be fixed.
-                let mut du = json!({});
-                for k in ["horizontalUnits", "verticalUnits", "rulerOrigin"] {
-                    if let Some(v) = d.fields.get(k).filter(|v| v.is_string()) {
-                        du[k] = v.clone();
-                    }
-                }
-                let mut read = || -> Result<(), String> {
-                    if let Some(t) = d.fields.get("keyboardIncrement").and_then(Value::as_str) {
-                        du["keyboardIncrement"] = json!(parse_measure(t, Unit::Points).map_err(|_| format!("Cursor Key: `{t}` is not a measurement"))?);
-                    }
-                    if let Some(v) = d.fields.get("kerningIncrement").filter(|v| !v.is_null()) {
-                        let n = d.n("kerningIncrement").filter(|v| v.is_finite());
-                        du["kerningIncrement"] = json!(n.ok_or_else(|| format!("Kerning/Tracking: `{}` is not a number", v.as_str().unwrap_or_default()))?);
-                    }
-                    Ok(())
-                };
-                let r = read().and_then(|()| app.run("prefs.set", json!({"defaultUnits": du})));
-                if let Err(e) = &r {
-                    let mut d = d.clone();
-                    d.fields.insert("status".into(), json!(e));
-                    app.status(e.clone());
-                    app.ui.dialog = Some(d);
-                    return Err(e.clone());
-                }
+                // The default units went with the preferences above.
                 return Ok(Value::Null);
             }
             let Some(horizontal) = d.fields.get("horizontalUnits") else { return Ok(Value::Null) };
@@ -5168,6 +5159,29 @@ fn section_list(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, cjk: bool, sectio
             }
         });
     });
+}
+
+/// Preferences with no document open: the Units & Increments new documents start with, as
+/// `prefs.set`'s `defaultUnits` (None with a document open). An increment that doesn't read is an
+/// error naming the field.
+fn default_units_of(d: &Dialog) -> Result<Option<Value>, String> {
+    if !d.b("defaults") {
+        return Ok(None);
+    }
+    let mut du = json!({});
+    for k in ["horizontalUnits", "verticalUnits", "rulerOrigin"] {
+        if let Some(v) = d.fields.get(k).filter(|v| v.is_string()) {
+            du[k] = v.clone();
+        }
+    }
+    if let Some(t) = d.fields.get("keyboardIncrement").and_then(Value::as_str) {
+        du["keyboardIncrement"] = json!(parse_measure(t, Unit::Points).map_err(|_| format!("Cursor Key: `{t}` is not a measurement"))?);
+    }
+    if let Some(v) = d.fields.get("kerningIncrement").filter(|v| !v.is_null()) {
+        let n = d.n("kerningIncrement").filter(|v| v.is_finite());
+        du["kerningIncrement"] = json!(n.ok_or_else(|| format!("Kerning/Tracking: `{}` is not a number", v.as_str().unwrap_or_default()))?);
+    }
+    Ok(Some(du))
 }
 
 /// "Paragraph Style n" / "Character Style n": the first name no style has.
@@ -7281,9 +7295,10 @@ mod tests {
         assert_eq!((du.horizontal_units, du.vertical_units, du.keyboard_increment), (Unit::Inches, Unit::Inches, 0.5));
         assert!(app.session.active().is_none(), "no document made");
         // A Cursor Key of 0 or text that isn't a measure is refused, keeping the dialog open and
-        // the saved value; a Kerning/Tracking of 0.5 is kept as it is.
+        // the saved values, the other preferences' too; a Kerning/Tracking of 0.5 is kept as it is.
+        let scale = app.session.prefs.scale_strokes;
         for bad in [json!({"keyboardIncrement": "0 pt"}), json!({"keyboardIncrement": "wide"}), json!({"kerningIncrement": "lots"})] {
-            let mut d = Dialog::new("preferences", json!({"defaults": true, "horizontalUnits": "inches"}));
+            let mut d = Dialog::new("preferences", json!({"defaults": true, "horizontalUnits": "inches", "scaleStrokes": !scale}));
             for (k, v) in bad.as_object().unwrap() {
                 d.fields.insert(k.clone(), v.clone());
             }
@@ -7291,6 +7306,7 @@ mod tests {
             assert!(confirm(&mut app).is_err(), "{bad}");
             assert!(app.ui.dialog.as_ref().is_some_and(|d| d.id == "preferences"), "still open: {bad}");
             assert_eq!(app.session.prefs.default_units.keyboard_increment, 0.5, "{bad}");
+            assert_eq!(app.session.prefs.scale_strokes, scale, "no other preference saved: {bad}");
         }
         app.ui.dialog = Some(Dialog::new("preferences", json!({"defaults": true, "horizontalUnits": "inches", "kerningIncrement": "0.5"})));
         confirm(&mut app).unwrap();
