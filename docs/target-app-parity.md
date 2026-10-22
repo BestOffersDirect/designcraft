@@ -417,7 +417,7 @@ It is evidence of breadth: each item exists. It is not a claim of InDesign-level
 - Spring-loaded Zoom: hold Cmd+Space (Ctrl+Space on Windows/Linux) for the Zoom cursor and click/scrubby zoom; Alt-click zooms out. Release returns to the previous tool without changing the document or undo history. Text-frame and text-field typing suppress the shortcut; Space remains Hand.
 - Guides belong to the active layer: hidden with it (or with its Show Guides off) and locked with it.
 - Pencil tool (N): freehand strokes, shown as you draw in the layer's colour, simplified to smooth paths (Alt closes); Smooth and Erase tools re-fit or remove the stretch you drag along (`path.smooth`, `path.erase`).
-- Edit › Keyboard Shortcuts: every command, click and press the new keys, conflicts shown, per-command and global reset; `window.setShortcut`.
+- Edit › Keyboard Shortcuts: every command, click and press the new keys, conflicts shown, per-command and global reset; `window.setShortcut`. Import InDesign Set… reads a set saved by InDesign's Show Set (.txt) and reports what it changed and what it could not match; `window.importShortcuts`.
 - Primary Text Frame (New Document) and Smart Text Reflow: pages are added while the primary story oversets and empty ones at the end removed, in the same undo step (Preferences › Type).
 - Glyphs panel: every character of any font (rendered by our renderer), search by character or U+code, click to insert, recently used.
 - UI scaling (Preferences › Interface, 50–200%; `window.uiScale`); the window title steps aside when the bar is crowded.
