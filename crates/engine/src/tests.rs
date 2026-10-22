@@ -1675,6 +1675,13 @@ fn paragraph_style_references_must_name_styles() {
     s.execute("style.paragraph.create", &json!({"name": "Body"})).unwrap();
     assert!(s.execute("style.paragraph.create", &json!({"name": "Lost", "nextStyle": "Nowhere"})).is_err());
     assert!(s.doc().unwrap().doc.styles.para("Lost").is_none());
+    // On creation too, a reference that isn't a name or null is refused, not dropped.
+    for p in [json!({"name": "Lost", "nextStyle": true}), json!({"name": "Lost", "basedOn": 3})] {
+        assert!(s.execute("style.paragraph.create", &p).is_err(), "{p}");
+        assert!(s.doc().unwrap().doc.styles.para("Lost").is_none(), "{p}");
+    }
+    assert!(s.execute("style.character.create", &json!({"name": "Lost", "basedOn": ["Body"]})).is_err());
+    assert!(s.doc().unwrap().doc.styles.char_style("Lost").is_none());
     s.execute("style.paragraph.create", &json!({"name": "Self", "nextStyle": "Self"})).unwrap();
     let before = s.doc().unwrap().doc.clone();
     for p in [json!({"name": "Body", "basedOn": "Nowhere"}), json!({"name": "Body", "basedOn": 3}), json!({"name": "Body", "nextStyle": true})] {
