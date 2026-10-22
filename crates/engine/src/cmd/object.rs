@@ -616,7 +616,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Text Wrap",
             ["Window"],
             Some("Cmd+Alt+W"),
-            "{mode?: none|boundingBox|contour|jumpObject|jumpToNextColumn (boundingBox when absent, unless side or contour is given: then unchanged), offset?: number|[t,l,b,r] (a null side keeps each object's own), invert?: bool, side?: bothSides|leftSide|rightSide|towardsSpine|awayFromSpine|largestArea, contour?: boundingBox|graphicFrame|sameAsClipping, content?: bool (the placed graphic instead of its frame; default: whether the selection is the frame's content), ids?}; offset or contour drops an imported custom wrap boundary",
+            "{mode?: none|boundingBox|contour|jumpObject|jumpToNextColumn (boundingBox when absent, unless side or contour is given; null or those: each object's own, unchanged), offset?: number|[t,l,b,r] (a null side keeps each object's own), invert?: bool, side?: bothSides|leftSide|rightSide|towardsSpine|awayFromSpine|largestArea, contour?: boundingBox|graphicFrame|sameAsClipping, content?: bool (the placed graphic instead of its frame; default: whether the selection is the frame's content), ids?}; offset or contour drops an imported custom wrap boundary",
             has_selection,
             text_wrap
         ),
@@ -2100,6 +2100,8 @@ fn text_wrap(s: &mut Session, p: &Value) -> Result<Value> {
         None => None,
     };
     let mode: Option<WrapMode> = match p.get("mode") {
+        // Null keeps each object's own mode (an edit of the offsets or Invert alone).
+        Some(Value::Null) => None,
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|_| bad("object.textWrap", "unknown mode"))?),
         None if side.is_some() || contour.is_some() => None,
         None => Some(WrapMode::BoundingBox),

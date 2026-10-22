@@ -1043,7 +1043,8 @@ fn wrap_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
         let enabled = i.wrap != "none";
         let r = ui.add_enabled_ui(enabled, |ui| widgets::checkbox(ui, &mut inv, crate::i18n::tr(&app.ui.language, "Invert"))).inner;
         if r.changed() {
-            let _ = app.run("object.textWrap", json!({"mode": i.wrap, "invert": inv}));
+            // Each object keeps its own mode.
+            let _ = app.run("object.textWrap", json!({"mode": null, "invert": inv}));
         }
     });
     wrap_offsets(app, ui, i);
@@ -1106,7 +1107,8 @@ fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
         }
     });
     if let Some(o) = set {
-        let _ = app.run("object.textWrap", json!({"mode": i.wrap, "offset": o}));
+        // Each object keeps its own mode: only the offsets change.
+        let _ = app.run("object.textWrap", json!({"mode": null, "offset": o}));
     }
 }
 
@@ -3480,7 +3482,7 @@ mod tests {
         // Two objects with different offsets: a side typed in changes that side on each, and
         // each keeps its other three.
         let other = h.state_mut().run("frame.create", json!({"rect": [72, 300, 300, 400], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
-        h.state_mut().run("object.textWrap", json!({"mode": "boundingBox", "offset": [3, 4, 5, 6], "ids": [other]})).unwrap();
+        h.state_mut().run("object.textWrap", json!({"mode": "contour", "offset": [3, 4, 5, 6], "ids": [other]})).unwrap();
         let of = |h: &Harness<'_, DesignApp>, id: u64| {
             h.state().session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().wrap.offsets
         };
@@ -3489,6 +3491,13 @@ mod tests {
         let f = fields(&h);
         type_in(&mut h, f[0], "9pt");
         assert_eq!((of(&h, id), of(&h, other)), ([9.0, 12.0, 6.0, 12.0], [9.0, 4.0, 5.0, 6.0]), "the top alone, on each");
+        let mode =
+            |h: &Harness<'_, DesignApp>, id: u64| h.state().session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().wrap.mode;
+        assert_eq!(
+            (mode(&h, id), mode(&h, other)),
+            (designcraft_doc::WrapMode::BoundingBox, designcraft_doc::WrapMode::Contour),
+            "each keeps its mode"
+        );
         // An object whose offsets are the same starts linked, though the link was off before.
         let third = h.state_mut().run("frame.create", json!({"rect": [320, 72, 500, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
         h.state_mut().run("object.textWrap", json!({"mode": "boundingBox", "offset": 4, "ids": [third]})).unwrap();
