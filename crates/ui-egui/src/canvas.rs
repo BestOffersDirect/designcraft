@@ -2753,11 +2753,7 @@ fn draw_hidden_characters(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc
             let (Some((a, _)), Some(it)) = (item_canvas_xf(doc, layout, ft.frame), doc.item(ft.frame)) else { continue };
             let m = a * doc.text_xf(it);
             let col = layer_color(doc, it);
-            let lines = ft
-                .lines
-                .iter()
-                .flat_map(|l| hidden_marks(&story.text, l).into_iter().map(move |(x, mark, c)| (Point::new(x, l.baseline), mark, c, l.ascent)));
-            for (p, mark, centered, ascent) in lines.chain(ft.tables.iter().flat_map(table_hidden_marks)) {
+            for (p, mark, centered, ascent) in frame_hidden_marks(&story.text, ft) {
                 let size = (ascent * 0.75 * xf.zoom).clamp(6.0, 40.0) as f32;
                 let align = if centered { egui::Align2::CENTER_BOTTOM } else { egui::Align2::LEFT_BOTTOM };
                 painter.text(xf.to_screen(m * p), align, mark, egui::FontId::proportional(size), col);
@@ -2766,22 +2762,28 @@ fn draw_hidden_characters(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc
     }
 }
 
-/// A table fragment's hidden-character marks in frame space (position at the baseline, mark,
-/// centered, the line's ascent): each text cell's own marks, its # where its text ends, and the
-/// table paragraph's ¶ after the last row's bottom right corner.
-fn table_hidden_marks(t: &compose::TableFrag) -> Vec<(Point, &'static str, bool, f64)> {
-    let mut out = Vec::new();
-    for c in t.cells.iter().filter(|c| c.graphic.is_none()) {
-        for l in c.text.frames.first().map_or(&[][..], |f| &f.lines) {
-            out.extend(
-                hidden_marks(&c.source, l)
-                    .into_iter()
-                    .map(|(x, mark, centered)| (c.origin + designcraft_geom::Vec2::new(x, l.baseline), mark, centered, l.ascent)),
-            );
+/// A frame's hidden-character marks in frame space (position at the baseline, mark, centered,
+/// the line's ascent): its lines' marks, then its tables' — each text cell's own marks (nested
+/// tables included) with its # where its text ends, and a table paragraph's ¶ after the last
+/// row's bottom right corner. A table's own glyph-less line has no marks: its ¶ is that one.
+fn frame_hidden_marks(text: &str, ft: &compose::FrameText) -> Vec<(Point, &'static str, bool, f64)> {
+    let table_lines: Vec<usize> = ft.tables.iter().map(|t| t.line).collect();
+    let mut out: Vec<_> = ft
+        .lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !table_lines.contains(i))
+        .flat_map(|(_, l)| hidden_marks(text, l).into_iter().map(move |(x, mark, c)| (Point::new(x, l.baseline), mark, c, l.ascent)))
+        .collect();
+    for t in &ft.tables {
+        for c in t.cells.iter().filter(|c| c.graphic.is_none()) {
+            if let Some(cf) = c.text.frames.first() {
+                out.extend(frame_hidden_marks(&c.source, cf).into_iter().map(|(p, mark, centered, a)| (p + c.origin.to_vec2(), mark, centered, a)));
+            }
         }
-    }
-    if t.last {
-        out.push((Point::new(t.rect.x1 + 1.0, t.rect.y1), "¶", false, 12.0));
+        if t.last {
+            out.push((Point::new(t.rect.x1 + 1.0, t.rect.y1), "¶", false, 12.0));
+        }
     }
     out
 }
@@ -5703,10 +5705,15 @@ mod tests {
         d.story_mut(sid).unwrap().insert_table(0, t);
         let cs = compose::compose_story(&d, sid, &compose::ComposeOptions::default());
         let frag = &cs.frames[0].tables[0];
-        let marks = table_hidden_marks(frag);
+        // The whole frame: the table's own line adds no second ¶; the story's last paragraph
+        // (after the table) has its #.
+        let story = d.story(sid).unwrap().text.clone();
+        let all = frame_hidden_marks(&story, &cs.frames[0]);
+        let marks: Vec<_> = all.iter().filter(|m| frag.rect.inflate(2.0, 2.0).contains(m.0)).cloned().collect();
         let ends = |m: &str| marks.iter().filter(|x| x.1 == m).count();
         assert_eq!(ends("#"), 4, "one per cell: {marks:?}");
-        assert_eq!(ends("¶"), 2, "the cell's first paragraph and the table's: {marks:?}");
+        assert_eq!(ends("¶"), 2, "the cell's first paragraph and the table's, once: {marks:?}");
+        assert_eq!(all.iter().filter(|m| m.1 == "¶" && m.3 > 20.0).count(), 0, "no ¶ the size of the table: {all:?}");
         // Each # is inside its cell, after the cell's text.
         for c in &frag.cells {
             let inside = marks.iter().filter(|m| m.1 == "#" && c.rect.contains(m.0)).count();
