@@ -148,6 +148,12 @@ fn escape_toggles_text_and_cell_selection() {
     assert_eq!((t.cell, t.range()), (Some(cell), 0..5), "the cell's text is selected");
     s.execute("table.prevCell", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().selection.text.unwrap().cell, Some(designcraft_doc::CellAddr { col: 0, ..cell }));
+    // A selection that starts inside a merged cell goes back to the merged cell's text.
+    s.execute("table.select", &json!({"rows": [0, 1], "cols": [0, 0]})).unwrap();
+    s.execute("table.merge", &json!({})).unwrap();
+    s.execute("table.select", &json!({"rows": [1, 1], "cols": [0, 1]})).unwrap();
+    s.execute("table.toggleSelection", &json!({})).unwrap();
+    assert_eq!(s.doc().unwrap().selection.text.unwrap().cell, Some(designcraft_doc::CellAddr { row: 0, col: 0, ..cell }));
     // Outside a table there is nothing to toggle.
     s.execute("text.select", &json!({"story": sid, "anchor": 0, "focus": 0})).unwrap();
     assert!(s.execute("table.toggleSelection", &json!({})).is_err());

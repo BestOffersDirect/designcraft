@@ -1555,7 +1555,13 @@ fn toggle_selection(s: &mut Session) -> Result<Value> {
     let c = t.cell.ok_or_else(|| bad(ID, "not in a cell"))?;
     let cells = match st.selection.cells {
         Some(cs) => {
-            let cell = CellAddr { table: cs.table, row: cs.range.r0, col: cs.range.c0 };
+            // A merged cell's text belongs to the cell at its top left.
+            let (row, col) = st
+                .doc
+                .story(cs.story)
+                .and_then(|x| x.tables.get(&cs.table))
+                .map_or((cs.range.r0, cs.range.c0), |tb| tb.owner(cs.range.r0, cs.range.c0));
+            let cell = CellAddr { table: cs.table, row, col };
             let len = st.doc.text_story(cs.story, Some(cell)).map_or(0, |x| x.len());
             st.selection = Selection::text(TextSel { story: cs.story, anchor: 0, focus: len, cell: Some(cell), ..t });
             false
