@@ -88,7 +88,8 @@ fn table_specs() -> Vec<CommandSpec> {
             "table.insert",
             "Create Table",
             [],
-            Some("Cmd+Alt+Shift+T"),
+            // InDesign's Cmd+Alt+Shift+T opens the Insert Table dialog (`app.insertTableDialog`).
+            None,
             "{rows?: body rows (4), cols? | columns? (4), headerRows? (0), footerRows? (0), width?} — at the text insertion point",
             has_text,
             insert
