@@ -139,7 +139,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Pages on Top", ["Seiten oben", "Pages en haut", "Páginas en la parte superior", "ページを上に表示", "页面在上"]),
     (
         "Parents on Top",
-        ["Übergeordnete Seiten oben", "Parents en haut", "Páginas principales en la parte superior", "親ページを上に表示", "父页面在上"],
+        ["Übergeordnete Seiten oben", "Gabarits en haut", "Páginas principales en la parte superior", "親ページを上に表示", "父页面在上"],
     ),
     ("Resize:", ["Größe ändern:", "Redimensionner :", "Cambiar tamaño:", "サイズ変更:", "调整大小："]),
     ("Extra Small", ["Sehr klein", "Très petite", "Extra pequeño", "極小", "特小"]),
@@ -150,8 +150,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Jumbo", ["Riesig", "Géante", "Gigante", "最大", "巨大"]),
     ("Proportional", ["Proportional", "Proportionnel", "Proporcional", "比例", "按比例"]),
     ("Pages Fixed", ["Seiten fixiert", "Pages fixes", "Páginas fijas", "ページを固定", "页面固定"]),
-    ("Parents Fixed", ["Übergeordnete fixiert", "Parents fixes", "Páginas principales fijas", "親ページを固定", "父页面固定"]),
-    ("Parents", ["Übergeordnete Seiten", "Parents", "Páginas principales", "親ページ", "父页面"]),
+    ("Parents Fixed", ["Übergeordnete fixiert", "Gabarits fixes", "Páginas principales fijas", "親ページを固定", "父页面固定"]),
+    ("Parents", ["Übergeordnete Seiten", "Gabarits", "Páginas principales", "親ページ", "父页面"]),
     (
         "Bulleted & Numbered Lists",
         [
@@ -497,7 +497,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ),
     ("ICF Top", ["ICF oben", "Haut ICF", "Parte superior ICF", "平均字面の上", "平均字面上"]),
     ("ICF Bottom", ["ICF unten", "Bas ICF", "Parte inferior ICF", "平均字面の下", "平均字面下"]),
-    ("Gyoudori:", ["Gyoudori:", "Gyoudori:", "Gyoudori:", "行取り:", "行取："]),
+    ("Gyoudori:", ["Gyoudori:", "Gyoudori :", "Gyoudori:", "行取り:", "行取："]),
     (
         "Use Paragraph Gyoudori",
         ["Absatz-Gyoudori verwenden", "Utiliser le gyoudori de paragraphe", "Usar gyoudori de párrafo", "段落行取りを使用", "使用段落行取"],
@@ -734,7 +734,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Editorial", ["Redaktion", "Éditorial", "Editorial", "エディトリアル", "编辑"]),
     ("Object & Layout", ["Objekt und Layout", "Objet et mise en page", "Objeto y diseño", "オブジェクト＆レイアウト", "对象和版面"]),
     ("Styles", ["Formate", "Styles", "Estilos", "スタイル", "样式"]),
-    ("Essentials Classic", ["Essentials Classic", "Essentials Classic", "Essentials Classic", "Essentials Classic", "基本功能（经典）"]),
+    ("Essentials Classic", ["Essentials Classic", "Les indispensables (classique)", "Essentials Classic", "Essentials Classic", "基本功能（经典）"]),
     ("Split Window", ["Fenster teilen", "Fractionner la fenêtre", "Dividir ventana", "ウィンドウを分割", "拆分窗口"]),
     ("New Window", ["Neues Fenster", "Nouvelle fenêtre", "Nueva ventana", "新規ウィンドウ", "新建窗口"]),
     (
@@ -873,7 +873,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     ("Delete Spread", ["Druckbogen löschen", "Supprimer la planche", "Eliminar pliego", "スプレッドを削除", "删除跨页"]),
-    ("Parent Pages", ["Übergeordnete Seiten", "Pages parents", "Páginas principales", "親ページ", "父页面"]),
+    ("Parent Pages", ["Übergeordnete Seiten", "Gabarits", "Páginas principales", "親ページ", "父页面"]),
     (
         "Apply Parent to Pages",
         [
@@ -1388,12 +1388,12 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Apply None (/)", ["Apply None (/)", "Appliquer Aucun (/)", "Apply None (/)", "Apply None (/)", "应用无 (/)"]),
     (
         "Default Fill and Stroke",
-        ["Default Fill and Stroke", "Default Fill and Stroke", "Default Fill and Stroke", "Default Fill and Stroke", "默认填色和描边"],
+        ["Default Fill and Stroke", "Fond et contour par défaut", "Default Fill and Stroke", "Default Fill and Stroke", "默认填色和描边"],
     ),
-    ("Swap Fill and Stroke", ["Swap Fill and Stroke", "Swap Fill and Stroke", "Swap Fill and Stroke", "Swap Fill and Stroke", "交换填色和描边"]),
+    ("Swap Fill and Stroke", ["Swap Fill and Stroke", "Permuter fond et contour", "Swap Fill and Stroke", "Swap Fill and Stroke", "交换填色和描边"]),
     (
         "Toggle Fill and Stroke",
-        ["Toggle Fill and Stroke", "Toggle Fill and Stroke", "Toggle Fill and Stroke", "Toggle Fill and Stroke", "切换填色和描边"],
+        ["Toggle Fill and Stroke", "Basculer fond/contour", "Toggle Fill and Stroke", "Toggle Fill and Stroke", "切换填色和描边"],
     ),
     ("Reverse the gradient", ["Reverse the gradient", "Inverser le dégradé", "Reverse the gradient", "Reverse the gradient", "反转渐变"]),
     ("Style source", ["Style source", "Source du style", "Style source", "Style source", "样式源"]),
@@ -2061,7 +2061,13 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ),
     (
         "Show/Hide Document Grid",
-        ["Show/Hide Document Grid", "Show/Hide Document Grid", "Show/Hide Document Grid", "Show/Hide Document Grid", "显示/隐藏文档网格"],
+        [
+            "Show/Hide Document Grid",
+            "Afficher/Masquer la grille du document",
+            "Show/Hide Document Grid",
+            "Show/Hide Document Grid",
+            "显示/隐藏文档网格",
+        ],
     ),
     (
         "Show/Hide Frame Edges",
@@ -2713,7 +2719,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
         "Select an object or text to color its fill or stroke.",
         [
             "Select an object or text to color its fill or stroke.",
-            "Select an object or text to color its fill or stroke.",
+            "Sélectionnez un objet ou du texte pour colorer son fond ou son contour.",
             "Select an object or text to color its fill or stroke.",
             "Select an object or text to color its fill or stroke.",
             "选择一个对象或文本以设置其填色或描边颜色。",
@@ -2922,7 +2928,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Cap Height", ["Cap Height", "Hauteur de capitale", "Cap Height", "Cap Height", "大写字母高度"]),
     ("Leading", ["Leading", "Interligne", "Leading", "Leading", "行距"]),
     ("x Height", ["x Height", "Hauteur d'x", "x Height", "x Height", "x 字高"]),
-    ("Em Box Height", ["Em Box Height", "Em Box Height", "Em Box Height", "Em Box Height", "全角字框高度"]),
+    ("Em Box Height", ["Em Box Height", "Hauteur du cadratin", "Em Box Height", "Em Box Height", "全角字框高度"]),
     ("Fixed", ["Fixed", "Fixe", "Fixed", "Fixed", "固定"]),
     ("Never (continuous)", ["Never (continuous)", "Jamais (continu)", "Never (continuous)", "Never (continuous)", "从不（连续编号）"]),
     ("Page", ["Page", "Page", "Page", "Page", "页面"]),
@@ -3505,8 +3511,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Ukrainian", ["Ukrainian", "Ukrainien", "Ukrainian", "Ukrainian", "乌克兰语"]),
     ("Cell Style", ["Cell Style", "Style de cellule", "Cell Style", "Cell Style", "单元格样式"]),
     ("Table Style", ["Table Style", "Style de tableau", "Table Style", "Table Style", "表样式"]),
-    ("Col ←", ["Col ←", "Col ←", "Col ←", "Col ←", "左侧插入列"]),
-    ("Col →", ["Col →", "Col →", "Col →", "Col →", "右侧插入列"]),
+    ("Col ←", ["Col ←", "Col. ←", "Col ←", "Col ←", "左侧插入列"]),
+    ("Col →", ["Col →", "Col. →", "Col →", "Col →", "右侧插入列"]),
     ("Row ↑", ["Row ↑", "Ligne ↑", "Row ↑", "Row ↑", "上方插入行"]),
     ("Row ↓", ["Row ↓", "Ligne ↓", "Row ↓", "Row ↓", "下方插入行"]),
     ("Hide Others", ["Hide Others", "Masquer les autres", "Hide Others", "Hide Others", "隐藏其他图层"]),
@@ -3536,7 +3542,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
         "Show Parent Page Overlay",
         [
             "Überlagerung der übergeordneten Seite anzeigen",
-            "Afficher la superposition de la page parent",
+            "Afficher la superposition du gabarit",
             "Mostrar superposición de página principal",
             "親ページオーバーレイを表示",
             "显示父页面叠加",
@@ -3544,7 +3550,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ),
     (
         "Controlled by Parent",
-        ["Durch übergeordnete Seite gesteuert", "Contrôlé par le parent", "Controlado por principal", "親ページで制御", "由父页面控制"],
+        ["Durch übergeordnete Seite gesteuert", "Contrôlé par le gabarit", "Controlado por principal", "親ページで制御", "由父页面控制"],
     ),
     ("US Business Card", ["US-Visitenkarte", "Carte de visite US", "Tarjeta de visita EE. UU.", "US 名刺", "美国名片"]),
     (
@@ -4229,8 +4235,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
         "Bullets and Numbering…",
         ["Aufzählungszeichen und Nummerierung…", "Puces et numérotation…", "Viñetas y numeración…", "箇条書き記号と番号付け…", "项目符号和编号…"],
     ),
-    ("List:", ["Liste:", "Liste:", "Lista:", "リスト:", "列表："]),
-    ("Mode:", ["Modus:", "Mode:", "Modo:", "モード:", "模式："]),
+    ("List:", ["Liste:", "Liste :", "Lista:", "リスト:", "列表："]),
+    ("Mode:", ["Modus:", "Mode :", "Modo:", "モード:", "模式："]),
     (
         "Continue from Previous Number",
         [
@@ -4443,6 +4449,12 @@ fn column(lang: &str) -> Option<usize> {
 
 /// `s` in `lang` (English, or the string itself, when there's no translation).
 pub fn tr<'a>(lang: &str, s: &'a str) -> &'a str {
+    let text = lookup(lang, s);
+    // An empty row is a translation nobody has written yet.
+    if text.trim().is_empty() { s } else { text }
+}
+
+fn lookup<'a>(lang: &str, s: &'a str) -> &'a str {
     static GERMAN: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     static JAPANESE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     static TRANSLATIONS: OnceLock<HashMap<&'static str, [&'static str; 5]>> = OnceLock::new();
@@ -4461,18 +4473,18 @@ pub fn tr<'a>(lang: &str, s: &'a str) -> &'a str {
     // The German and Japanese tables cover the whole interface; the shared table's German and Japanese
     // columns are the fallback for keys added there after them.
     if lang == "de"
-        && let Some(text) = GERMAN.get_or_init(|| de::TABLE.iter().copied().collect()).get(s).copied()
+        && let Some(text) = GERMAN.get_or_init(|| de::TABLE.iter().copied().collect()).get(s).copied().filter(|text| !text.trim().is_empty())
     {
         return text;
     }
     if lang == "ja"
-        && let Some(text) = JAPANESE.get_or_init(|| ja::TABLE.iter().copied().collect()).get(s).copied()
+        && let Some(text) = JAPANESE.get_or_init(|| ja::TABLE.iter().copied().collect()).get(s).copied().filter(|text| !text.trim().is_empty())
     {
         return text;
     }
     // `fr::TABLE` holds the strings the shared table has no row for.
     if lang == "fr"
-        && let Some(text) = FRENCH.get_or_init(|| fr::TABLE.iter().copied().collect()).get(s).copied()
+        && let Some(text) = FRENCH.get_or_init(|| fr::TABLE.iter().copied().collect()).get(s).copied().filter(|text| !text.trim().is_empty())
     {
         return text;
     }
@@ -4518,11 +4530,13 @@ pub fn tr_context<'a>(lang: &str, s: &'a str, context: &str) -> &'a str {
         "ar" => ar::CONTEXT,
         _ => &[],
     };
-    if let Some((_, _, text)) = contexts.iter().find(|(key, scope, _)| *key == s && *scope == context) {
+    let written = |text: &&str| !text.trim().is_empty();
+    if let Some(text) = contexts.iter().find(|(key, scope, _)| *key == s && *scope == context).map(|(_, _, text)| *text).filter(written) {
         return text;
     }
     if let Some(c) = column(lang)
-        && let Some(text) = CONTEXT.iter().find(|(key, scope, _)| *key == s && *scope == context).and_then(|(_, _, row)| row.get(c))
+        && let Some(text) =
+            CONTEXT.iter().find(|(key, scope, _)| *key == s && *scope == context).and_then(|(_, _, row)| row.get(c)).copied().filter(written)
     {
         return text;
     }
@@ -4561,7 +4575,9 @@ pub fn count_label(lang: &str, noun: &str, count: usize) -> String {
             2..=4 => few,
             _ => other,
         };
-        return format!("{count} {form}");
+        if !form.trim().is_empty() {
+            return format!("{count} {form}");
+        }
     }
     format!("{count} {}", tr(lang, noun))
 }
@@ -4592,360 +4608,237 @@ pub fn workspace_name<'a>(lang: &str, name: &'a str) -> &'a str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+
+    /// Every per-language table `tr` looks up, by interface language.
+    const LANGUAGE_TABLES: &[(&str, &[(&str, &str)])] = &[
+        ("ar", ar::TABLE),
+        ("cs", cs::TABLE),
+        ("de", de::TABLE),
+        ("fr", fr::TABLE),
+        ("it", it::TABLE),
+        ("ja", ja::TABLE),
+        ("ka", ka::TABLE),
+        ("pl", pl::TABLE),
+        ("pt-br", pt_br::TABLE),
+        ("ru", ru::TABLE),
+        ("uk", uk::TABLE),
+    ];
+
+    /// Every per-language table `tr_context` looks up.
+    const CONTEXT_TABLES: &[(&str, &[(&str, &str, &str)])] =
+        &[("ar", ar::CONTEXT), ("cs", cs::CONTEXT), ("ja", ja::CONTEXT), ("pl", pl::CONTEXT), ("ru", ru::CONTEXT), ("uk", uk::CONTEXT)];
+
+    /// The languages of the shared tables' columns, in column order.
+    const SHARED_COLUMNS: [&str; 5] = ["de", "fr", "es", "ja", "zh"];
+
+    /// The German and Japanese tables translate the whole interface and win over the shared columns.
+    const WHOLE_INTERFACE: [&str; 2] = ["de", "ja"];
+
+    /// What `tr` shows for a row: an empty one is still untranslated.
+    fn or_english<'a>(text: &'a str, english: &'a str) -> &'a str {
+        if text.trim().is_empty() { english } else { text }
+    }
 
     #[test]
     fn cached_lookup_preserves_every_translation_across_language_switches() {
+        let own = |lang: &str, key: &str| {
+            LANGUAGE_TABLES.iter().find(|(code, _)| *code == lang).and_then(|(_, table)| table.iter().find(|(k, _)| *k == key)).map(|(_, text)| *text)
+        };
         for (key, translations) in TABLE {
-            for (lang, expected) in ["de", "fr", "es", "ja", "zh"].into_iter().zip(translations) {
-                // `de::TABLE` and `ja::TABLE` translate the whole interface and win over the shared columns.
-                if lang != "de" && lang != "ja" {
-                    assert_eq!(tr(lang, key), *expected, "{lang}: {key}");
-                }
+            for (lang, shared) in SHARED_COLUMNS.into_iter().zip(translations) {
+                // A language's own table is looked up before the shared column.
+                let expected = own(lang, key).filter(|text| !text.trim().is_empty()).unwrap_or(*shared);
+                assert_eq!(tr(lang, key), or_english(expected, key), "{lang}: {key}");
             }
             assert_eq!(tr("", key), *key);
         }
-        for (key, expected) in de::TABLE {
-            assert_eq!(tr("de", key), *expected, "de: {key}");
+        for (lang, table) in LANGUAGE_TABLES {
+            for (key, expected) in *table {
+                if !expected.trim().is_empty() {
+                    assert_eq!(tr(lang, key), *expected, "{lang}: {key}");
+                }
+                assert_eq!(tr("", key), *key);
+            }
         }
-        for (key, expected) in ar::TABLE {
-            assert_eq!(tr("ar", key), *expected, "ar: {key}");
-        }
-        for (key, expected) in pt_br::TABLE {
-            assert_eq!(tr("pt-br", key), *expected, "pt-br: {key}");
-        }
-        for (key, expected) in it::TABLE {
-            assert_eq!(tr("it", key), *expected, "it: {key}");
-        }
-        for (key, expected) in uk::TABLE {
-            assert_eq!(tr("uk", key), *expected, "uk: {key}");
-        }
-        for (key, expected) in ru::TABLE {
-            assert_eq!(tr("ru", key), *expected, "ru: {key}");
-        }
-        for (key, expected) in cs::TABLE {
-            assert_eq!(tr("cs", key), *expected, "cs: {key}");
-        }
-        for (key, expected) in fr::TABLE {
-            assert_eq!(tr("fr", key), *expected, "fr: {key}");
-        }
-        for (key, expected) in pl::TABLE {
-            assert_eq!(tr("pl", key), *expected, "pl: {key}");
-        }
-        for (key, expected) in ka::TABLE {
-            assert_eq!(tr("ka", key), *expected, "ka: {key}");
-        }
+        // Strings no catalog has stay as they are, in every language.
         let unknown = String::from("A user-defined untranslated label");
-        for lang in ["pl", "cs", "uk", "ru", "ar", "pt-br", "it", "ka", "zh", "ja", "de", "fr", "es", "", "unknown"] {
-            assert!(std::ptr::eq(tr(lang, &unknown), unknown.as_str()));
+        for lang in LANGUAGES.iter().map(|(code, _)| *code).chain(["en", "unknown"]) {
+            assert!(std::ptr::eq(tr(lang, &unknown), unknown.as_str()), "{lang}");
+            // Fixed standard names stay identical.
+            assert_eq!(tr(lang, "PDF/X-4"), "PDF/X-4", "{lang}");
         }
     }
 
     #[test]
-    fn translates_known_strings_and_keeps_the_rest() {
-        assert_eq!(tr("de", "File"), "Datei");
-        assert_eq!(tr("ja", "Swatches"), "スウォッチ");
-        assert_eq!(tr("fr", "Something new"), "Something new");
-        assert_eq!(tr("", "File"), "File");
-        assert_eq!(tr("ar", "File"), "ملف");
-        assert_eq!(tr("ar", "Unknown label"), "Unknown label");
-        assert_eq!(tr("pt-br", "File"), "Arquivo");
-        assert_eq!(tr("pt-br", "New Document…"), "Novo documento…");
-        assert_eq!(tr("pt-br", "Unknown label"), "Unknown label");
-        assert_eq!(tr("it", "Edit"), "Modifica");
-        assert_eq!(tr("it", "New Document…"), "Nuovo documento…");
-        assert_eq!(tr("it", "Unknown label"), "Unknown label");
-        assert!(is_rtl("ar"));
-        for (i, (en, translation)) in ar::TABLE.iter().enumerate() {
-            assert!(ar::TABLE[..i].iter().all(|(key, _)| key != en), "duplicate {en}");
-            assert!(!translation.is_empty(), "{en}");
+    fn context_captions_come_from_their_context_or_the_plain_translation() {
+        for (lang, table) in CONTEXT_TABLES {
+            for (key, scope, text) in *table {
+                if !text.trim().is_empty() {
+                    assert_eq!(tr_context(lang, key, scope), *text, "{lang}: {key} ({scope})");
+                }
+            }
         }
-        for (i, (en, translation)) in pt_br::TABLE.iter().enumerate() {
-            assert!(pt_br::TABLE[..i].iter().all(|(key, _)| key != en), "duplicate {en}");
-            assert!(!translation.is_empty(), "{en}");
+        for (key, scope, row) in CONTEXT {
+            for (lang, shared) in SHARED_COLUMNS.into_iter().zip(row) {
+                // A language's own context table is looked up before the shared one.
+                let own = CONTEXT_TABLES
+                    .iter()
+                    .filter(|(code, _)| *code == lang)
+                    .flat_map(|(_, table)| table.iter())
+                    .find(|(k, s, _)| k == key && s == scope)
+                    .map(|(_, _, text)| *text)
+                    .filter(|text| !text.trim().is_empty());
+                let expected = own.or(Some(*shared).filter(|text| !text.trim().is_empty())).unwrap_or_else(|| tr(lang, key));
+                assert_eq!(tr_context(lang, key, scope), expected, "{lang}: {key} ({scope})");
+            }
         }
-        for (i, (en, translation)) in it::TABLE.iter().enumerate() {
-            assert!(it::TABLE[..i].iter().all(|(key, _)| key != en), "duplicate {en}");
-            assert!(!translation.is_empty(), "{en}");
-        }
-        // Italian entries are for keys the shared or Arabic table knows. A new English string
-        // falls back to English until it is translated, so it doesn't fail here.
-        for (en, _) in it::TABLE {
-            assert!(TABLE.iter().any(|(key, _)| key == en) || ar::TABLE.iter().any(|(key, _)| key == en), "it: unknown key {en}");
-        }
-        // Every row is unique and complete.
-        for (i, (en, t)) in TABLE.iter().enumerate() {
-            assert!(TABLE[..i].iter().all(|(e, _)| e != en), "duplicate {en}");
-            assert!(t.iter().all(|x| !x.is_empty()), "{en}");
+        // An unknown context, or a language without one, keeps the plain translation.
+        let keys = CONTEXT.iter().map(|(key, _, _)| *key).chain(CONTEXT_TABLES.iter().flat_map(|(_, table)| table.iter().map(|(key, _, _)| *key)));
+        for key in keys {
+            for lang in LANGUAGES.iter().map(|(code, _)| *code).chain(["en"]) {
+                assert_eq!(tr_context(lang, key, "no such context"), tr(lang, key), "{lang}: {key}");
+            }
+            assert_eq!(tr_context("", key, "count"), key);
         }
     }
 
-    #[test]
-    fn a_column_count_and_a_list_number_read_differently() {
-        for (lang, count, numeral) in [
-            ("de", "Anzahl:", "Zahl:"),
-            ("ja", "数:", "番号:"),
-            ("uk", "Кількість:", "Номер:"),
-            ("ar", "العدد:", "الرقم:"),
-            ("fr", "Nombre :", "Numéro:"),
-            ("zh", "数量：", "编号："),
-        ] {
-            assert_eq!((tr_context(lang, "Number:", "count"), tr(lang, "Number:")), (count, numeral), "{lang}");
+    /// The tables `tr` reads, as (language, key, translation), context captions included.
+    fn entries() -> Vec<(&'static str, &'static str, &'static str)> {
+        let mut entries: Vec<_> = LANGUAGE_TABLES.iter().flat_map(|(lang, table)| table.iter().map(|(key, text)| (*lang, *key, *text))).collect();
+        for (lang, i) in SHARED_COLUMNS.into_iter().zip(0..) {
+            entries.extend(TABLE.iter().filter_map(|(key, row)| row.get(i).map(|text| (lang, *key, *text))));
+            entries.extend(CONTEXT.iter().filter_map(|(key, _, row)| row.get(i).map(|text| (lang, *key, *text))));
         }
-        assert_eq!(tr_context("en", "Number:", "count"), "Number:");
-        assert_eq!(tr("de", "Gutter:"), "Spaltenabstand:");
-        // The Pages panel menu.
-        for key in [
-            "Insert Pages…",
-            "Move Pages…",
-            "New Parent…",
-            "Override All Parent Page Items",
-            "Remove All Local Overrides",
-            "Detach All Objects from Parent",
-            "Create Alternate Layout…",
-            "Allow Selected Spread to Shuffle",
-        ] {
-            assert_ne!(tr("pt-br", key), key);
-        }
-        assert_ne!(tr("ar", "Apply Parent to Pages"), "Apply Parent to Pages");
+        entries.extend(CONTEXT_TABLES.iter().flat_map(|(lang, table)| table.iter().map(|(key, _, text)| (*lang, *key, *text))));
+        entries
     }
 
+    /// Every catalog has one row per key and keeps the English placeholders. A string a catalog
+    /// doesn't translate shows in English, so a missing or empty row fails nothing here; the
+    /// `missing_translations_report` lists them.
     #[test]
-    fn french_catalog_has_no_duplicate_or_stale_keys_and_keeps_placeholders() {
-        let catalog: HashMap<_, _> = fr::TABLE.iter().copied().collect();
-        assert_eq!(catalog.len(), fr::TABLE.len(), "duplicate French keys");
-        let shared: std::collections::HashSet<_> = TABLE.iter().map(|(key, _)| *key).collect();
-        // `fr::TABLE` is looked up first: a key there would hide the shared table's French column.
-        let both: Vec<_> = catalog.keys().filter(|k| shared.contains(*k)).collect();
-        assert!(both.is_empty(), "French keys also in the shared table: {both:?}");
-        let mut keys = std::collections::HashSet::new();
-        for table in [ar::TABLE, de::TABLE, it::TABLE, ja::TABLE, pt_br::TABLE, uk::TABLE, ru::TABLE, cs::TABLE] {
-            keys.extend(table.iter().map(|(key, _)| *key));
+    fn every_catalog_has_unique_keys_and_keeps_placeholders() {
+        for (lang, i) in SHARED_COLUMNS.iter().zip(0..) {
+            assert_eq!(column(lang), Some(i), "{lang}");
         }
-        let stale: Vec<_> = catalog.keys().filter(|k| !keys.contains(*k)).collect();
-        assert!(stale.is_empty(), "French entries for unknown keys: {stale:?}");
-        let placeholders = |s: &str| {
-            let mut names = s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned())).collect::<Vec<_>>();
-            names.sort();
+        for (lang, table) in LANGUAGE_TABLES {
+            let keys: HashSet<_> = table.iter().map(|(key, _)| *key).collect();
+            assert_eq!(keys.len(), table.len(), "{lang}: duplicate keys");
+        }
+        let shared: HashSet<_> = TABLE.iter().map(|(key, _)| *key).collect();
+        assert_eq!(shared.len(), TABLE.len(), "duplicate keys in the shared table");
+        let shared_contexts: HashSet<_> = CONTEXT.iter().map(|(key, scope, _)| (*key, *scope)).collect();
+        assert_eq!(shared_contexts.len(), CONTEXT.len(), "duplicate keys in the shared context table");
+        for (lang, table) in CONTEXT_TABLES {
+            let keys: HashSet<_> = table.iter().map(|(key, scope, _)| (*key, *scope)).collect();
+            assert_eq!(keys.len(), table.len(), "{lang}: duplicate context keys");
+        }
+        // A per-language table is looked up before the shared table, so a key in both hides the
+        // shared column, except in the tables that translate the whole interface.
+        for (lang, table) in LANGUAGE_TABLES.iter().filter(|(lang, _)| column(lang).is_some() && !WHOLE_INTERFACE.contains(lang)) {
+            let both: Vec<_> = table.iter().map(|(key, _)| *key).filter(|key| shared.contains(key)).collect();
+            assert!(both.is_empty(), "{lang} keys also in the shared table: {both:?}");
+        }
+
+        let placeholders = |s: &'static str| {
+            let mut names: Vec<_> = s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name)).collect();
+            names.sort_unstable();
             names
         };
-        let shared_french = TABLE.iter().filter_map(|(key, row)| row.get(1).map(|text| (*key, *text)));
-        for (key, translation) in fr::TABLE.iter().copied().chain(shared_french) {
-            assert!(!translation.trim().is_empty(), "empty {key}");
-            assert_eq!(key.starts_with(' '), translation.starts_with(' '), "leading space: {key}");
-            assert_eq!(key.ends_with(' '), translation.ends_with(' '), "trailing space: {key}");
-            assert_eq!(placeholders(key), placeholders(translation), "placeholders: {key}");
+        for (lang, key, text) in entries().into_iter().filter(|(_, _, text)| !text.trim().is_empty()) {
+            assert_eq!(placeholders(key), placeholders(text), "{lang}: placeholders of {key:?}");
         }
-        assert_eq!(tr("fr", "Group"), "Associer");
     }
 
+    /// The strings each interface language shows in English, for the `cargo xtask ci` log. It
+    /// always passes: `cargo xtask i18n-report` runs it.
     #[test]
-    fn ukrainian_catalog_covers_existing_keys_and_preserves_placeholders() {
-        let catalog: std::collections::HashMap<_, _> = uk::TABLE.iter().copied().collect();
-        assert_eq!(catalog.len(), uk::TABLE.len(), "duplicate Ukrainian keys");
-        let mut keys = std::collections::HashSet::new();
-        keys.extend(TABLE.iter().map(|(key, _)| *key));
-        keys.extend(ar::TABLE.iter().map(|(key, _)| *key));
-        keys.extend(pt_br::TABLE.iter().map(|(key, _)| *key));
-        // A new English string falls back to English until it is translated, so only stale
-        // entries (keys no catalog knows any more) fail.
-        let stale: Vec<_> = catalog.keys().filter(|k| !keys.contains(*k)).collect();
-        assert!(stale.is_empty(), "Ukrainian entries for unknown keys: {stale:?}");
-        let placeholders =
-            |s: &str| s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned())).collect::<Vec<_>>();
-        for (key, translation) in uk::TABLE {
-            assert!(!translation.trim().is_empty(), "empty {key}");
-            let mut source = placeholders(key);
-            let mut translated = placeholders(translation);
-            source.sort();
-            translated.sort();
-            assert_eq!(source, translated, "placeholders: {key}");
-        }
-        assert_eq!(tr_context("uk", "Columns", "table"), "Стовпці");
-        assert_eq!(tr("uk", "Columns"), "Колонки");
-        assert_eq!(tr_context("uk", "Group", "selection"), "Група");
-        // Step and Repeat's grid columns are not a text frame's.
-        assert_eq!(tr_context("uk", "Columns:", "grid"), "Стовпці:");
-        assert_eq!(tr_context("ja", "Columns:", "grid"), "列:");
-        assert_eq!(tr("ja", "Columns:"), "段:");
-        assert_eq!(tr("uk", "Group"), "Згрупувати");
-        assert_eq!(tr_context("", "Columns", "table"), "Columns");
-        assert_eq!(tr_context("ja", "Span Columns", "paragraphLayout"), "段抜き");
-        assert_eq!(tr("ja", "Span Columns"), "段抜きと段分割");
-        assert_eq!(tr_context("uk", "Custom caption", "custom"), "Custom caption");
-        assert_eq!(tr("uk", "through"), "включно");
-        assert_eq!(tr("uk", "up to"), "не включно");
-        assert!(!is_rtl("uk"));
-        assert_eq!(tr("uk", "Type"), "Текст");
-        assert_eq!(tr("uk", "Spread"), "Розворот");
-        assert_eq!(tr("uk", "Story"), "Текстовий матеріал");
-        assert_eq!(tr("uk", "Footer Rows"), "Рядки нижнього колонтитула");
-        assert_eq!(style_name("uk", "[Basic Paragraph]"), "[Основний абзац]");
-        assert_eq!(style_name("uk", "My layout style"), "My layout style");
-        assert_eq!(workspace_name("uk", "Essentials"), "Основне");
-        assert_eq!(workspace_name("uk", "My workspace"), "My workspace");
-    }
-
-    #[test]
-    fn georgian_catalog_preserves_placeholders_and_counts() {
-        let catalog: HashMap<_, _> = ka::TABLE.iter().copied().collect();
-        assert_eq!(catalog.len(), ka::TABLE.len(), "duplicate Georgian keys");
-        let placeholders = |s: &str| {
-            s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned())).collect::<std::collections::BTreeSet<_>>()
+    #[ignore = "a report, run by `cargo xtask i18n-report`"]
+    fn missing_translations_report() {
+        let interface = interface_strings();
+        let catalogs: Vec<(&str, HashSet<&str>)> = LANGUAGE_TABLES
+            .iter()
+            .map(|(lang, table)| (*lang, table.iter().map(|(key, _)| *key).collect()))
+            .chain([("shared", TABLE.iter().map(|(key, _)| *key).collect())])
+            .collect();
+        let mut keys: Vec<&str> = interface.iter().copied().chain(catalogs.iter().flat_map(|(_, keys)| keys.iter().copied())).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        // `tr` hands back the string it was given when it has no translation.
+        let missing = |lang: &str| -> Vec<&str> {
+            keys.iter()
+                .copied()
+                .filter(|key| {
+                    let english = (*key).to_owned();
+                    std::ptr::eq(tr(lang, &english), english.as_str())
+                })
+                .collect()
         };
-        for (key, translation) in ka::TABLE {
-            assert!(!translation.trim().is_empty(), "empty {key}");
-            assert_eq!(placeholders(key), placeholders(translation), "placeholders: {key}");
-            assert_eq!(key.ends_with('…'), translation.ends_with('…'), "ellipsis: {key}");
-            // Georgian has no capitals in running text: Mtavruli never appears in the interface.
-            assert!(!translation.chars().any(|c| ('\u{1C90}'..='\u{1CBF}').contains(&c)), "Mtavruli: {key}");
+        let report: Vec<(&str, Vec<&str>)> = LANGUAGES.iter().filter(|(code, _)| !code.is_empty()).map(|(code, _)| (*code, missing(code))).collect();
+        println!("i18n report: {} interface strings; a missing translation shows in English.", keys.len());
+        for (lang, missing) in &report {
+            println!("  {lang:<6} {:>5} missing", missing.len());
         }
-        assert_eq!(tr("ka", "File"), "ფაილი");
-        assert_eq!(tr("ka", "Save As…"), "შენახვა როგორც…");
-        assert_eq!(tr("ka", "Unknown label"), "Unknown label");
-        assert!(!is_rtl("ka"));
-        for n in [1, 2, 5, 21] {
-            assert_eq!(count_label("ka", "pages", n), format!("გვერდი: {n}"));
+        for (lang, missing) in report.iter().filter(|(_, missing)| !missing.is_empty()) {
+            println!("{lang} ({}): {}", missing.len(), missing.iter().map(|key| format!("{key:?}")).collect::<Vec<_>>().join(", "));
+        }
+        // A catalog key neither the interface list nor another catalog knows is stale, or a label
+        // `interface_strings` doesn't list yet.
+        for (name, own) in &catalogs {
+            let mut unknown: Vec<_> = own
+                .iter()
+                .filter(|key| !interface.contains(*key) && !catalogs.iter().any(|(other, keys)| other != name && keys.contains(*key)))
+                .collect();
+            unknown.sort_unstable();
+            if !unknown.is_empty() {
+                println!("{name}: {} rows for keys the interface list doesn't have: {unknown:?}", unknown.len());
+            }
         }
     }
 
     #[test]
-    fn ukrainian_counts_use_category_captions_for_every_number() {
-        for n in [0, 1, 2, 4, 5, 11, 21, 22, 25] {
-            assert_eq!(count_label("uk", "pages", n), format!("сторінок: {n}"));
-            assert_eq!(count_label("uk", "objects", n), format!("об’єктів: {n}"));
-            assert_eq!(count_label("uk", "errors", n), format!("помилок: {n}"));
-            let pages = tr("uk", "{pages} Pages in {spreads} Spreads").replace("{pages}", &n.to_string()).replace("{spreads}", &n.to_string());
-            assert_eq!(pages, format!("Сторінок: {n}; розворотів: {n}"));
+    fn only_arabic_lays_out_right_to_left() {
+        for (code, _) in LANGUAGES {
+            assert_eq!(is_rtl(code), *code == "ar", "{code}");
+        }
+    }
+
+    /// Built-in style and workspace names follow the interface language; names people give their
+    /// own styles and workspaces are document data and stay as typed.
+    #[test]
+    fn only_built_in_style_and_workspace_names_are_translated() {
+        for (code, _) in LANGUAGES {
+            for name in [designcraft_doc::NO_PARA_STYLE, designcraft_doc::BASIC_PARAGRAPH, designcraft_doc::NO_CHAR_STYLE] {
+                assert_eq!(style_name(code, name), tr(code, name), "{code}");
+            }
+            assert_eq!(workspace_name(code, "Essentials"), tr(code, "Essentials"), "{code}");
+            for custom in ["Group", "Columns", "My layout style"] {
+                assert_eq!(style_name(code, custom), custom, "{code}");
+                assert_eq!(workspace_name(code, custom), custom, "{code}");
+            }
+        }
+    }
+
+    /// Languages with several plural forms put the category first, so every number reads the same.
+    #[test]
+    fn category_first_counts_put_the_category_before_every_number() {
+        assert!(!category_first("de") && !category_first(""));
+        for lang in ["ka", "uk", "ru", "pl"] {
+            assert!(category_first(lang), "{lang}");
+            for noun in ["pages", "objects", "errors"] {
+                for n in [0, 1, 2, 4, 5, 11, 12, 21, 22, 25, 101, 111] {
+                    assert_eq!(count_label(lang, noun, n), format!("{}: {n}", tr(lang, noun)), "{lang}: {noun}");
+                }
+            }
         }
         assert_eq!(count_label("", "objects", 2), "2 objects");
     }
 
-    #[test]
-    fn russian_catalog_covers_existing_keys_and_preserves_placeholders() {
-        let catalog: std::collections::HashMap<_, _> = ru::TABLE.iter().copied().collect();
-        assert_eq!(catalog.len(), ru::TABLE.len(), "duplicate Russian keys");
-        let mut keys = std::collections::HashSet::new();
-        keys.extend(TABLE.iter().map(|(key, _)| *key));
-        keys.extend(ar::TABLE.iter().map(|(key, _)| *key));
-        keys.extend(pt_br::TABLE.iter().map(|(key, _)| *key));
-        keys.extend(it::TABLE.iter().map(|(key, _)| *key));
-        keys.extend(ja::TABLE.iter().map(|(key, _)| *key));
-        keys.extend(uk::TABLE.iter().map(|(key, _)| *key));
-        // A new English string falls back to English until it is translated, so only stale
-        // entries (keys no catalog knows any more) fail.
-        let stale: Vec<_> = catalog.keys().filter(|k| !keys.contains(*k)).collect();
-        assert!(stale.is_empty(), "Russian entries for unknown keys: {stale:?}");
-        let placeholders =
-            |s: &str| s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned())).collect::<Vec<_>>();
-        for (key, translation) in ru::TABLE {
-            assert!(!translation.trim().is_empty(), "empty {key}");
-            assert_eq!(key.starts_with(' '), translation.starts_with(' '), "leading space: {key}");
-            assert_eq!(key.ends_with(' '), translation.ends_with(' '), "trailing space: {key}");
-            assert!(!translation.contains(['ґ', 'є', 'і', 'ї', 'Ґ', 'Є', 'І', 'Ї']), "Ukrainian letter in {key}");
-            let mut source = placeholders(key);
-            let mut translated = placeholders(translation);
-            source.sort();
-            translated.sort();
-            assert_eq!(source, translated, "placeholders: {key}");
-        }
-    }
-
-    #[test]
-    fn russian_is_selectable_ltr_and_resolves_contexts_styles_and_menu_paths() {
-        assert!(LANGUAGES.contains(&("ru", "Русский")));
-        assert!(!is_rtl("ru"));
-        assert_eq!(tr("ru", "File"), "Файл");
-        assert_eq!(tr("ru", "Type"), "Текст");
-        assert_eq!(tr("ru", "Spread"), "Разворот");
-        assert_eq!(tr("ru", "Story"), "Материал");
-        assert_eq!(tr("ru", "Unknown label"), "Unknown label");
-        assert_eq!(tr_context("ru", "Columns", "table"), "Столбцы");
-        assert_eq!(tr("ru", "Columns"), "Колонки");
-        assert_eq!(tr_context("ru", "Group", "selection"), "Группа");
-        assert_eq!(tr("ru", "Group"), "Сгруппировать");
-        assert_eq!(tr_context("ru", "Custom caption", "custom"), "Custom caption");
-        assert_eq!(tr("ru", "through"), "включительно");
-        assert_eq!(tr("ru", "up to"), "не включая");
-        assert_eq!(tr("ru", "Edit/Spelling"), "Редактирование/Орфография");
-        assert_eq!(tr("ru", "Type/Insert Special Character/Quotation Marks"), "Текст/Вставить специальный символ/Кавычки");
-        assert_eq!(style_name("ru", "[Basic Paragraph]"), "[Основной абзац]");
-        assert_eq!(style_name("ru", "My layout style"), "My layout style");
-        assert_eq!(workspace_name("ru", "Essentials"), "Основное");
-        assert_eq!(workspace_name("ru", "My workspace"), "My workspace");
-        // Fixed standard names stay identical.
-        assert_eq!(tr("ru", "PDF/X-4"), "PDF/X-4");
-    }
-
-    #[test]
-    fn russian_counts_use_category_captions_for_every_number() {
-        assert!(category_first("ru") && category_first("uk") && !category_first("de") && !category_first(""));
-        for n in [0, 1, 2, 4, 5, 11, 12, 21, 22, 25, 101, 111] {
-            assert_eq!(count_label("ru", "pages", n), format!("страниц: {n}"));
-            assert_eq!(count_label("ru", "objects", n), format!("объектов: {n}"));
-            assert_eq!(count_label("ru", "errors", n), format!("ошибок: {n}"));
-            let pages = tr("ru", "{pages} Pages in {spreads} Spreads").replace("{pages}", &n.to_string()).replace("{spreads}", &n.to_string());
-            assert_eq!(pages, format!("Страниц: {n}; разворотов: {n}"));
-        }
-    }
-
-    #[test]
-    fn polish_catalog_covers_existing_keys_and_preserves_placeholders() {
-        let catalog: HashMap<_, _> = pl::TABLE.iter().copied().collect();
-        assert_eq!(catalog.len(), pl::TABLE.len(), "duplicate Polish keys");
-        let mut keys = std::collections::HashSet::new();
-        keys.extend(TABLE.iter().map(|(key, _)| *key));
-        for table in [ar::TABLE, pt_br::TABLE, ja::TABLE, it::TABLE, uk::TABLE, de::TABLE, fr::TABLE, ru::TABLE, cs::TABLE] {
-            keys.extend(table.iter().map(|(key, _)| *key));
-        }
-        // A new English string falls back to English until it is translated; only stale entries fail.
-        let stale: Vec<_> = catalog.keys().filter(|k| !keys.contains(*k)).collect();
-        assert!(stale.is_empty(), "Polish entries for unknown keys: {stale:?}");
-        let placeholders =
-            |s: &str| s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned())).collect::<Vec<_>>();
-        for (key, translation) in pl::TABLE {
-            assert!(!translation.trim().is_empty(), "empty {key}");
-            let mut source = placeholders(key);
-            let mut translated = placeholders(translation);
-            source.sort();
-            translated.sort();
-            assert_eq!(source, translated, "placeholders: {key}");
-            assert_eq!(key.ends_with('…'), translation.ends_with('…'), "ellipsis: {key}");
-        }
-        assert!(LANGUAGES.contains(&("pl", "Polski")));
-        assert!(!is_rtl("pl"));
-        assert_eq!(tr("pl", "File"), "Plik");
-        assert_eq!(tr("pl", "New Document…"), "Nowy dokument…");
-        assert_eq!(tr("pl", "Spread"), "Rozkładówka");
-        assert_eq!(tr("pl", "Unknown label"), "Unknown label");
-        assert_eq!(style_name("pl", "[Basic Paragraph]"), "[Podstawowy akapit]");
-        assert_eq!(workspace_name("pl", "Essentials"), "Podstawowe");
-        // A table's columns and grid columns aren't a text frame's; a selection's group isn't the action.
-        assert_eq!(tr("pl", "Columns"), "Łamy");
-        assert_eq!(tr_context("pl", "Columns", "table"), "Kolumny");
-        assert_eq!(tr_context("pl", "Columns:", "grid"), "Łamy:");
-        assert_eq!(tr("pl", "Group"), "Grupuj");
-        assert_eq!(tr_context("pl", "Group", "selection"), "Grupa");
-    }
-
-    #[test]
-    fn polish_counts_use_category_captions_for_every_number() {
-        for n in [0, 1, 2, 5, 12, 22, 25] {
-            assert_eq!(count_label("pl", "pages", n), format!("Strony: {n}"));
-            assert_eq!(count_label("pl", "objects", n), format!("Obiekty: {n}"));
-            assert_eq!(count_label("pl", "errors", n), format!("Błędy: {n}"));
-        }
-        assert_eq!(tr("pl", "{pages} Pages in {spreads} Spreads"), "Strony: {pages}, rozkładówki: {spreads}");
-    }
-
-    #[test]
-    fn czech_catalog_has_no_stale_keys_and_keeps_placeholders_and_markers() {
-        let catalog: HashMap<_, _> = cs::TABLE.iter().copied().collect();
-        assert_eq!(catalog.len(), cs::TABLE.len(), "duplicate Czech keys");
-        let mut keys = std::collections::HashSet::new();
-        keys.extend(TABLE.iter().map(|(key, _)| *key));
-        for table in [ar::TABLE, it::TABLE, ja::TABLE, pt_br::TABLE, uk::TABLE] {
-            keys.extend(table.iter().map(|(key, _)| *key));
-        }
+    /// Every English string the interface passes to `tr`, as far as the command and tool tables and
+    /// the list of UI-only labels know them.
+    fn interface_strings() -> HashSet<&'static str> {
+        let mut keys = HashSet::new();
         // Command labels and menu names reach `tr` from the engine and the UI command table.
         for spec in designcraft_engine::command_specs() {
             keys.insert(spec.label);
@@ -4965,6 +4858,8 @@ mod tests {
             "(unchanged)",
             "[No Language]",
             "Cell Number:",
+            "Differs from this document",
+            "Digits:",
             "Change fill to:",
             "Chinese: Simplified",
             "Chinese: Traditional",
@@ -5000,6 +4895,7 @@ mod tests {
             "Found",
             "Grab bag",
             "Key Object",
+            "Load Styles",
             "layer",
             "layers",
             "Lines +/−",
@@ -5015,6 +4911,7 @@ mod tests {
             "Redefine Document Style",
             "Report an issue",
             "Reverse the order",
+            "Sort Entries in Alphabetical Order",
             "Story {story} ← story {parent}",
             "Story Editor — {count} words",
             "Text Anchor",
@@ -5033,112 +4930,18 @@ mod tests {
             "{name}: import cancelled while a dialog is open; choose the file again",
             "{name}: {count} step(s) done",
         ]);
-        // A new English string falls back to English until it is translated, so only stale
-        // entries (keys nothing passes to `tr` any more) fail.
-        let stale: Vec<_> = catalog.keys().filter(|k| !keys.contains(*k)).collect();
-        assert!(stale.is_empty(), "Czech entries for unknown keys: {stale:?}");
-        let placeholders =
-            |s: &str| s.split('{').skip(1).filter_map(|part| part.split_once('}').map(|(name, _)| name.to_owned())).collect::<Vec<_>>();
-        for (key, translation) in cs::TABLE {
-            assert!(!translation.trim().is_empty(), "empty {key}");
-            let mut source = placeholders(key);
-            let mut translated = placeholders(translation);
-            source.sort();
-            translated.sort();
-            assert_eq!(source, translated, "placeholders: {key}");
-            // Dialog ellipses, label colons and padded button captions stay as in English.
-            assert_eq!(key.ends_with('…'), translation.ends_with('…'), "ellipsis: {key}");
-            assert_eq!(key.ends_with(':'), translation.ends_with(':'), "colon: {key}");
-            assert_eq!(key.starts_with(' '), translation.starts_with(' '), "leading space: {key}");
-            assert_eq!(key.ends_with(' '), translation.ends_with(' '), "trailing space: {key}");
-        }
-        assert!(!is_rtl("cs"));
-        assert_eq!(tr("cs", "File"), "Soubor");
-        assert_eq!(tr("cs", "New Document…"), "Nový dokument…");
-        assert_eq!(tr("cs", "Spread"), "Dvoustrana");
-        assert_eq!(tr("cs", "Bleed"), "Spadávka");
-        assert_eq!(tr("cs", "Leading"), "Proklad");
-        assert_eq!(tr("cs", "Unknown label"), "Unknown label");
-        assert_eq!(tr_context("cs", "Group", "selection"), "Skupina");
-        assert_eq!(tr_context("cs", "Name", "contributors"), "Jméno");
-        assert_eq!(tr_context("cs", "Name", "unknown"), "Název");
-        assert_eq!(tr("cs", "Group"), "Seskupit");
-        assert_eq!(tr_context("cs", "Columns", "table"), tr("cs", "Columns"));
-        assert_eq!(style_name("cs", "[Basic Paragraph]"), "[Základní odstavec]");
-        assert_eq!(style_name("cs", "My layout style"), "My layout style");
-        assert_eq!(workspace_name("cs", "Essentials"), "Základní");
-        assert_eq!(workspace_name("cs", "My workspace"), "My workspace");
+        keys
     }
 
     #[test]
     fn czech_counts_use_the_plural_form_for_the_number() {
-        for (n, form) in [(0, "chyb"), (1, "chyba"), (2, "chyby"), (4, "chyby"), (5, "chyb"), (11, "chyb"), (22, "chyb")] {
-            assert_eq!(count_label("cs", "errors", n), format!("{n} {form}"));
-        }
-        // The status bar passes the singular noun for one error.
-        assert_eq!(count_label("cs", "error", 1), "1 chyba");
-        assert_eq!(count_label("cs", "pages", 1), "1 stránka");
-        assert_eq!(count_label("cs", "pages", 3), "3 stránky");
-        assert_eq!(count_label("cs", "pages", 5), "5 stránek");
-        assert_eq!(count_label("cs", "stories", 2), "2 články");
-        assert_eq!(count_label("cs", "items", 1), "1 položka");
-        assert_eq!(count_label("cs", "objects", 7), "7 objektů");
-        assert_eq!(count_label("cs", "warnings", 3), "3 varování");
-        assert_eq!(count_label("cs", "layer", 1), "1 vrstva");
-        assert_eq!(count_label("cs", "layers", 3), "3 vrstvy");
-        assert_eq!(count_label("cs", "layers", 8), "8 vrstev");
-        // A noun without plural forms keeps the plain translation.
-        assert_eq!(count_label("cs", "a new noun", 3), "3 a new noun");
-        for (noun, forms) in cs::PLURALS {
-            assert!(forms.iter().all(|form| !form.is_empty()), "{noun}");
-            assert!(forms.contains(&tr("cs", noun)), "{noun}: the catalog row is one of the plural forms");
-        }
-    }
-
-    #[test]
-    fn czech_translates_every_tool_name() {
-        for tool in designcraft_tools::TOOL_GROUPS.iter().flat_map(|group| group.iter()) {
-            assert_ne!(tr("cs", tool.label), tool.label, "{}", tool.id);
-            assert_eq!(tr("", tool.label), tool.label);
-        }
-    }
-
-    #[test]
-    fn japanese_vertical_type_commands_are_translated() {
-        for (en, ja) in [
-            ("Story Direction", "組み方向"),
-            ("Horizontal", "横書き"),
-            ("Vertical", "縦書き"),
-            ("Tate-Chu-Yoko", "縦中横"),
-            ("Ruby…", "ルビ…"),
-            ("Kenten", "圏点"),
-            ("Warichu", "割り注"),
-        ] {
-            assert_eq!(tr("ja", en), ja);
-        }
-    }
-
-    #[test]
-    fn pdf_export_dialog_strings_are_translated() {
-        // Translated labels in every supported language.
-        assert_ne!(tr("zh", "Crop Marks"), "Crop Marks");
-        assert_ne!(tr("de", "Tagged PDF"), "Tagged PDF");
-        assert_ne!(tr("ar", "Include document bleed"), "Include document bleed");
-        assert_ne!(tr("pt-br", "Compress images"), "Compress images");
-        // English returns the key unchanged.
-        assert_eq!(tr("", "Export PDF"), "Export PDF");
-        // An unknown string still falls through unchanged.
-        assert_eq!(tr("de", "Low Quality Print"), "Low Quality Print");
-        // Fixed standard names stay identical in every language.
-        assert_eq!(tr("ja", "PDF/X-4"), "PDF/X-4");
-    }
-
-    #[test]
-    fn style_row_menu_strings_are_translated_in_every_language() {
-        for (code, _) in LANGUAGES.iter().filter(|(c, _)| !c.is_empty()) {
-            for key in ["Redefine Style", "Alt-click clears overrides", "Apply \"{name}\", Clear Overrides"] {
-                assert_ne!(tr(code, key), key, "{code}: {key}");
+        for (noun, [one, few, other]) in cs::PLURALS {
+            for (n, form) in [(0, other), (1, one), (2, few), (4, few), (5, other), (11, other), (22, other)] {
+                let expected = if form.trim().is_empty() { format!("{n} {}", tr("cs", noun)) } else { format!("{n} {form}") };
+                assert_eq!(count_label("cs", noun, n), expected, "{noun}");
             }
         }
+        // A noun without plural forms keeps the plain translation.
+        assert_eq!(count_label("cs", "a new noun", 3), "3 a new noun");
     }
 }
