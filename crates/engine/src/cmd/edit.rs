@@ -288,6 +288,8 @@ pub fn specs() -> Vec<CommandSpec> {
             st.selection.cells = None;
             if let Some(i) = st.selection.items.iter().position(|x| *x == id) {
                 st.selection.items.remove(i);
+                // Its points go with it: arrow keys and Delete act on the selected points.
+                st.selection.anchors.retain(|a| a.0 != id);
             } else {
                 st.selection.items.push(id);
             }
