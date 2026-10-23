@@ -3361,7 +3361,13 @@ fn path_close(s: &mut Session, p: &Value) -> Result<Value> {
 fn path_move_anchors(s: &mut Session, p: &Value) -> Result<Value> {
     // The anchors to move, by path: `points` (several paths) or `id` with `anchors`.
     let mut targets: Vec<(ItemId, Vec<(usize, usize)>)> = Vec::new();
-    if let Some(points) = p.get("points").and_then(Value::as_array) {
+    // A `points` that isn't a list is an error, never the `id` form (which could move another path).
+    let points = match p.get("points") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(a)) => Some(a),
+        Some(_) => return Err(bad("path.moveAnchors", "`points` must be a list of [id, subpath, index]")),
+    };
+    if let Some(points) = points {
         for v in points {
             let n = |i: usize| v.get(i).and_then(Value::as_u64).and_then(|x| usize::try_from(x).ok());
             let (Some(id), Some(si), Some(ai)) = (v.get(0).and_then(Value::as_u64), n(1), n(2)) else {
