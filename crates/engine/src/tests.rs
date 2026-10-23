@@ -1686,3 +1686,66 @@ fn direct_selection_moves_the_points_of_several_frames_at_once() {
     assert_eq!(corners(&s, a), vec![(100.0, 300.0), (200.0, 300.0), (200.0, 400.0), (100.0, 400.0)]);
     assert_eq!(corners(&s, b), vec![(200.0, 300.0), (300.0, 300.0), (300.0, 400.0), (200.0, 400.0)]);
 }
+
+#[test]
+fn selected_points_follow_their_path() {
+    let mut s = session();
+    let a = s.execute("frame.create", &json!({"rect": [100, 300, 200, 400]})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("frame.create", &json!({"rect": [200, 300, 300, 400]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"anchors": [[a, 0, 1], [b, 0, 2]]})).unwrap();
+    // Shift-clicking a frame off the selection drops its points too.
+    s.execute("selection.toggle", &json!({"id": a})).unwrap();
+    let id = |n| designcraft_doc::ItemId(n);
+    assert_eq!(s.doc().unwrap().selection.anchors, vec![(id(b), 0, 2)]);
+    // A point added before the first one: the selected point keeps pointing at the same anchor.
+    let l = s.execute("path.create", &json!({"anchors": [{"p": [100, 100]}, {"p": [200, 100]}, {"p": [300, 150]}]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"anchors": [[l, 0, 1]]})).unwrap();
+    s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [50, 120]}, "at": "start"})).unwrap();
+    let st = s.doc().unwrap();
+    let (_, si, ai) = st.selection.anchors[0];
+    let it = st.doc.item(id(l)).unwrap();
+    assert_eq!((it.xf * it.path.subpaths[si].anchors[ai].p).round(), designcraft_geom::Point::new(200.0, 100.0));
+    assert!(s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [0, 0]}, "subpath": 3})).is_err(), "no such subpath");
+}
+
+#[test]
+fn direct_selection_pulls_one_corner_of_an_unselected_frame() {
+    // Chris Nielsen's "The Adobe InDesign Toolbox" (10:10): with the White Arrow, click outside,
+    // then press on a frame's corner and pull it: only that corner moves (a triangle, nearly).
+    use designcraft_tools::{PointerEvent, PointerKind, SnapView};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 612, "height": 792, "facingPages": false})).unwrap();
+    let id = s.execute("frame.create", &json!({"rect": [156, 219, 455, 569], "content": "graphic"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("edit.deselectAll", &json!({})).unwrap();
+    let corners = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let it = d.item(designcraft_doc::ItemId(id)).unwrap();
+        it.path.subpaths[0].anchors.iter().map(|a| it.xf * a.p).collect::<Vec<_>>()
+    };
+    let before = corners(&s);
+    s.set_tool("directSelection");
+    let v = ViewInfo { snap: SnapView::OFF, ..ViewInfo::at_zoom(1.0) };
+    let layout = s.layout();
+    let at = |x: f64, y: f64| layout.to_canvas(designcraft_doc::SpreadRef::Doc(0), designcraft_geom::Point::new(x, y));
+    let (a, b) = (at(455.0, 219.0), at(455.0, 150.0));
+    s.pointer(&PointerEvent::new(PointerKind::Down, a.x, a.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, a.x, a.y - 30.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, b.x, b.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, b.x, b.y), v).unwrap();
+    let after = corners(&s);
+    let moved: Vec<_> = before.iter().zip(&after).filter(|(p, q)| (**p - **q).hypot() > 1e-6).collect();
+    assert_eq!(moved.len(), 1, "one corner moved: {before:?} → {after:?}");
+    assert!((*moved[0].1 - designcraft_geom::Point::new(455.0, 150.0)).hypot() < 1e-6, "{after:?}");
+    assert_eq!(s.doc().unwrap().selection.items, [designcraft_doc::ItemId(id)], "the frame is selected");
+    // One undo step puts the corner back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(corners(&s), before);
+    // Away from its corners, the White Arrow still drags the whole unselected frame.
+    s.execute("edit.deselectAll", &json!({})).unwrap();
+    let (c, d) = (at(300.0, 219.0), at(300.0, 269.0));
+    s.pointer(&PointerEvent::new(PointerKind::Down, c.x, c.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, c.x, c.y + 20.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, d.x, d.y), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, d.x, d.y), v).unwrap();
+    assert!(corners(&s).iter().zip(&before).all(|(p, q)| (p.y - q.y - 50.0).abs() < 1e-6), "{:?}", corners(&s));
+}
