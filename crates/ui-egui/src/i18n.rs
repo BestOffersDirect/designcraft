@@ -1000,6 +1000,19 @@ const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     ("Load Styles", ["Formate laden", "Charger les styles", "Cargar estilos", "スタイルを読み込み", "加载样式"]),
+    ("Tab", ["Tabulator", "Tabulation", "Tabulación", "タブ", "制表符"]),
+    (
+        "Convert Text to Table…",
+        ["Text in Tabelle umwandeln …", "Convertir le texte en tableau…", "Convertir texto en tabla…", "テキストを表に変換…", "将文本转换为表格…"],
+    ),
+    (
+        "Convert Table to Text…",
+        ["Tabelle in Text umwandeln …", "Convertir le tableau en texte…", "Convertir tabla en texto…", "表をテキストに変換…", "将表格转换为文本…"],
+    ),
+    ("Column Separator", ["Spaltentrennzeichen", "Séparateur de colonnes", "Separador de columnas", "列分解文字", "列分隔符"]),
+    ("Row Separator", ["Zeilentrennzeichen", "Séparateur de rangs", "Separador de filas", "行分解文字", "行分隔符"]),
+    ("Number of Columns", ["Spaltenanzahl", "Nombre de colonnes", "Número de columnas", "列数", "列数"]),
+    ("Comma", ["Komma", "Virgule", "Coma", "カンマ", "逗号"]),
     (
         "Differs from this document",
         ["Weicht von diesem Dokument ab", "Diffère de ce document", "Difiere de este documento", "このドキュメントと異なります", "与此文档不同"],

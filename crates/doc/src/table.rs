@@ -1011,14 +1011,19 @@ impl Table {
 
     /// Cell texts, rows separated by `\n`, cells by `\t` (Convert Table to Text, search, agents).
     pub fn plain_text(&self) -> String {
+        self.text_with("\t", "\n")
+    }
+
+    /// The cells' text, columns separated by `col` and rows by `row` (Convert Table to Text).
+    pub fn text_with(&self, col: &str, row: &str) -> String {
         let mut out = String::new();
         for r in 0..self.nrows() {
             if r > 0 {
-                out.push('\n');
+                out.push_str(row);
             }
             for c in 0..self.ncols() {
                 if c > 0 {
-                    out.push('\t');
+                    out.push_str(col);
                 }
                 if let Some(cell) = self.cell(r, c) {
                     out.push_str(&cell.text.text.replace('\n', " "));

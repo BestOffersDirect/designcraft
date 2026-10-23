@@ -94,6 +94,13 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.findChange", "Find/Change…", Some("Cmd+F"), "{}"),
     ("app.insertTableDialog", "Insert Table…", Some("Cmd+Alt+Shift+T"), "{} — Insert Table dialog (body/header/footer rows, columns, table style)"),
     (
+        "app.convertTextToTableDialog",
+        "Convert Text to Table…",
+        None,
+        "{} — Convert Text to Table dialog (column and row separators, number of columns, table style)",
+    ),
+    ("app.convertTableToTextDialog", "Convert Table to Text…", None, "{} — Convert Table to Text dialog (column and row separators)"),
+    (
         "app.cellOptionsDialog",
         "Strokes and Fills…",
         None,
@@ -717,8 +724,8 @@ pub const MENUS: &[(&str, &[&str])] = &[
         "Table",
         &[
             "ui:app.insertTableDialog",
-            "cmd:table.convertFromText",
-            "cmd:table.convertToText",
+            "ui:app.convertTextToTableDialog",
+            "ui:app.convertTableToTextDialog",
             "-",
             ">Cell Options",
             "ui:app.cellOptionsDialog",
@@ -1252,6 +1259,20 @@ fn run_ui_inner(app: &mut DesignApp, id: &str, p: &Value) -> Option<Result<Value
         "app.findChange" => {
             app.session.reset_find_scope();
             app.ui.dialog = Some(crate::dialogs::Dialog::new("findChange", json!({})));
+            Ok(Value::Null)
+        }
+        "app.convertTextToTableDialog" => {
+            if !menu_enabled(app, id) {
+                return Some(Err("select the text to convert to a table".into()));
+            }
+            app.ui.dialog = Some(crate::dialogs::Dialog::new("convertTextToTable", p.clone()));
+            Ok(Value::Null)
+        }
+        "app.convertTableToTextDialog" => {
+            if !menu_enabled(app, id) {
+                return Some(Err("place the insertion point in a table to convert it to text".into()));
+            }
+            app.ui.dialog = Some(crate::dialogs::Dialog::new("convertTableToText", p.clone()));
             Ok(Value::Null)
         }
         "app.insertTableDialog" => {
@@ -2464,6 +2485,15 @@ pub fn menu_enabled(app: &DesignApp, id: &str) -> bool {
     }
     if id == "guide.selectAll" && (!app.ui.guides || app.ui.guides_locked) {
         return false;
+    }
+    // As InDesign's: Convert Text to Table wants selected text outside a table, Convert Table to
+    // Text a table.
+    if id == "app.convertTextToTableDialog" {
+        let selected = app.session.active().and_then(|d| d.selection.text).is_some_and(|t| t.cell.is_none() && !t.is_caret());
+        return selected && enabled(app, "table.convertFromText");
+    }
+    if id == "app.convertTableToTextDialog" {
+        return enabled(app, "table.convertToText");
     }
     if ui_label(id).is_some() {
         return app.session.active().is_some() || id.starts_with("app.") || id.starts_with("window.") || id.starts_with("help.");
@@ -4959,8 +4989,8 @@ mod tests {
             .collect();
         let expected = [
             "Insert Table…",
-            "Convert Text to Table",
-            "Convert Table to Text",
+            "Convert Text to Table…",
+            "Convert Table to Text…",
             "-",
             "Cell Options >",
             "-",

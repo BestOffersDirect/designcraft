@@ -99,7 +99,7 @@ fn table_specs() -> Vec<CommandSpec> {
             "Convert Text to Table",
             ["Table"],
             None,
-            "{columnSeparator?: tab|comma, width?: table width (default: the column)} — selected paragraphs become rows",
+            "{columnSeparator?: tab|comma|paragraph|text (tab), rowSeparator?: paragraph|tab|comma|text (paragraph), columns?: number of columns when both separators are the same (1), tableStyle?: name, width?: table width (default: the column)} — the selected paragraphs become a table, as InDesign's Convert Text to Table",
             has_text,
             convert_from_text
         ),
@@ -108,7 +108,7 @@ fn table_specs() -> Vec<CommandSpec> {
             "Convert Table to Text",
             ["Table"],
             None,
-            "{story?, table?, rows?: [a, b] | row?, cols?: [a, b] | col? (the target cells; default: the selection)} — cells separated by tabs, rows by paragraphs",
+            "{columnSeparator?: tab|comma|paragraph|text (tab), rowSeparator?: paragraph|tab|comma|text (paragraph), story?, table?, rows?: [a, b] | row?, cols?: [a, b] | col? (the target cells; default: the selection)} — the table becomes its cells' text, as InDesign's Convert Table to Text",
             in_table,
             convert_to_text
         ),
@@ -594,12 +594,49 @@ fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     })
 }
 
-fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
-    let t = s.doc()?.selection.text.ok_or_else(|| bad("table.convertFromText", "no text selected"))?;
-    if t.cell.is_some() {
-        return Err(bad("table.convertFromText", "select text outside tables"));
+/// A Convert Text to Table / Convert Table to Text separator: `tab`, `comma`, `paragraph` or the
+/// separator's own text (InDesign's fields take any characters).
+fn separator(p: &Value, key: &str, default: &str, cmd: &str) -> Result<String> {
+    let sep = match p.get(key) {
+        None | Some(Value::Null) => return Ok(default.to_string()),
+        Some(Value::String(s)) => match s.as_str() {
+            "tab" => "\t",
+            "comma" => ",",
+            "paragraph" => "\n",
+            other => other,
+        },
+        Some(_) => "",
+    };
+    if sep.is_empty() {
+        return Err(bad(cmd, format!("`{key}` must be tab, comma, paragraph or the separator's characters")));
     }
-    let sep = if str_param(p, "columnSeparator") == Some("comma") { ',' } else { '\t' };
+    Ok(sep.to_string())
+}
+
+fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
+    const ID: &str = "table.convertFromText";
+    let t = s.doc()?.selection.text.ok_or_else(|| bad(ID, "no text selected"))?;
+    if t.cell.is_some() {
+        return Err(bad(ID, "select text outside tables"));
+    }
+    let (col_sep, row_sep) = (separator(p, "columnSeparator", "\t", ID)?, separator(p, "rowSeparator", "\n", ID)?);
+    // With one separator for both, InDesign fills rows of Number of Columns cells.
+    let per_row = match p.get("columns") {
+        None | Some(Value::Null) => 1,
+        Some(v) => {
+            v.as_u64().filter(|n| (1..=10_000).contains(n)).ok_or_else(|| bad(ID, "`columns` must be a whole number from 1 to 10000"))? as usize
+        }
+    };
+    let style = match str_param(p, "tableStyle").filter(|n| *n != designcraft_doc::BASIC_TABLE) {
+        Some(name) => {
+            let styles = &s.doc()?.doc.styles;
+            if !styles.table.iter().any(|x| x.name == name) {
+                return Err(bad(ID, format!("no table style `{name}`")));
+            }
+            Some((styles.resolve_table_style(name), styles.cell.clone()))
+        }
+        None => None,
+    };
     let width = p.get("width").and_then(Value::as_f64).unwrap_or_else(|| column_width(s, &t));
     s.edit(|d, sel| {
         let id = d.alloc();
@@ -611,11 +648,20 @@ fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad("table.convertFromText", "the selection contains a table"));
         }
         let (a, b) = (ranges[pa].start, ranges[pb].end);
-        let data: Vec<Vec<String>> = st.text[a..b].split('\n').map(|line| line.split(sep).map(|c| c.trim().to_string()).collect()).collect();
+        let text = &st.text[a..b];
+        let data: Vec<Vec<String>> = if col_sep == row_sep {
+            let cells: Vec<String> = text.split(col_sep.as_str()).map(|c| c.trim().to_string()).collect();
+            cells.chunks(per_row).map(<[String]>::to_vec).collect()
+        } else {
+            text.split(row_sep.as_str()).map(|row| row.split(col_sep.as_str()).map(|c| c.trim().to_string()).collect()).collect()
+        };
         let pf = st.paras[pa].clone();
         let cf = st.format_after(a).clone();
         let mut table = Table::from_strings(id, &data, width, &pf, &cf);
         table.options.direction = direction;
+        if let Some((ts, cells)) = &style {
+            ts.apply_to(&mut table, cells);
+        }
         st.delete(a..b);
         let anchor = st.insert_table(a, table);
         *sel = Selection::text(TextSel::caret(t.story, anchor));
@@ -625,9 +671,11 @@ fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn convert_to_text(s: &mut Session, p: &Value) -> Result<Value> {
     let g = target(s, p, "table.convertToText")?;
+    let col_sep = separator(p, "columnSeparator", "\t", "table.convertToText")?;
+    let row_sep = separator(p, "rowSeparator", "\n", "table.convertToText")?;
     s.edit(|d, sel| {
         let st = d.story_mut(g.story).ok_or_else(|| bad("table.convertToText", "no story"))?;
-        let text = st.tables.get(&g.table).map(|t| t.plain_text()).unwrap_or_default();
+        let text = st.tables.get(&g.table).map(|t| t.text_with(&col_sep, &row_sep)).unwrap_or_default();
         let a = st.table_anchor(g.table).ok_or_else(|| bad("table.convertToText", "no anchor"))?;
         st.replace(a..a + designcraft_doc::TABLE_ANCHOR.len_utf8(), &text);
         *sel = Selection::text(TextSel::caret(g.story, a + text.len()));

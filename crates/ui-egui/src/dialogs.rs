@@ -34,6 +34,8 @@ impl Dialog {
             "goToPage" => json!({"page": "1"}),
             "qrCode" => json!({"type": "url", "content": "https://", "color": "[Black]"}),
             "insertTable" => json!({"bodyRows": 4, "columns": 4, "headerRows": 0, "footerRows": 0}),
+            "convertTextToTable" => json!({"columnSeparator": "tab", "rowSeparator": "paragraph", "columns": 1}),
+            "convertTableToText" => json!({"columnSeparator": "tab", "rowSeparator": "paragraph"}),
             "insertXref" => json!({"linkTo": "paragraph", "style": "", "target": "", "format": ""}),
             "findChange" => json!({"find": "", "change": "", "grep": false, "caseSensitive": false, "wholeWord": false, "scope": "document"}),
             "documentSetup" => json!({}),
@@ -135,6 +137,75 @@ fn text_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, w: f32) {
     if ui.add(egui::TextEdit::singleline(&mut s).desired_width(w).horizontal_align(egui::Align::Min)).changed() {
         d.fields.insert(key.into(), Value::String(s));
     }
+}
+
+/// Separators the Convert dialogs offer by name; anything else typed in the field is the
+/// separator's own characters.
+const SEPARATORS: [(&str, &str); 3] = [("tab", "Tab"), ("comma", "Comma"), ("paragraph", "Paragraph")];
+
+/// A separator field, as InDesign's: type any characters, or pick Tab, Comma or Paragraph from
+/// its menu. Stored as `tab`/`comma`/`paragraph` or the typed text.
+fn separator_field(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
+    let cur = d.s(key);
+    let name = |v: &str| SEPARATORS.iter().find(|s| s.0 == v).map(|s| crate::i18n::tr(lang, s.1).to_string());
+    let mut shown = name(&cur).unwrap_or_else(|| cur.clone());
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        if ui.add(egui::TextEdit::singleline(&mut shown).id_salt(("sep", key)).desired_width(150.0)).changed() {
+            let v = SEPARATORS.iter().find(|s| crate::i18n::tr(lang, s.1) == shown).map_or(shown.clone(), |s| s.0.to_string());
+            d.fields.insert(key.into(), json!(v));
+        }
+        ui.menu_button("▾", |ui| {
+            for (v, label) in SEPARATORS {
+                if ui.selectable_label(cur == v, crate::i18n::tr(lang, label)).clicked() {
+                    d.fields.insert(key.into(), json!(v));
+                    ui.close();
+                }
+            }
+        });
+    });
+}
+
+/// Table › Convert Text to Table and Convert Table to Text, laid out as InDesign's: Column and
+/// Row Separator; converting text to a table also has Number of Columns (only when both
+/// separators are the same: the cells then fill rows of that many) and Table Style.
+fn convert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let lang = &app.ui.language;
+    let to_table = d.id == "convertTextToTable";
+    let label = |ui: &mut egui::Ui, text: &str, on: bool| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_enabled(on, egui::Label::new(crate::rtl::widget(ui, format!("{}:", crate::i18n::tr(lang, text)))));
+        });
+    };
+    egui::Grid::new(("convert_table", to_table)).num_columns(2).min_col_width(120.0).spacing([8.0, 6.0]).show(ui, |ui| {
+        label(ui, "Column Separator", true);
+        separator_field(lang, ui, d, "columnSeparator");
+        ui.end_row();
+        label(ui, "Row Separator", true);
+        separator_field(lang, ui, d, "rowSeparator");
+        ui.end_row();
+        if !to_table {
+            return;
+        }
+        let same = d.s("columnSeparator") == d.s("rowSeparator");
+        label(ui, "Number of Columns", same);
+        let field = crate::widgets::NumField::number("columns", d.n("columns"), "", 0).width(70.0).range(1.0, 10_000.0).spinner().enabled(same);
+        if let Some(v) = field.show(ui) {
+            d.fields.insert("columns".into(), json!(v.round()));
+        }
+        ui.end_row();
+        label(ui, "Table Style", true);
+        let names: Vec<String> = app.session.active().map(|st| st.doc.styles.table.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
+        let cur = Some(d.s("tableStyle")).filter(|s| !s.is_empty()).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
+        egui::ComboBox::from_id_salt("convert_table_style").selected_text(&cur).width(170.0).show_ui(ui, |ui| {
+            for n in &names {
+                if ui.selectable_label(*n == cur, n).clicked() {
+                    d.fields.insert("tableStyle".into(), json!(n));
+                }
+            }
+        });
+        ui.end_row();
+    });
 }
 
 /// Table › Insert Table, laid out as InDesign's: Table Dimensions (body rows and columns, then
@@ -2088,6 +2159,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "frameSize" => crate::i18n::tr(&app.ui.language, "Rectangle"),
         "goToPage" => crate::i18n::tr(&app.ui.language, "Go to Page"),
         "insertTable" => crate::i18n::tr(&app.ui.language, "Insert Table…").trim_end_matches('…').trim_end(),
+        "convertTextToTable" => crate::i18n::tr(&app.ui.language, "Convert Text to Table"),
+        "convertTableToText" => crate::i18n::tr(&app.ui.language, "Convert Table to Text"),
         "cellOptions" => crate::i18n::tr(&app.ui.language, "Cell Options"),
         "createGuides" => crate::i18n::tr(&app.ui.language, "Create Guides"),
         "marginsAndColumns" => crate::i18n::tr(&app.ui.language, "Margins and Columns"),
@@ -2150,7 +2223,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         let available = (ctx.content_rect().size() - frame_margin - egui::vec2(16.0, 16.0)).max(egui::Vec2::splat(1.0));
         let preferred_width: f32 = match d.id.as_str() {
             "alert" => 440.0,
-            "closeDocument" | "updateLink" | "deletePages" | "newWorkspace" | "pagesPanelOptions" | "insertTable" => 380.0,
+            "closeDocument" | "updateLink" | "deletePages" | "newWorkspace" | "pagesPanelOptions" | "insertTable" | "convertTableToText" => 380.0,
+            "convertTextToTable" => 420.0,
             "newDocument" => 960.0,
             "numberingSection" => 560.0,
             crate::effects_dialog::ID => 720.0,
@@ -2817,6 +2891,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                     }
                     "ruby" => style_cjk::ruby_dialog(app, ui, &mut d),
                     "insertTable" => insert_table_dialog(app, ui, &mut d),
+                    "convertTextToTable" | "convertTableToText" => convert_table_dialog(app, ui, &mut d),
                     "cellOptions" => cell_options(app, ui, &mut d),
                     "createGuides" => create_guides_dialog(app, ui, &mut d),
                     "marginsAndColumns" => margins_and_columns_dialog(app, ui, &mut d),
@@ -3127,6 +3202,18 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 }
                 None => Err(format!("no page \"{typed}\"")),
             }
+        }
+        "convertTextToTable" => {
+            let same = d.s("columnSeparator") == d.s("rowSeparator");
+            let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty() && s != designcraft_doc::BASIC_TABLE);
+            app.run(
+                "table.convertFromText",
+                json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator"),
+                    "columns": if same { json!(d.n("columns").unwrap_or(1.0).max(1.0) as u64) } else { Value::Null }, "tableStyle": style}),
+            )
+        }
+        "convertTableToText" => {
+            app.run("table.convertToText", json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator")}))
         }
         "insertTable" => app
             .run(
@@ -9665,6 +9752,38 @@ mod tests {
             assert_eq!((len("rows"), len("columns"), t["headerRows"].as_u64()), (6, 3, Some(1)), "{t}");
             assert_eq!(t["style"].as_str().unwrap_or(""), expected, "{t}");
         }
+    }
+
+    /// Convert Text to Table: available with text selected (not with a caret alone); its
+    /// separators and Number of Columns shape the table. Convert Table to Text takes it back with
+    /// the separators chosen there.
+    #[test]
+    fn convert_dialogs_use_their_separators() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let text = "Name:\nAddress:\nCity:\nState:";
+        let sid = app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text", "text": text})).unwrap()["story"].clone();
+        app.run("text.select", json!({"story": sid, "anchor": 0, "focus": 0})).unwrap();
+        assert!(!crate::menus::menu_enabled(&app, "app.convertTextToTableDialog"), "a caret alone");
+        assert!(!crate::menus::menu_enabled(&app, "app.convertTableToTextDialog"), "no table");
+        app.run("text.select", json!({"story": sid, "anchor": 0, "focus": text.len()})).unwrap();
+        assert!(crate::menus::menu_enabled(&app, "app.convertTextToTableDialog"));
+        app.run("app.convertTextToTableDialog", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("convertTextToTable"));
+        for (field, value) in [("columnSeparator", json!("paragraph")), ("rowSeparator", json!("paragraph")), ("columns", json!(2))] {
+            ctl(&mut app, "ui.dialog.set", json!({"field": field, "value": value}));
+        }
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+        let t = app.run("table.get", json!({})).unwrap();
+        let len = |k: &str| t[k].as_array().map_or(0, Vec::len);
+        assert_eq!((len("rows"), len("columns")), (2, 2), "{t}");
+        assert!(crate::menus::menu_enabled(&app, "app.convertTableToTextDialog"));
+        app.run("app.convertTableToTextDialog", json!({})).unwrap();
+        ctl(&mut app, "ui.dialog.set", json!({"field": "columnSeparator", "value": ", "}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+        let story = app.session.active().unwrap().doc.story(designcraft_doc::StoryId(sid.as_u64().unwrap())).unwrap().text.clone();
+        // (The empty paragraph after a table that ends its story stays after the text.)
+        assert_eq!(story.trim_end(), "Name:, Address:\nCity:, State:");
     }
 
     #[test]
