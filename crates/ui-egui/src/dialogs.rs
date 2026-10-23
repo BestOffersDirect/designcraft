@@ -214,11 +214,13 @@ fn convert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 fn insert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let lang = &app.ui.language;
     crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(lang, "Table Dimensions")).font(semibold(12.0)));
+    use designcraft_engine::cmd::table::{MAX_BODY_ROWS, MAX_COLUMNS, MAX_HEADER_FOOTER_ROWS};
+    // `table.insert`'s limits, so the table made is the one the fields show.
     let rows = [
-        ("bodyRows", crate::i18n::tr(lang, "Body Rows"), 1.0),
-        ("columns", crate::i18n::tr_context(lang, "Columns", "table"), 1.0),
-        ("headerRows", crate::i18n::tr(lang, "Header Rows"), 0.0),
-        ("footerRows", crate::i18n::tr(lang, "Footer Rows"), 0.0),
+        ("bodyRows", crate::i18n::tr(lang, "Body Rows"), 1.0, MAX_BODY_ROWS),
+        ("columns", crate::i18n::tr_context(lang, "Columns", "table"), 1.0, MAX_COLUMNS),
+        ("headerRows", crate::i18n::tr(lang, "Header Rows"), 0.0, MAX_HEADER_FOOTER_ROWS),
+        ("footerRows", crate::i18n::tr(lang, "Footer Rows"), 0.0, MAX_HEADER_FOOTER_ROWS),
     ];
     // Body rows and columns, then (after a gap) header and footer rows; one label width for both.
     for (g, pair) in rows.chunks(2).enumerate() {
@@ -226,9 +228,9 @@ fn insert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.add_space(8.0);
         }
         egui::Grid::new(("ins_table", g)).num_columns(2).min_col_width(100.0).spacing([8.0, 6.0]).show(ui, |ui| {
-            for (key, label, min) in pair {
+            for (key, label, min, max) in pair {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| crate::rtl::label(ui, format!("{label}:")));
-                let field = crate::widgets::NumField::number(key, d.n(key), "", 0).width(70.0).range(*min, 10_000.0).spinner();
+                let field = crate::widgets::NumField::number(key, d.n(key), "", 0).width(70.0).range(*min, *max as f64).spinner();
                 if let Some(v) = field.show(ui) {
                     d.fields.insert((*key).into(), json!(v.round()));
                 }
@@ -2159,8 +2161,9 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "frameSize" => crate::i18n::tr(&app.ui.language, "Rectangle"),
         "goToPage" => crate::i18n::tr(&app.ui.language, "Go to Page"),
         "insertTable" => crate::i18n::tr(&app.ui.language, "Insert Table…").trim_end_matches('…').trim_end(),
-        "convertTextToTable" => crate::i18n::tr(&app.ui.language, "Convert Text to Table"),
-        "convertTableToText" => crate::i18n::tr(&app.ui.language, "Convert Table to Text"),
+        // The menu items' translations (every language has them), without the ellipsis.
+        "convertTextToTable" => crate::i18n::tr(&app.ui.language, "Convert Text to Table…").trim_end_matches('…').trim_end(),
+        "convertTableToText" => crate::i18n::tr(&app.ui.language, "Convert Table to Text…").trim_end_matches('…').trim_end(),
         "cellOptions" => crate::i18n::tr(&app.ui.language, "Cell Options"),
         "createGuides" => crate::i18n::tr(&app.ui.language, "Create Guides"),
         "marginsAndColumns" => crate::i18n::tr(&app.ui.language, "Margins and Columns"),
@@ -3215,20 +3218,16 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         "convertTableToText" => {
             app.run("table.convertToText", json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator")}))
         }
-        "insertTable" => app
-            .run(
+        "insertTable" => {
+            // The table and its style in one step; a style that is gone leaves the document alone.
+            let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty());
+            app.run(
                 "table.insert",
                 json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
-                    "headerRows": d.n("headerRows").unwrap_or(0.0).max(0.0) as u64, "footerRows": d.n("footerRows").unwrap_or(0.0).max(0.0) as u64}),
+                    "headerRows": d.n("headerRows").unwrap_or(0.0).max(0.0) as u64, "footerRows": d.n("footerRows").unwrap_or(0.0).max(0.0) as u64,
+                    "tableStyle": style}),
             )
-            .and_then(|r| {
-                // A table style other than [Basic Table] (which a new table has) is applied after.
-                let style = d.s("tableStyle");
-                if style.is_empty() || style == designcraft_doc::BASIC_TABLE {
-                    return Ok(r);
-                }
-                app.run("style.table.apply", json!({"name": style, "story": r["story"], "table": r["table"]})).map(|_| r)
-            }),
+        }
         "numberingSection" => {
             // On an error the dialog stays open to be corrected.
             let r = crate::section_options::confirm(app, &d);
@@ -9751,7 +9750,17 @@ mod tests {
             let len = |k: &str| t[k].as_array().map_or(0, Vec::len);
             assert_eq!((len("rows"), len("columns"), t["headerRows"].as_u64()), (6, 3, Some(1)), "{t}");
             assert_eq!(t["style"].as_str().unwrap_or(""), expected, "{t}");
+            // One Insert Table, one undo.
+            app.run("edit.undo", json!({})).unwrap();
+            assert!(app.run("table.get", json!({})).is_err(), "the table is gone");
         }
+        // A style that no longer exists changes nothing.
+        let tables = |app: &DesignApp| app.session.active().unwrap().doc.stories.values().map(|s| s.tables.len()).sum::<usize>();
+        app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+        app.run("app.insertTableDialog", json!({})).unwrap();
+        ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": "Gone"}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+        assert_eq!(tables(&app), 0);
     }
 
     /// Convert Text to Table: available with text selected (not with a caret alone); its
