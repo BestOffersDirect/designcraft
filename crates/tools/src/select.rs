@@ -837,6 +837,19 @@ impl Tool for SelectionTool {
                     out.push(Action::Begin(label.into()));
                     return out;
                 }
+                // As in InDesign, the Direct Selection tool pressed on a corner or anchor of an object
+                // that isn't selected selects it and moves just that point (Chris Nielsen's "The
+                // InDesign Toolbox", 10:10: click outside, then pull a frame's corner).
+                if self.direct
+                    && !ev.mods.shift
+                    && let Some((_, hit)) = cx.hit(p)
+                    && !cx.selection.contains(hit)
+                    && let Some((id, si, ai, None)) = anchor_at_in(cx, &[hit], p)
+                {
+                    let at = anchor_spread_point(cx, id, si, ai);
+                    self.drag = Drag::Anchor { id, si, ai, handle: None, start: p, at, others: vec![] };
+                    return vec![Action::Exec("selection.set".into(), json!({"ids": [id], "content": true})), Action::Begin("Move Anchor".into())];
+                }
                 // A selected placed graphic's own handles resize it inside its frame (the
                 // frame's anchors, under Direct Selection, come first).
                 if let Some((id, h)) = content_handle_at(cx, p)
