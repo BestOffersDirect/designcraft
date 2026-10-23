@@ -2037,7 +2037,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Print Layer", "Ebene drucken"),
     ("Suppress Text Wrap When Layer is Hidden", "Textumfluss bei ausgeblendeter Ebene unterdrücken"),
     // Remaining interface strings.
-    ("A custom name", "Ein eigener Name"),
     ("Close Panel", "Bedienfeld schließen"),
     ("Default Fill and Stroke", "Standardfläche und -kontur"),
     ("Distribute Rows Evenly", "Zeilen gleichmäßig verteilen"),
