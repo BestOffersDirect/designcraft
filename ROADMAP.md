@@ -301,6 +301,8 @@ measured); Ready estimated.
 ## Languages
 
 Interface strings translated, of 1,724 measured. Detail: [docs/localization-parity.md](docs/localization-parity.md).
+A string without a translation shows in English and fails no check; `cargo xtask i18n-report`
+(also a `cargo xtask ci` step) lists the missing strings per language.
 
 | Language | Code | Status | Translated |
 |---|---|---|---|
@@ -349,6 +351,7 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 Newest first.
 
 - **2026-10-16** · Edit › Keyboard Shortcuts imports a set saved by InDesign's Show Set (.txt, Windows or Mac key names, UTF-8 or UTF-16): matched commands take its Default shortcuts or lose theirs, other commands give up keys it takes, and a report lists what it changed and the items it could not match (`window.importShortcuts`, #1180). Tool keys stay fixed. No readiness percentage change.
+- **2026-10-23** · Translations: a missing string shows in English and fails no test; `cargo xtask i18n-report`, run by `cargo xtask ci`, prints the missing strings per language. Tests keep duplicate-key and placeholder checks and the language mechanics (lookup, context captions, plural captions, right-to-left). No readiness percentage change.
 - **2026-10-23** · Direct Selection shows a path's direction handles as InDesign: both handles of each selected anchor and, on its neighbours, the handle shaping the segment to it; no handles with no anchor selected, and handles that don't show can't be grabbed. The tool draws the path and its points without the bounding box. Found in the Learn Skills Daily course, chapter 43. No readiness percentage change.
 - **2026-10-22** · A ruler guide dragged with the Selection tools, out of a ruler, on its own or with other selected guides, snaps along its axis as objects do (#1221): to other ruler guides, margins, columns, bleed, page and object edges and centers (with the smart-guide mark) and the document grid, within the snap zone and following Snap to Guides and Smart Guides. Shift snaps to the ruler's ticks and Cmd suspends snapping. The preview line, the position readout and the drop use the same snapped position. No readiness percentage change.
 - **2026-10-22** · macOS: the app menu has a Language submenu after Settings… with each interface language in its own name and the current one checked, as in the suite's other apps; Preferences › General › Interface Language stays. No readiness percentage change.
