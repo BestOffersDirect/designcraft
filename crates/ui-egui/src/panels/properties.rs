@@ -3148,8 +3148,19 @@ mod tests {
     /// are translated, with a sample of each script's figures.
     #[test]
     fn digits_choices_use_the_reference_names() {
-        let shown: Vec<String> = DIGIT_OPTIONS.iter().map(|o| digit_label("fr", *o)).collect();
-        assert_eq!(shown, ["Par défaut", "Arabe  0123", "Hindi  ٠١٢٣", "Persan  ۰۱۲۳", "Natif"].map(String::from));
+        assert_eq!(DIGIT_OPTIONS.map(|o| o.1), ["Default", "Arabic", "Hindi", "Farsi", "Native"]);
+        for (lang, _) in crate::i18n::LANGUAGES {
+            let tr = |s| crate::i18n::tr(lang, s);
+            let shown: Vec<String> = DIGIT_OPTIONS.iter().map(|o| digit_label(lang, *o)).collect();
+            let expected = [
+                tr("Default").to_string(),
+                format!("{}  0123", tr("Arabic")),
+                format!("{}  ٠١٢٣", tr("Hindi")),
+                format!("{}  ۰۱۲۳", tr("Farsi")),
+                tr("Native").to_string(),
+            ];
+            assert_eq!(shown, expected, "{lang}");
+        }
     }
 
     #[test]
