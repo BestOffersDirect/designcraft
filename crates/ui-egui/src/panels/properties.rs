@@ -644,16 +644,19 @@ fn anchor_transform_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
         app.ui.ref_point = p;
     }
     let mut set = serde_json::Map::new();
-    for (row, (lx, vx, kx, lw, vw, kw)) in
-        [("X:", x, "x", "W:", r.width(), "width"), ("Y:", y, "y", "H:", r.height(), "height")].into_iter().enumerate()
-    {
+    // A single point has no size: as InDesign, W and H show its object's, greyed out.
+    let single = super::selected_anchor_points(app).len() == 1;
+    let (w, h) = if single { i.object_size } else { (r.width(), r.height()) };
+    for (row, (lx, vx, kx, lw, vw, kw)) in [("X:", x, "x", "W:", w, "width"), ("Y:", y, "y", "H:", h, "height")].into_iter().enumerate() {
         let yy = row as f32 * 25.0;
         place(ui, sub(b, 40.0, yy, 18.0, FIELD_H), |ui| widgets::caption_w(ui, lx, 18.0));
         if let Some(v) = place(ui, sub(b, 59.0, yy, 54.0, FIELD_H), |ui| measure(ui, &format!("pt_{kx}"), Some(vx), u, 54.0)) {
             set.insert(kx.into(), json!(v));
         }
         place(ui, sub(b, 120.0, yy, 19.0, FIELD_H), |ui| widgets::caption_w(ui, lw, 19.0));
-        if let Some(v) = place(ui, sub(b, 140.0, yy, 54.0, FIELD_H), |ui| measure(ui, &format!("pt_{kw}"), Some(vw), u, 54.0)) {
+        let id = format!("pt_{kw}");
+        let field = NumField::measure(&id, Some(vw), u).width(54.0).enabled(!single);
+        if let Some(v) = place(ui, sub(b, 140.0, yy, 54.0, FIELD_H), |ui| field.show(ui)) {
             set.insert(kw.into(), json!(v));
         }
     }
@@ -3607,6 +3610,28 @@ mod tests {
         let (pl, pr) = if left == 2 { (p2, p3) } else { (p3, p2) };
         assert_eq!(corner(&app, left), pl, "the reference side stays");
         assert!((corner(&app, right).x - (pr.x + w)).abs() < 1e-9, "spread to twice the width");
+    }
+
+    /// One point has no size: W and H show its frame's, greyed out, as InDesign; two points
+    /// measure (and set) their own.
+    #[test]
+    fn one_selected_point_shows_its_frames_size_greyed() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let a = app.run("frame.create", json!({"rect": [72, 72, 172, 222]})).unwrap()["id"].as_u64().unwrap();
+        app.run("selection.set", json!({"anchors": [[a, 0, 0]]})).unwrap();
+        assert_eq!(super::super::sel_info(&app).unwrap().object_size, (100.0, 150.0));
+        let mut h = panel(app);
+        h.run_steps(2);
+        let greyed = |h: &Harness<'_, DesignApp>| {
+            h.query_all_by(|n| n.role() == egui::accesskit::Role::TextInput && n.is_disabled()).filter_map(|n| n.value()).collect::<Vec<_>>()
+        };
+        let u = units(h.state());
+        let f = |v| designcraft_geom::units::format_measure(v, u);
+        assert_eq!(greyed(&h), [f(100.0), f(150.0)], "the frame's W and H, greyed");
+        h.state_mut().run("selection.set", json!({"anchors": [[a, 0, 0], [a, 0, 2]]})).unwrap();
+        h.run_steps(2);
+        assert!(greyed(&h).is_empty(), "two points have a size of their own");
     }
 
     #[test]

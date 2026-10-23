@@ -34,6 +34,9 @@ use crate::theme::Tokens;
 pub struct SelInfo {
     /// Bounds measured from the rulers' zero point (as the X/Y fields show them).
     pub page_rect: Rect,
+    /// Width and height of the selected objects themselves (with points selected, `page_rect`
+    /// measures the points).
+    pub object_size: (f64, f64),
     pub count: usize,
     pub fill: String,
     pub stroke: String,
@@ -197,6 +200,7 @@ pub fn sel_info(app: &DesignApp) -> Option<SelInfo> {
         };
         b = Some(b.map_or(ib, |r| r.union(ib)));
     }
+    let object_size = b.map_or((0.0, 0.0), |r| (r.width(), r.height()));
     // Points selected with Direct Selection: Transform measures the points, not their paths.
     let points = selected_anchor_points(app);
     let b = match points.split_first() {
@@ -220,6 +224,7 @@ pub fn sel_info(app: &DesignApp) -> Option<SelInfo> {
     };
     Some(SelInfo {
         page_rect: Rect::new(b.x0 - o.x, b.y0 - o.y, b.x1 - o.x, b.y1 - o.y),
+        object_size,
         count: st.selection.items.len(),
         fill: first.fill.swatch.clone(),
         stroke: first.stroke.swatch.clone(),
