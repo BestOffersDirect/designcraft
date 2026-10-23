@@ -577,6 +577,10 @@ mod tests {
         assert_eq!(r["removed"], json!([l]));
         assert!(s.doc().unwrap().doc.item(ItemId(l)).is_none());
         assert!(s.execute("path.deletePoints", &json!({"points": []})).is_err());
+        // Edit › Clear with points selected deletes the points, not their paths.
+        s.execute("selection.set", &json!({"anchors": [[a, 0, 0]]})).unwrap();
+        s.execute("edit.clear", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc.item(ItemId(a)).unwrap().path.subpaths[0].anchors.len(), 3, "one point gone, the frame stays");
     }
 
     #[test]
