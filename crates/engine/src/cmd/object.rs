@@ -3202,7 +3202,11 @@ fn path_create(s: &mut Session, p: &Value) -> Result<Value> {
 fn path_append(s: &mut Session, p: &Value) -> Result<Value> {
     let id = super::id_param(p, "id").ok_or_else(|| bad("path.appendAnchor", "missing id"))?;
     let a = p.get("anchor").and_then(anchor_from).ok_or_else(|| bad("path.appendAnchor", "missing anchor"))?;
-    let subpath = p.get("subpath").and_then(Value::as_u64);
+    // An omitted subpath is the last one; one given must name a subpath (never falls back).
+    let subpath = match p.get("subpath") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_u64().ok_or_else(|| bad("path.appendAnchor", "`subpath` must be a subpath index"))?),
+    };
     let at_start = match p.get("at") {
         None => false,
         Some(v) if v.as_str() == Some("end") => false,
