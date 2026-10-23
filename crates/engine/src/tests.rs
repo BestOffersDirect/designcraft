@@ -1688,6 +1688,27 @@ fn direct_selection_moves_the_points_of_several_frames_at_once() {
 }
 
 #[test]
+fn selected_points_follow_their_path() {
+    let mut s = session();
+    let a = s.execute("frame.create", &json!({"rect": [100, 300, 200, 400]})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("frame.create", &json!({"rect": [200, 300, 300, 400]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"anchors": [[a, 0, 1], [b, 0, 2]]})).unwrap();
+    // Shift-clicking a frame off the selection drops its points too.
+    s.execute("selection.toggle", &json!({"id": a})).unwrap();
+    let id = |n| designcraft_doc::ItemId(n);
+    assert_eq!(s.doc().unwrap().selection.anchors, vec![(id(b), 0, 2)]);
+    // A point added before the first one: the selected point keeps pointing at the same anchor.
+    let l = s.execute("path.create", &json!({"anchors": [{"p": [100, 100]}, {"p": [200, 100]}, {"p": [300, 150]}]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"anchors": [[l, 0, 1]]})).unwrap();
+    s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [50, 120]}, "at": "start"})).unwrap();
+    let st = s.doc().unwrap();
+    let (_, si, ai) = st.selection.anchors[0];
+    let it = st.doc.item(id(l)).unwrap();
+    assert_eq!((it.xf * it.path.subpaths[si].anchors[ai].p).round(), designcraft_geom::Point::new(200.0, 100.0));
+    assert!(s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [0, 0]}, "subpath": 3})).is_err(), "no such subpath");
+}
+
+#[test]
 fn direct_selection_pulls_one_corner_of_an_unselected_frame() {
     // Chris Nielsen's "The Adobe InDesign Toolbox" (10:10): with the White Arrow, click outside,
     // then press on a frame's corner and pull it: only that corner moves (a triangle, nearly).

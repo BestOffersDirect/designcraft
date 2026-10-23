@@ -3208,22 +3208,25 @@ fn path_append(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) if v.as_str() == Some("start") => true,
         Some(_) => return Err(bad("path.appendAnchor", "`at` must be `start` or `end`")),
     };
-    s.edit(|d, _| {
+    s.edit(|d, sel| {
         path_editable(d, id, "path.appendAnchor")?;
         let loc = d.find(id).ok_or(designcraft_doc::DocError::NoItem(id))?;
         let inv = (d.parent_xf(&loc) * d.item_at(&loc).map(|i| i.xf).unwrap_or_default()).inverse();
         let it = d.item_mut(id).ok_or(designcraft_doc::DocError::NoItem(id))?;
-        let sp = match subpath {
-            Some(i) => {
-                usize::try_from(i).ok().and_then(|i| it.path.subpaths.get_mut(i)).ok_or_else(|| bad("path.appendAnchor", "no such subpath"))?
-            }
-            None => it.path.subpaths.last_mut().ok_or_else(|| bad("path.appendAnchor", "empty path"))?,
+        let si = match subpath {
+            Some(i) => usize::try_from(i).ok().filter(|i| *i < it.path.subpaths.len()).ok_or_else(|| bad("path.appendAnchor", "no such subpath"))?,
+            None => it.path.subpaths.len().checked_sub(1).ok_or_else(|| bad("path.appendAnchor", "empty path"))?,
         };
+        let sp = &mut it.path.subpaths[si];
         if sp.closed {
             return Err(bad("path.appendAnchor", "the subpath is closed"));
         }
         if at_start {
             sp.anchors.insert(0, a.transform(inv));
+            // The selected points of this sub-path move up one place with the others.
+            for a in sel.anchors.iter_mut().filter(|a| a.0 == id && a.1 == si) {
+                a.2 += 1;
+            }
         } else {
             sp.anchors.push(a.transform(inv));
         }
