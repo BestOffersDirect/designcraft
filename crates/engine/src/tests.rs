@@ -1652,6 +1652,48 @@ fn a_line_fits_when_its_baseline_does() {
     assert!(overset(&mut s, 50.0), "a baseline below the frame still oversets the line");
 }
 
+/// The course's chapter 43: with Direct Selection, a circle's selected anchor shows its handles
+/// and they drag, reshaping the curve; the handles of the anchors away from it neither show nor
+/// catch a press, as in InDesign.
+#[test]
+fn direct_selection_drags_only_the_handles_around_the_selected_anchor() {
+    use designcraft_tools::{PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::at_zoom(1.0);
+    let id = s.execute("frame.create", &json!({"rect": [100, 300, 300, 500], "shape": "ellipse"})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"ids": [id]})).unwrap();
+    s.set_tool("directSelection");
+    // Each anchor and its two handles, in the spread.
+    let anchors = |s: &Session| {
+        let st = s.doc().unwrap();
+        let it = st.doc.item(designcraft_doc::ItemId(id)).unwrap();
+        it.path.subpaths[0].anchors.iter().map(|a| (it.xf * a.p, it.xf * a.h_in, it.xf * a.h_out)).collect::<Vec<_>>()
+    };
+    let before = anchors(&s);
+    let lowest = |f: &dyn Fn(f64) -> f64| (0..before.len()).min_by(|a, b| f(before[*a].0.y).total_cmp(&f(before[*b].0.y))).unwrap();
+    let (bottom, top) = (lowest(&|y| -y), lowest(&|y| y));
+    let press = |s: &mut Session, from: designcraft_geom::Point, to: designcraft_geom::Point| {
+        s.pointer(&PointerEvent::new(PointerKind::Down, from.x, from.y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, (from.x + to.x) / 2.0, (from.y + to.y) / 2.0), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Drag, to.x, to.y), v).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, to.x, to.y), v).unwrap();
+    };
+    // Select the bottom anchor.
+    let b = before[bottom].0;
+    press(&mut s, b, b);
+    assert_eq!(s.doc().unwrap().selection.anchors, [(designcraft_doc::ItemId(id), 0, bottom)]);
+    // Its handle drags: the handle moves.
+    let h = before[bottom].2;
+    press(&mut s, h, h + designcraft_geom::Vec2::new(30.0, 0.0));
+    let after = anchors(&s);
+    assert!((after[bottom].2 - before[bottom].2).hypot() > 20.0, "the bottom handle moved: {:?} → {:?}", before[bottom], after[bottom]);
+    // The top anchor's handle isn't shown, so a press on it doesn't take it.
+    let t = before[top].2;
+    press(&mut s, t, t + designcraft_geom::Vec2::new(0.0, -30.0));
+    let after2 = anchors(&s);
+    assert!((after2[top].2 - before[top].2).hypot() < 1e-6, "the top handle stays: {:?} → {:?}", before[top], after2[top]);
+}
+
 /// Direct Selection: a marquee over the top edges of two frames selects their top points, and a
 /// drag on one of them slants both frames in one undo step (InDesign's way to make a row of
 /// parallelograms).
