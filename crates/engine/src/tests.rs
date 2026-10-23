@@ -1705,6 +1705,10 @@ fn selected_points_follow_their_path() {
     let (_, si, ai) = st.selection.anchors[0];
     let it = st.doc.item(id(l)).unwrap();
     assert_eq!((it.xf * it.path.subpaths[si].anchors[ai].p).round(), designcraft_geom::Point::new(200.0, 100.0));
+    // `points` that isn't a list is refused, even with an `id` beside it.
+    for bad in [json!("x"), json!({"0": 1}), json!(5)] {
+        assert!(s.execute("path.moveAnchors", &json!({"points": bad, "id": l, "anchors": [[0, 0]], "dx": 5})).is_err(), "points {bad}");
+    }
     for bad in [json!(3), json!(-1), json!("0")] {
         assert!(s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [0, 0]}, "subpath": bad})).is_err(), "subpath {bad}");
     }
