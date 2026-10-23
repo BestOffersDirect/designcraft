@@ -497,7 +497,13 @@ fn convert_text_to_table_with_indesigns_separators() {
     s.execute("style.table.create", &json!({"name": "Grid"})).unwrap();
     let r = convert(&mut s, "x\ty", json!({"tableStyle": "Grid"})).unwrap();
     assert_eq!(s.execute("table.get", &json!({"table": r["table"]})).unwrap()["style"], "Grid");
-    for bad in [json!({"columnSeparator": ""}), json!({"rowSeparator": 3}), json!({"columns": 0}), json!({"tableStyle": "Missing"}), json!({"tableStyle": 123})] {
+    for bad in [
+        json!({"columnSeparator": ""}),
+        json!({"rowSeparator": 3}),
+        json!({"columns": 0}),
+        json!({"tableStyle": "Missing"}),
+        json!({"tableStyle": 123}),
+    ] {
         assert!(convert(&mut s, "p\tq", bad.clone()).is_err(), "{bad}");
     }
     check(&s);
