@@ -307,7 +307,17 @@ pub struct SelectionTool {
 
 impl SelectionTool {
     pub fn new(direct: bool) -> Self {
-        Self { direct, drag: Drag::None, hover_handle: None, guides: vec![], shift_release: None, key_release: None, anchor_release: None, loaded: None, live: None }
+        Self {
+            direct,
+            drag: Drag::None,
+            hover_handle: None,
+            guides: vec![],
+            shift_release: None,
+            key_release: None,
+            anchor_release: None,
+            loaded: None,
+            live: None,
+        }
     }
 
     /// [`bracket_at`] for this tool. With Direct Selection an anchor under the pointer wins: the
