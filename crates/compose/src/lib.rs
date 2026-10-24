@@ -165,6 +165,20 @@ pub struct PlacedGlyph {
 }
 
 impl PlacedGlyph {
+    /// Whether an underline or a strikethrough runs across this glyph.
+    ///
+    /// A tab is not drawn, but it is a character with an advance, and the rule runs across its
+    /// whole width as InDesign draws it: forms rule their fill-in lines with underlined tabs, and
+    /// without this they lost every writing line (#1466). The spaces a line break trimmed off the
+    /// end, the break characters themselves and the markers' carriers are not part of the line's
+    /// text and are not spanned.
+    pub fn spans_rules(&self) -> bool {
+        if self.visible {
+            return true;
+        }
+        self.adv > 0.0 && matches!(self.rendered_char, '\t' | designcraft_doc::story::RIGHT_INDENT_TAB)
+    }
+
     /// In a vertical frame, the turn that sets this glyph upright, applied after drawing it at `x`
     /// on `baseline`: it hangs from its vertical origin ([`designcraft_fonts::FontFace::v_origin`],
     /// centred across) at `x` on the line's centre, the middle of the font's em box; a tate-chu-yoko
@@ -571,6 +585,9 @@ pub struct FrameSpec {
     pub grid: Option<(f64, f64)>,
     /// The frame is on a left page (for towards/away-from-spine alignment).
     pub left_page: bool,
+    /// The frame is on a right page of a facing spread (spine-relative anchored objects mirror
+    /// there; a single page has no spine).
+    pub right_page: bool,
     /// The page and its margins in the frame's inner space (custom anchored objects).
     pub page_rect: Option<(Rect, Rect)>,
 }
@@ -650,7 +667,10 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
         let loc = doc.find(fid);
         let Some(item) = loc.as_ref().and_then(|l| doc.item_at(l)).or_else(|| doc.anchored_item(fid)) else { continue };
         let Some(tf) = item.text_frame() else { continue };
-        let xf = loc.as_ref().map(|l| doc.parent_xf(l)).unwrap_or(designcraft_geom::Affine::IDENTITY) * item.xf;
+        let parent = loc.as_ref().map(|l| doc.parent_xf(l)).unwrap_or(designcraft_geom::Affine::IDENTITY);
+        let xf = parent * item.xf;
+        // Where the frame is on the spread (a group's transform included), to find its page.
+        let center_x = parent.transform_rect_bbox(item.bounds()).center().x;
         let inv = xf.inverse();
         let mut exclusions = Vec::new();
         let spread_ref = loc.as_ref().map(|l| l.spread);
@@ -674,25 +694,27 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
                 r.is_finite() && r.x0 < a.x1 && r.x1 > a.x0 && r.y0 < a.y1 && r.y1 > a.y0
             });
         }
-        let (page_name, page, left_page) = match (spread_ref, spread) {
+        let (page_name, page, side) = match (spread_ref, spread) {
             (Some(designcraft_doc::SpreadRef::Doc(si)), Some(sp)) => {
-                let c = item.bounds().center();
-                let pi = sp.page_at_x(c.x).unwrap_or(0);
+                let pi = sp.page_at_x(center_x).unwrap_or(0);
                 let abs = doc.first_page_of_spread(si) + pi;
-                (Some(doc.page_name(abs)), Some(abs), sp.pages.get(pi).is_some_and(|p| p.side == designcraft_doc::PageSide::Left))
+                (Some(doc.page_name(abs)), Some(abs), sp.pages.get(pi).map(|p| p.side))
             }
-            (Some(designcraft_doc::SpreadRef::Parent(pi)), Some(sp)) => {
+            (Some(designcraft_doc::SpreadRef::Parent(_)), Some(sp)) => {
                 let prefix = sp.parent.as_ref().map(|p| p.prefix.clone()).unwrap_or_else(|| "A".into());
-                let _ = pi;
-                (Some(prefix), None, false)
+                // The side of the parent page under the frame, so a folio there aligns to the spine of its own page.
+                let under = sp.page_at_x(center_x).and_then(|pi| sp.pages.get(pi));
+                (Some(prefix), None, under.map(|p| p.side))
             }
-            _ => (None, None, false),
+            _ => (None, None, None),
         };
+        let left_page = side == Some(designcraft_doc::PageSide::Left);
+        let right_page = side == Some(designcraft_doc::PageSide::Right);
         let section_marker = page.map(|abs| section_marker(doc, abs));
         // The page under the frame and its margins, in inner space (bounding boxes).
         let page_rect = match (spread_ref, spread) {
             (_, Some(sp)) => sp
-                .page_at_x(item.bounds().center().x)
+                .page_at_x(center_x)
                 .and_then(|pi| sp.pages.get(pi))
                 .map(|pg| (inv.transform_rect_bbox(pg.bounds()), inv.transform_rect_bbox(pg.margin_rect()))),
             _ => None,
@@ -759,6 +781,7 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
             page,
             grid,
             left_page,
+            right_page,
             page_rect,
         });
     }
@@ -1676,10 +1699,16 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                 }
                 // A drop cap sits at the start-side indent; the first-line indent doesn't move it.
                 let beside = drop_cap.as_ref().filter(|dc| line_no < dc.lines && col_first_line == 0).map(DropCap::indent);
+                let first_line = if line_no == 0 { pp.first_line_indent } else { 0.0 };
                 let (ind_l, ind_r) = match beside {
                     Some(w) if rtl => (pp.left_indent, pp.right_indent + w),
                     Some(w) => (pp.left_indent + w, pp.right_indent),
-                    None => (pp.left_indent + if line_no == 0 { pp.first_line_indent } else { 0.0 }, pp.right_indent),
+                    // The first-line indent is at the paragraph's start side, which is the right
+                    // one in a right-to-left paragraph: applied on the left it moved the line the
+                    // wrong way, out of the frame for the hanging indent a numbered list uses
+                    // (#1448).
+                    None if rtl => (pp.left_indent, pp.right_indent + first_line),
+                    None => (pp.left_indent + first_line, pp.right_indent),
                 };
                 let lx0 = x0 + ind_l;
                 let lx1 = x1 - ind_r;
@@ -1984,6 +2013,7 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                         object_point,
                         ref_point,
                         keep_within_column,
+                        spine_relative,
                     } => {
                         use designcraft_doc::anchored::AnchorRelative as R;
                         let col = ft.columns.get(l.column as usize).copied().unwrap_or(f.area);
@@ -1995,15 +2025,21 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
                             R::PageEdge => Some(f.page_rect.map_or(f.area, |p| p.0)),
                         };
                         let frac = |i: u8| ([0.0, 0.5, 1.0][(i % 3) as usize], [0.0, 0.5, 1.0][(i / 3).min(2) as usize]);
-                        let (rfx, rfy) = frac(*ref_point);
-                        let (ofx, ofy) = frac(*object_point);
+                        let (mut rfx, rfy) = frac(*ref_point);
+                        let (mut ofx, ofy) = frac(*object_point);
+                        let mut dx = *x_offset;
+                        // The settings describe a left-hand page; a right-hand page mirrors them
+                        // across the spine.
+                        if *spine_relative && f.right_page {
+                            (rfx, ofx, dx) = (1.0 - rfx, 1.0 - ofx, -dx);
+                        }
                         let rx = area(*x_relative).map_or(o.x, |a| a.x0 + a.width() * rfx);
                         let ry = area(*y_relative).map_or(l.baseline, |a| a.y0 + a.height() * rfy);
                         let mut y = ry + y_offset - h * ofy;
                         if *keep_within_column {
                             y = y.clamp(col.y0, (col.y1 - h).max(col.y0));
                         }
-                        Point::new(rx + x_offset - w * ofx, y)
+                        Point::new(rx + dx - w * ofx, y)
                     }
                 };
             }
@@ -4006,7 +4042,7 @@ fn hyphenation_points(
     // Words repeat a lot: remember their points per set of limits.
     static CACHE: Mutex<Vec<(LimitsKey, HashMap<(hyphen::Lang, Box<str>), Box<[usize]>>)>> = Mutex::new(Vec::new());
     let key = (lim.min_word, lim.after_first, lim.before_last, lim.capitalized);
-    let mut guard = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let idx = match guard.iter().position(|e| e.0 == key) {
         Some(i) => i,
         None => {
@@ -4507,7 +4543,7 @@ pub fn adjacent_row(l: &Line, x: f64, caret_y: f64, up: bool) -> Option<f64> {
     // count as still inside the note.
     let over = |r: &(f64, f64, f64)| x >= r.1 - 0.01 && x < r.2 - 0.01;
     let candidates = rows.iter().filter(|r| over(r)).filter(|r| if up { r.0 < caret_y - ROW_Y } else { r.0 > caret_y + ROW_Y });
-    if up { candidates.map(|r| r.0).max_by(|a, b| a.total_cmp(b)) } else { candidates.map(|r| r.0).min_by(|a, b| a.total_cmp(b)) }
+    if up { candidates.map(|r| r.0).max_by(f64::total_cmp) } else { candidates.map(|r| r.0).min_by(f64::total_cmp) }
 }
 
 #[cfg(test)]
@@ -4629,6 +4665,7 @@ mod column_allocation_safety_tests {
             page: None,
             grid: None,
             left_page: false,
+            right_page: false,
             page_rect: None,
             outline: None,
         }
