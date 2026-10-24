@@ -2974,8 +2974,10 @@ impl<'r> Importer<'r> {
                 if let Some(g) = self.with_style(e, "BaselineFrameGridOption")
                     && g.get("UseCustomBaselineFrameGrid") == Some("true")
                 {
-                    options.baseline_grid =
-                        Some((g.num("StartingOffsetForBaselineFrameGrid").unwrap_or(0.0), g.num("BaselineFrameGridIncrement").unwrap_or(12.0)));
+                    options.baseline_grid = Some(designcraft_doc::FrameBaselineGrid {
+                        start: g.num("StartingOffsetForBaselineFrameGrid").unwrap_or(0.0),
+                        increment: g.num("BaselineFrameGridIncrement").unwrap_or(12.0),
+                    });
                 }
                 it.content = Content::Text(TextFrame { story, options });
                 self.ctx.threads.push((
