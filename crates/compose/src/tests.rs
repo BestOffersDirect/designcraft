@@ -1150,7 +1150,7 @@ fn nonbreaking_space_alone_fills_a_justified_line() {
 /// Story of `n` one-line filler paragraphs followed by `extra` paragraphs, in a 2-column frame.
 fn keep_doc(fillers: usize, extra: &[&str], height: f64) -> (Document, StoryId, Vec<usize>) {
     let mut parts: Vec<String> = (0..fillers).map(|k| format!("Filler {k}")).collect();
-    parts.extend(extra.iter().map(|s| s.to_string()));
+    parts.extend(extra.iter().map(ToString::to_string));
     let text = parts.join("\n");
     let (mut d, sid, fid) = doc_with(&text, Rect::new(0.0, 0.0, 400.0, height), ParaAttrs::default());
     d.item_mut(fid).unwrap().text_frame_mut().unwrap().options.columns = 2;
@@ -2752,6 +2752,7 @@ fn custom_anchors_do_not_change_bottom_baseline_fitting() {
         object_point: 0,
         ref_point: 0,
         keep_within_column: false,
+        spine_relative: false,
     };
     d.story_mut(sid).unwrap().insert_object(0, designcraft_doc::AnchoredObject::new(it, pos));
     let cs = compose_story(&d, sid, &ComposeOptions::default());
@@ -6740,6 +6741,7 @@ fn anchor_box(d: &mut Document, sid: StoryId, at: usize, x: f64, y: f64, y_rel: 
         object_point: 0,
         ref_point: 0,
         keep_within_column: false,
+        spine_relative: false,
     };
     d.story_mut(sid).unwrap().insert_object(at, designcraft_doc::AnchoredObject::new(it, position));
 }
@@ -6808,6 +6810,7 @@ fn anchored_object_wraps_with_its_contour_and_side() {
         object_point: 0,
         ref_point: 0,
         keep_within_column: false,
+        spine_relative: false,
     };
     d.story_mut(a).unwrap().insert_object(0, designcraft_doc::AnchoredObject::new(it, position));
     let cs = compose_story(&d, b, &ComposeOptions::default());
@@ -6819,6 +6822,70 @@ fn anchored_object_wraps_with_its_contour_and_side() {
     let top = pairs.first().unwrap().0.x1;
     let mid = pairs.iter().map(|(l, _)| l.x1).fold(f64::INFINITY, f64::min);
     assert!(top > mid + 5.0, "top {top}, middle {mid}");
+}
+
+/// Relative to Spine: a marginal note set up for a left-hand page (its right edge 12 pt left of
+/// the column) mirrors on the right-hand page (its left edge 12 pt right of the column), so the
+/// notes of a story that runs across a spread all sit in the outside margin. Placed as on a
+/// left-hand page, the right page's note sat in the inside margin and reached across the spine.
+#[test]
+fn spine_relative_anchored_notes_stay_in_the_outside_margin_on_both_pages() {
+    use designcraft_doc::anchored::AnchorRelative as R;
+    let compose_spread = |spine_relative: bool| {
+        let mut d = Document::new(&NewDocument { pages: 3, ..Default::default() });
+        let lid = d.default_layer();
+        let sp = &d.spreads[1];
+        let (l, r) = (sp.pages[0].clone(), sp.pages[1].clone());
+        assert_eq!((l.side, r.side), (designcraft_doc::PageSide::Left, designcraft_doc::PageSide::Right));
+        // Body frames leave a 120 pt outside margin for the notes.
+        let left_rect = Rect::new(l.x + 120.0, 36.0, l.x + l.width - 36.0, 120.0);
+        let right_rect = Rect::new(r.x + 36.0, 36.0, r.x + r.width - 120.0, 600.0);
+        let text = [LOREM; 3].join(" ");
+        let (lf, sid) = d.add_text_frame(SpreadRef::Doc(1), left_rect, lid, &text, ParaFormat::default()).unwrap();
+        let (rf, _) = d.add_text_frame(SpreadRef::Doc(1), right_rect, lid, "", ParaFormat::default()).unwrap();
+        d.thread(lf, rf).unwrap();
+        let plain = compose_story(&d, sid, &ComposeOptions::default());
+        let second_line = |fid| plain.frame(fid).unwrap().lines[1].range.start;
+        let (at_left, at_right) = (second_line(lf), second_line(rf));
+        // Top-right corner of the note 12 pt left of the column's top-left, on the anchor's baseline.
+        let position = designcraft_doc::AnchorPosition::Custom {
+            x_relative: R::ColumnEdge,
+            y_relative: R::Anchor,
+            x_offset: -12.0,
+            y_offset: 0.0,
+            object_point: 2,
+            ref_point: 0,
+            keep_within_column: false,
+            spine_relative,
+        };
+        for at in [at_right, at_left] {
+            let note = designcraft_doc::Item::new(
+                ItemId(d.alloc()),
+                lid,
+                designcraft_doc::Shape::Rectangle,
+                designcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 72.0, 40.0)),
+            );
+            d.story_mut(sid).unwrap().insert_object(at, designcraft_doc::AnchoredObject::new(note, position.clone()));
+        }
+        let cs = compose_story(&d, sid, &ComposeOptions::default());
+        // Per page: the note's left and right edges, the column, and the page's left and right edges.
+        let placed = |fid, page: &designcraft_doc::Page| {
+            let ft = cs.frame(fid).unwrap();
+            assert_eq!(ft.objects.len(), 1);
+            let o = &ft.objects[0];
+            ((o.origin.x, o.origin.x + o.size.0), ft.columns[0], (page.x, page.x + page.width))
+        };
+        (placed(lf, &l), placed(rf, &r))
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+
+    let (((lx0, lx1), lcol, (lp0, _)), ((rx0, rx1), rcol, (_, rp1))) = compose_spread(true);
+    assert!(near(lx1, lcol.x0 - 12.0) && lx0 >= lp0, "left page: note {lx0}..{lx1}, column {lcol:?}");
+    assert!(near(rx0, rcol.x1 + 12.0) && rx1 <= rp1, "right page: note {rx0}..{rx1}, column {rcol:?}");
+
+    // Without Relative to Spine both pages take the settings as written.
+    let (_, ((rx0, rx1), rcol, _)) = compose_spread(false);
+    assert!(near(rx1, rcol.x0 - 12.0), "right page as written: note {rx0}..{rx1}, column {rcol:?}");
 }
 
 const OBJECT_LEN: usize = designcraft_doc::OBJECT_MARK.len_utf8();
@@ -7309,4 +7376,78 @@ fn rule_above_offset_is_measured_from_the_baseline() {
     assert!((rule.y1 - (second.baseline - 10.0)).abs() < 1e-6, "{rule:?}, baseline {}", second.baseline);
     assert!((rule.height() - 1.5).abs() < 1e-6);
     assert!(rule.y0 > first.baseline, "the rule stays below the row above: {rule:?}, its baseline {}", first.baseline);
+}
+
+#[test]
+fn parent_page_frames_know_which_side_of_the_spine_they_are_on() {
+    // Folios on a facing-pages parent: towards/away from spine must differ between its left and right page.
+    let mut d = Document::new(&NewDocument::default());
+    let lid = d.default_layer();
+    let w = d.parents[0].pages[0].width;
+    let para = ParaFormat { para: ParaAttrs { align: Some(Align::TowardsSpine), ..Default::default() }, ..Default::default() };
+    let (_, left_story) = d.add_text_frame(SpreadRef::Parent(0), Rect::new(36.0, 700.0, w - 36.0, 730.0), lid, "7", para.clone()).unwrap();
+    let (_, right_story) = d.add_text_frame(SpreadRef::Parent(0), Rect::new(w + 36.0, 700.0, 2.0 * w - 36.0, 730.0), lid, "8", para).unwrap();
+    assert!(frame_specs(&d, left_story)[0].left_page);
+    assert!(!frame_specs(&d, right_story)[0].left_page);
+}
+
+#[test]
+fn a_grouped_frame_takes_the_side_of_the_page_its_group_moves_it_to() {
+    let mut d = Document::new(&NewDocument { pages: 3, ..Default::default() });
+    let lid = d.default_layer();
+    let (l, r) = (d.spreads[1].pages[0].clone(), d.spreads[1].pages[1].clone());
+    let rect = Rect::new(l.x + 36.0, 36.0, l.x + l.width - 36.0, 300.0);
+    let (fid, sid) = d.add_text_frame(SpreadRef::Doc(1), rect, lid, "Text", ParaFormat::default()).unwrap();
+    // The frame's own coordinates are on the left page; its group's transform puts it on the right one.
+    let mut g = designcraft_doc::Item::new(ItemId(d.alloc()), lid, designcraft_doc::Shape::Group, designcraft_geom::PathData::default());
+    g.xf = designcraft_geom::Affine::translate((r.x - l.x, 0.0));
+    let sp = Arc::make_mut(&mut d.spreads[1]);
+    let at = sp.items.iter().position(|it| it.id == fid).unwrap();
+    g.content = designcraft_doc::Content::Group { items: vec![sp.items.remove(at)] };
+    sp.items.push(Arc::new(g));
+    let spec = &frame_specs(&d, sid)[0];
+    assert!(spec.right_page && !spec.left_page);
+    assert_eq!(spec.page, Some(2));
+}
+
+/// A right-to-left paragraph's first-line indent belongs at its start side, the right. Applied on
+/// the left it moved the first line the wrong way — out of the frame for the hanging indent a
+/// numbered list uses (right indent 10 mm, first line −10 mm), while the wrapped lines sat where
+/// the first line should have been (#1448).
+#[test]
+fn an_rtl_first_line_indent_is_at_the_right_edge() {
+    const MM: f64 = 72.0 / 25.4;
+    // Latin text in a right-to-left paragraph: the direction is the paragraph's, and it is the
+    // placement that is being measured, so no Arabic font has to be present.
+    let text = LOREM;
+    let rect = Rect::new(0.0, 0.0, 200.0, 300.0);
+    let para = |dir, align, first, left, right| ParaAttrs {
+        direction: Some(dir),
+        align: Some(align),
+        first_line_indent: Some(first),
+        left_indent: Some(left),
+        right_indent: Some(right),
+        ..Default::default()
+    };
+    // The hanging indent of a numbered list, right to left.
+    let (d, sid, _) = doc_with(text, rect, para(designcraft_doc::TextDirection::RightToLeft, Align::Right, -10.0 * MM, 0.0, 10.0 * MM));
+    let cs = compose_story(&d, sid, &ComposeOptions::default());
+    let lines = all_lines(&cs);
+    assert!(lines.len() >= 2, "the text wraps: {}", lines.len());
+    let right_edge = |l: &Line| l.glyphs.iter().filter(|g| g.visible).map(|g| g.x + g.adv).fold(f64::MIN, f64::max);
+    let left_edge = |l: &Line| l.glyphs.iter().filter(|g| g.visible).map(|g| g.x).fold(f64::MAX, f64::min);
+    // The first line reaches the frame's right edge; the wrapped lines stop 10 mm short of it.
+    assert!((right_edge(lines[0]) - rect.x1).abs() < 1.0, "first line at the edge: {}", right_edge(lines[0]));
+    assert!((right_edge(lines[1]) - (rect.x1 - 10.0 * MM)).abs() < 1.0, "wrapped line indented: {}", right_edge(lines[1]));
+    // And nothing leaves the frame on the left, which is where the first line used to go.
+    for (i, l) in lines.iter().enumerate() {
+        assert!(left_edge(l) >= rect.x0 - 0.01, "line {i} starts inside the frame: {}", left_edge(l));
+    }
+
+    // The same paragraph left to right is unchanged: the first line hangs on the left.
+    let (d, sid, _) = doc_with(text, rect, para(designcraft_doc::TextDirection::LeftToRight, Align::Left, -10.0 * MM, 10.0 * MM, 0.0));
+    let cs = compose_story(&d, sid, &ComposeOptions::default());
+    let lines = all_lines(&cs);
+    assert!((left_edge(lines[0]) - rect.x0).abs() < 1.0, "left to right, first line at the edge: {}", left_edge(lines[0]));
+    assert!((left_edge(lines[1]) - (rect.x0 + 10.0 * MM)).abs() < 1.0, "left to right, wrapped line indented: {}", left_edge(lines[1]));
 }

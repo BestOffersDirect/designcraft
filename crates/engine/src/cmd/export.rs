@@ -331,7 +331,12 @@ fn pages_param(id: &str, p: &Value, page_count: usize) -> Result<Option<Vec<usiz
                     .and_then(|n| usize::try_from(n).ok())
                     .filter(|n| *n >= 1 && *n <= page_count)
                     .ok_or_else(|| bad(id, format!("bad page {x}")))?;
-                v.push(n - 1);
+                // A page named twice is one page, as `"2,2"` already is: the list says which
+                // pages to export, not how many times. `[2, 2]` exported two copies of page 2
+                // while `"2,2"` exported one.
+                if !v.contains(&(n - 1)) {
+                    v.push(n - 1);
+                }
             }
             Some(v)
         }
@@ -1329,5 +1334,54 @@ mod pptx_tests {
         s.execute("object.exportOptions", &json!({"ids": [r["id"]], "rasterize": true})).unwrap();
         let x = shapes(&mut s);
         assert!(x.contains("<p:pic>") && !x.contains("prst=\"ellipse\""), "{x}");
+    }
+}
+
+#[cfg(test)]
+mod page_list_tests {
+    use serde_json::{Value, json};
+
+    use crate::Session;
+
+    fn doc(pages: u64) -> Session {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 200, "pages": pages, "facingPages": false, "margins": 0})).unwrap();
+        s
+    }
+
+    /// The same selection written two ways exported different files: `"2,2"` is one page, because
+    /// `parse_page_range` keeps the first of a repeat, while `[2, 2]` was two copies of page 2.
+    /// The list says which pages to export, not how many times.
+    #[test]
+    fn a_page_named_twice_is_exported_once_either_way() {
+        let mut s = doc(4);
+        for (pages, want) in [
+            (json!("2,2"), 1),
+            (json!([2, 2]), 1),
+            (json!([2, 2, 2]), 1),
+            (json!("2-2,2"), 1),
+            (json!([1, 2, 1]), 2),
+            (json!("1,2,1"), 2),
+            (json!([4, 1]), 2),
+            (json!("4,1"), 2),
+            (json!("all"), 4),
+        ] {
+            let r = s.execute("file.exportPdf", &json!({"pages": pages.clone()})).unwrap();
+            assert_eq!(r["pages"].as_u64(), Some(want), "pdf {pages}");
+            let r = s.execute("file.exportPptx", &json!({"pages": pages.clone()})).unwrap();
+            assert_eq!(r["slides"].as_u64(), Some(want), "pptx {pages}");
+        }
+        // The two forms now agree byte for byte, and the pages come out in the document's order
+        // whichever order the list names them in (which is how the export already behaved).
+        let mut file = |pages: Value| {
+            let r = s.execute("file.exportPdf", &json!({"pages": pages})).unwrap();
+            r["base64"].as_str().unwrap_or_default().to_string()
+        };
+        assert_eq!(file(json!([4, 1])), file(json!("4,1")), "the array and the string agree");
+        assert_eq!(file(json!([4, 1])), file(json!([1, 4])), "pages 1 and 4, in the document's order");
+        assert_eq!(file(json!([2, 2])), file(json!("2")), "a repeat is the single page");
+        // A page that does not exist is still refused, and an empty list still exports nothing.
+        assert!(s.execute("file.exportPdf", &json!({"pages": [5]})).is_err());
+        assert!(s.execute("file.exportPdf", &json!({"pages": []})).is_err());
     }
 }
