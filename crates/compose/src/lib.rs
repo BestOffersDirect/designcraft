@@ -23,6 +23,7 @@ pub mod optical;
 mod outline;
 mod overlay;
 mod parabox;
+mod placed;
 mod ruby;
 pub mod shape;
 pub mod shatai;
@@ -50,6 +51,7 @@ use crate::notes::Notes;
 pub use crate::notes::{find_note, hit_note, hit_note_with, note_caret};
 pub use crate::outline::FrameOutline;
 use crate::parabox::ParaBox;
+pub use crate::placed::Placement;
 use crate::shape::{Glyph, StyleTable, SubstCtx};
 pub use crate::table::{BorderHit, PlacedCell, StrokeSeg, TableFrag, cell_caret, find_cell, hit_border, hit_cell, hit_cell_with};
 
@@ -629,6 +631,9 @@ pub struct ComposeOptions {
     pub label: Option<String>,
     /// Anchor pages for cross-references (needed when the story contains cross-references).
     pub xrefs: Option<Arc<xref::XrefIndex>>,
+    /// Where the story's anchored frames sit on their spreads; an anchored frame not listed is
+    /// composed where it is stored, on no page.
+    pub placed: Vec<(ItemId, Placement)>,
 }
 
 /// Nesting depth past which wrap obstacles inside groups are not collected.
@@ -661,21 +666,34 @@ fn wrap_obstacles(it: &Item, parent: Affine, inv: Affine, skip: ItemId, left_pag
 
 /// Build the frame specs of a story from the document (geometry, wrap, page names, grid).
 pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
+    frame_specs_placed(doc, sid, &[])
+}
+
+/// [`frame_specs`] with anchored frames where their host story placed them (`placed`).
+pub(crate) fn frame_specs_placed(doc: &Document, sid: StoryId, placed: &[(ItemId, Placement)]) -> Vec<FrameSpec> {
     let Some(st) = doc.story(sid) else { return vec![] };
     let mut out = Vec::with_capacity(st.frames.len());
     for &fid in &st.frames {
         let loc = doc.find(fid);
         let Some(item) = loc.as_ref().and_then(|l| doc.item_at(l)).or_else(|| doc.anchored_item(fid)) else { continue };
         let Some(tf) = item.text_frame() else { continue };
-        let parent = loc.as_ref().map(|l| doc.parent_xf(l)).unwrap_or(designcraft_geom::Affine::IDENTITY);
+        // An anchored frame takes its page, page side, page rect and grid from where it is placed.
+        let placement = if loc.is_none() { placed.iter().find(|(id, _)| *id == fid).map(|(_, p)| *p) } else { None };
+        let parent = match (&loc, placement) {
+            (Some(l), _) => doc.parent_xf(l),
+            (None, Some(p)) => p.xf,
+            (None, None) => Affine::IDENTITY,
+        };
         let xf = parent * item.xf;
         // Where the frame is on the spread (a group's transform included), to find its page.
         let center_x = parent.transform_rect_bbox(item.bounds()).center().x;
         let inv = xf.inverse();
         let mut exclusions = Vec::new();
-        let spread_ref = loc.as_ref().map(|l| l.spread);
+        let spread_ref = loc.as_ref().map(|l| l.spread).or(placement.map(|p| p.spread));
         let spread = spread_ref.and_then(|r| doc.spread(r));
+        // Page items wrap the text of frames on the spread, not of anchored frames.
         if !tf.options.ignore_wrap
+            && loc.is_some()
             && let Some(sp) = spread
         {
             let left = |x: f64| sp.page_at_x(x).and_then(|pi| sp.pages.get(pi)).is_some_and(|p| p.side == designcraft_doc::PageSide::Left);
@@ -785,10 +803,23 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
 
 /// Compose a story of `doc` through its frames, with the text wrap of page items and of anchored
 /// objects ([`wrap`]).
+/// Anchored frames are composed where their host story places them (unless `opts` places them).
 pub fn compose_story(doc: &Document, sid: StoryId, opts: &ComposeOptions) -> ComposedStory {
+    compose_story_at(doc, sid, opts, 0)
+}
+
+/// [`compose_story`] for a story `depth` hosts down from the story asked for.
+fn compose_story_at(doc: &Document, sid: StoryId, opts: &ComposeOptions, depth: usize) -> ComposedStory {
     let others: Vec<ComposedStory> =
         wrap::neighbours(doc, sid).into_iter().map(|o| wrap::compose_among(doc, o, &ComposeOptions::default(), &[])).collect();
-    wrap::compose_among(doc, sid, opts, &others.iter().collect::<Vec<_>>())
+    let others: Vec<&ComposedStory> = others.iter().collect();
+    if opts.placed.is_empty() && depth < placed::MAX_DEPTH {
+        let placed = placed::placements(doc, sid, &mut |host| Arc::new(compose_story_at(doc, host, &ComposeOptions::default(), depth + 1)));
+        if !placed.is_empty() {
+            return wrap::compose_among(doc, sid, &ComposeOptions { placed, ..opts.clone() }, &others);
+        }
+    }
+    wrap::compose_among(doc, sid, opts, &others)
 }
 
 const DEFAULT_TAB: f64 = 36.0;

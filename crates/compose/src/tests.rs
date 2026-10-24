@@ -7658,3 +7658,91 @@ fn an_rtl_first_line_indent_is_at_the_right_edge() {
     assert!((left_edge(lines[0]) - rect.x0).abs() < 1.0, "left to right, first line at the edge: {}", left_edge(lines[0]));
     assert!((left_edge(lines[1]) - (rect.x0 + 10.0 * MM)).abs() < 1.0, "left to right, wrapped line indented: {}", left_edge(lines[1]));
 }
+
+/// A marginal note (an anchored text frame, Only Align First Line to Grid, 9/10) hangs 15 pt
+/// above its anchor's baseline on a right-hand page. It composes against the document grid where
+/// it is placed: its first line moves down onto the grid line, the second follows 10 pt below,
+/// and its page is the host's. Composed where it was stored, it snapped to a grid measured from
+/// its own top edge and sat on no page.
+#[test]
+fn anchored_text_frames_compose_against_the_grid_where_they_are_placed() {
+    use designcraft_doc::anchored::AnchorRelative as R;
+    let mut d = Document::new(&NewDocument { pages: 3, ..Default::default() });
+    d.settings.baseline_grid.start = 36.0;
+    d.settings.baseline_grid.increment = 10.0;
+    let lid = d.default_layer();
+    let page = d.spreads[1].pages[1].clone();
+    assert_eq!(page.side, designcraft_doc::PageSide::Right);
+    // Body lines at 46, 56, 66, … (on the grid) while the frame top is at 36.
+    let body = "One.\nTwo.\nThree.\nFour.";
+    let rect = Rect::new(page.x + 108.0, 36.0, page.x + page.width - 36.0, 400.0);
+    let (bf, sid) = d.add_text_frame(SpreadRef::Doc(1), rect, lid, body, ParaFormat::default()).unwrap();
+    d.item_mut(bf).unwrap().text_frame_mut().unwrap().options.first_baseline = FirstBaseline::Leading;
+    let nine_ten = |f: &mut designcraft_doc::story::CharFormat| {
+        f.over.size = Some(9.0);
+        f.over.leading = Some(designcraft_doc::Leading::Points(10.0));
+    };
+    d.story_mut(sid).unwrap().format_chars(0..body.len(), nine_ten);
+    // The note: its own story in a 60 × 40 frame anchored in the third line.
+    let (nid, nsid) = (ItemId(d.alloc()), StoryId(d.alloc()));
+    let text = "Note one\u{2028}note two";
+    let para = ParaFormat { para: ParaAttrs { grid_align: Some(GridAlign::FirstLineOnly), ..Default::default() }, ..Default::default() };
+    let mut story = Story::with_text(nsid, text, para);
+    story.format_chars(0..text.len(), nine_ten);
+    story.frames.push(nid);
+    d.stories.insert(nsid, Arc::new(story));
+    let mut note =
+        designcraft_doc::Item::new(nid, lid, designcraft_doc::Shape::Rectangle, designcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 40.0)));
+    note.content = Content::Text(designcraft_doc::TextFrame { story: nsid, options: Default::default() });
+    let position = designcraft_doc::AnchorPosition::Custom {
+        x_relative: R::TextFrame,
+        y_relative: R::Anchor,
+        x_offset: -72.0,
+        y_offset: -15.0,
+        object_point: 0,
+        ref_point: 0,
+        keep_within_column: false,
+        spine_relative: false,
+    };
+    let at = body.find("Three").unwrap();
+    d.story_mut(sid).unwrap().insert_object(at, designcraft_doc::AnchoredObject::new(note, position));
+
+    let cache = Cache::new();
+    let on_grid = |y: f64| on_grid(y, (36.0, 10.0));
+    // (anchor line baseline, note baselines), in spread space.
+    let baselines = |d: &Document, cs: &ComposedStory| {
+        let host = compose_story(d, sid, &ComposeOptions::default());
+        let ft = host.frame(bf).unwrap();
+        let o = &ft.objects[0];
+        let fxf = d.item(bf).unwrap().xf;
+        let anchor = (fxf * Point::new(0.0, ft.lines[o.line].baseline)).y;
+        let nxf = fxf * Affine::translate(o.origin.to_vec2()) * d.anchored_item(nid).unwrap().xf;
+        (anchor, all_lines(cs).iter().map(|l| (nxf * Point::new(0.0, l.baseline)).y).collect::<Vec<_>>())
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+
+    let (anchor, lines) = baselines(&d, &cache.get(&d, nsid, None));
+    assert!(near(anchor, 66.0), "anchor baseline {anchor}");
+    assert_eq!(lines.len(), 2);
+    assert!(near(lines[0], anchor) && near(lines[1], anchor + 10.0), "note baselines {lines:?}, anchor {anchor}");
+    assert_eq!(baselines(&d, &compose_story(&d, nsid, &ComposeOptions::default())).1, lines);
+    // The note is on the host's right-hand page, with that page's rectangle.
+    let placed = placed::placements(&d, nsid, &mut |h| Arc::new(compose_story(&d, h, &ComposeOptions::default())));
+    let spec = &frame_specs_placed(&d, nsid, &placed)[0];
+    assert_eq!((spec.page, spec.right_page, spec.left_page), (Some(2), true, false));
+    assert!(spec.page_rect.is_some());
+
+    // Host moved down 5 pt: the anchor is off the grid, and the note's first line moves down from
+    // 10 pt above it onto the grid line 5 pt above it. The cache composes the note again.
+    let xf = d.item(bf).unwrap().xf;
+    d.item_mut(bf).unwrap().xf = Affine::translate((0.0, 5.0)) * xf;
+    let (anchor, lines) = baselines(&d, &cache.get(&d, nsid, None));
+    assert!(near(anchor, 71.0), "anchor baseline {anchor}");
+    assert!(on_grid(lines[0]) && near(lines[0], anchor - 5.0) && near(lines[1], lines[0] + 10.0), "note baselines {lines:?}, anchor {anchor}");
+    assert_eq!(baselines(&d, &compose_story(&d, nsid, &ComposeOptions::default())).1, lines);
+
+    // The host's page turns into a left-hand page: the note is composed again for that side.
+    let before = cache.get(&d, nsid, None);
+    Arc::make_mut(&mut d.spreads[1]).pages[1].side = designcraft_doc::PageSide::Left;
+    assert!(!Arc::ptr_eq(&before, &cache.get(&d, nsid, None)));
+}
