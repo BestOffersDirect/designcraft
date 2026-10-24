@@ -137,6 +137,10 @@ fn text_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, w: f32) {
     }
 }
 
+/// The temporary-data key a dialog sets, each frame, while one of its multi-line fields has focus:
+/// Enter then makes a new line there, and the footer doesn't take it for OK.
+pub(crate) const MULTILINE_FOCUS: &str = "dialog_multiline_focus";
+
 /// Extract once when opened. Cancel is read-only; confirmation adds exactly these colours.
 pub(crate) fn open_color_theme(app: &mut DesignApp, params: Value) {
     match app.run("color.extractTheme", params) {
@@ -2850,6 +2854,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                 app.ui.style_preview = d.b("preview");
                 style_options_preview(app, &mut d);
             }
+            // A multi-line field with focus (set by the dialog this frame) takes Enter as a new line.
+            let multiline = ui.ctx().data_mut(|m| m.remove_temp::<bool>(egui::Id::new(MULTILINE_FOCUS))).unwrap_or(false);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add(
@@ -2857,7 +2863,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             .fill(crate::theme::Tokens::get(ui.ctx()).accent_strong),
                     )
                     .clicked()
-                    || (!popup_open && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    || (!popup_open && !multiline && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                 {
                     result = Some(true);
                 }

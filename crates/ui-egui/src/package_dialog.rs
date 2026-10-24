@@ -45,13 +45,7 @@ pub fn open(app: &mut DesignApp) -> Result<(), String> {
         .unwrap_or_default()
         .iter()
         .map(|f| {
-            let status = if f["missing"].as_bool().unwrap_or(false) {
-                "missing"
-            } else if f["styleMissing"].as_bool().unwrap_or(false) || f["matchStatus"] == "styleSubstitute" {
-                "substituted"
-            } else {
-                "ok"
-            };
+            let status = font_status(f);
             let name = format!("{} {}", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or("")).trim().to_string();
             json!({"name": name, "source": f["source"].as_str().unwrap_or(""), "status": status})
         })
@@ -81,11 +75,33 @@ pub fn open(app: &mut DesignApp) -> Result<(), String> {
                 .collect()
         })
         .unwrap_or_default();
+    let doc = app.session.active().map(|d| d.uid);
     app.ui.dialog = Some(Dialog::new(
         ID,
-        json!({"page": "summary", "fonts": fonts, "links": links, "spot": spot, "instructions": false, "idml": true, "pdf": false, "problemsOnly": false}),
+        json!({"page": "summary", "doc": doc, "fonts": fonts, "links": links, "spot": spot, "instructions": false, "idml": true, "pdf": false, "problemsOnly": false}),
     ));
     Ok(())
+}
+
+/// A `font.list` entry's status here: a missing font, or a style its family lacks, is missing
+/// (as `file.package` counts them); a style it stands in for is substituted.
+fn font_status(f: &Value) -> &'static str {
+    if f["missing"].as_bool().unwrap_or(false) || f["styleMissing"].as_bool().unwrap_or(false) {
+        "missing"
+    } else if f["matchStatus"] == "styleSubstitute" {
+        "substituted"
+    } else {
+        "ok"
+    }
+}
+
+/// The document the dialog was opened on is still the active one (automation can switch
+/// documents while it is open, and the package must be of the one summarised).
+fn same_document(app: &DesignApp, d: &Dialog) -> Result<(), String> {
+    match app.session.active() {
+        Some(doc) if d.fields.get("doc").and_then(Value::as_u64) == Some(doc.uid) => Ok(()),
+        _ => Err("the active document changed after the Package dialog opened".into()),
+    }
 }
 
 fn rows(d: &Dialog, key: &str) -> Vec<Value> {
@@ -268,9 +284,10 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 
 /// Package…: the Printing Instructions first when asked for, else the folder.
 pub fn confirm(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
+    same_document(app, d)?;
     let (idml, pdf) = (d.b("idml"), d.b("pdf"));
     if d.b("instructions") {
-        app.ui.dialog = Some(Dialog::new(INSTRUCTIONS, json!({"idml": idml, "pdf": pdf})));
+        app.ui.dialog = Some(Dialog::new(INSTRUCTIONS, json!({"idml": idml, "pdf": pdf, "doc": d.fields.get("doc")})));
         return Ok(Value::Null);
     }
     package_to_folder(app, idml, pdf, None)
@@ -284,8 +301,13 @@ pub fn show_instructions(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             crate::rtl::label(ui, crate::i18n::tr(&lang, label));
             let mut text = d.s(key);
             let edit = if lines > 1 { egui::TextEdit::multiline(&mut text).desired_rows(lines) } else { egui::TextEdit::singleline(&mut text) };
-            if ui.add(edit.desired_width(320.0)).changed() {
+            let resp = ui.add(edit.desired_width(320.0));
+            if resp.changed() {
                 d.fields.insert(key.into(), json!(text));
+            }
+            // Enter there makes a new line: the footer mustn't take it for Continue.
+            if lines > 1 && resp.has_focus() {
+                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new(crate::dialogs::MULTILINE_FOCUS), true));
             }
             ui.end_row();
         }
@@ -318,6 +340,7 @@ fn instructions_text(d: &Dialog) -> String {
 
 /// Continue: the folder, with the instructions.
 pub fn confirm_instructions(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
+    same_document(app, d)?;
     let text = instructions_text(d);
     package_to_folder(app, d.b("idml"), d.b("pdf"), Some(text).filter(|t| !t.is_empty()))
 }
@@ -479,6 +502,61 @@ mod tests {
         app.ui.dialog = None;
         assert!(app.run("app.packageDialog", json!({})).is_err());
         assert!(app.ui.dialog.is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A style the font's family lacks counts as missing, as `file.package` counts it.
+    #[test]
+    fn a_missing_font_style_is_a_missing_font() {
+        assert_eq!(font_status(&json!({"missing": true})), "missing");
+        assert_eq!(font_status(&json!({"missing": false, "styleMissing": true})), "missing");
+        assert_eq!(font_status(&json!({"missing": false, "matchStatus": "styleSubstitute"})), "substituted");
+        assert_eq!(font_status(&json!({"missing": false})), "ok");
+    }
+
+    /// The package is of the document the dialog summarised: when another document became active
+    /// meanwhile, Package… and Continue refuse, and nothing is written.
+    #[test]
+    fn package_refuses_when_the_active_document_changed() {
+        let dir = temp_dir("switched");
+        let mut app = app_with_missing_link(&dir);
+        let out = dir.join("Packed Folder");
+        let picked = out.to_string_lossy().to_string();
+        app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+        open(&mut app).unwrap();
+        let d = app.ui.dialog.take().unwrap();
+        app.run("file.new", json!({"title": "Other"})).unwrap();
+        assert!(confirm(&mut app, &d).is_err());
+        let ins = Dialog::new(INSTRUCTIONS, json!({"idml": true, "pdf": false, "doc": d.fields["doc"]}));
+        assert!(confirm_instructions(&mut app, &ins).is_err());
+        assert!(!out.exists(), "nothing packaged");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Enter in Address or Instructions makes a new line there; in a one-line field it continues.
+    #[test]
+    fn enter_in_a_multiline_instruction_field_is_a_new_line() {
+        let dir = temp_dir("enter");
+        let mut app = app_with_missing_link(&dir);
+        let doc = app.session.active().unwrap().uid;
+        app.ui.dialog = Some(Dialog::new(INSTRUCTIONS, json!({"idml": true, "pdf": false, "doc": doc})));
+        let mut h = harness(app);
+        h.run_steps(3);
+        let field = |h: &Harness<'static, DesignApp>, n: usize| {
+            h.query_all_by(|x| x.role() == egui::accesskit::Role::TextInput || x.role() == egui::accesskit::Role::MultilineTextInput)
+                .nth(n)
+                .unwrap()
+                .rect()
+                .center()
+        };
+        // Address is the third field.
+        let address = field(&h, 2);
+        h.event(egui::Event::PointerButton { pos: address, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+        h.event(egui::Event::PointerButton { pos: address, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.id.as_str()), Some(INSTRUCTIONS), "still open");
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
