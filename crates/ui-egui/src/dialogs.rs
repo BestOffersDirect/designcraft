@@ -3210,17 +3210,24 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 None => Err(format!("no page \"{typed}\"")),
             }
         }
-        "convertTextToTable" => {
-            let same = d.s("columnSeparator") == d.s("rowSeparator");
-            let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty() && s != designcraft_doc::BASIC_TABLE);
-            app.run(
-                "table.convertFromText",
-                json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator"),
-                    "columns": if same { json!(d.n("columns").unwrap_or(1.0).max(1.0) as u64) } else { Value::Null }, "tableStyle": style}),
-            )
-        }
-        "convertTableToText" => {
-            app.run("table.convertToText", json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator")}))
+        "convertTextToTable" | "convertTableToText" => {
+            let r = if d.id == "convertTextToTable" {
+                let same = d.s("columnSeparator") == d.s("rowSeparator");
+                let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty() && s != designcraft_doc::BASIC_TABLE);
+                app.run(
+                    "table.convertFromText",
+                    json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator"),
+                        "columns": if same { json!(d.n("columns").unwrap_or(1.0).max(1.0) as u64) } else { Value::Null }, "tableStyle": style}),
+                )
+            } else {
+                app.run("table.convertToText", json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator")}))
+            };
+            // On an error (an emptied separator field) the dialog stays open to be corrected.
+            if let Err(e) = &r {
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+            }
+            r
         }
         "insertTable" => {
             // The table and its style in one step; a style that is gone leaves the document alone,
@@ -9861,6 +9868,10 @@ mod tests {
         assert!(crate::menus::menu_enabled(&app, "app.convertTextToTableDialog"));
         app.run("app.convertTextToTableDialog", json!({})).unwrap();
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("convertTextToTable"));
+        // An emptied separator: the command refuses it and the dialog stays open, as typed.
+        ctl(&mut app, "ui.dialog.set", json!({"field": "rowSeparator", "value": ""}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| (d.id.as_str(), d.s("rowSeparator"))), Some(("convertTextToTable", String::new())));
         for (field, value) in [("columnSeparator", json!("paragraph")), ("rowSeparator", json!("paragraph")), ("columns", json!(2))] {
             ctl(&mut app, "ui.dialog.set", json!({"field": field, "value": value}));
         }
