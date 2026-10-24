@@ -231,11 +231,24 @@ fn new_document_settings(s: &Session, p: &Value) -> Result<NewDocument> {
     Ok(nd)
 }
 
+/// A document as `file.new` makes it. Its Basic Paragraph doesn't hyphenate capitalized words, a
+/// paragraph's last word or across a column. Opened and imported files keep their own values,
+/// which is why `ParaProps` keeps the IDML defaults (on).
+fn new_document(nd: &NewDocument) -> Document {
+    let mut d = Document::new(nd);
+    if let Some(st) = Arc::make_mut(&mut d.styles).para_mut(designcraft_doc::BASIC_PARAGRAPH) {
+        st.para.hyph_capitalized = Some(false);
+        st.para.hyph_last_word = Some(false);
+        st.para.hyph_across_column = Some(false);
+    }
+    d
+}
+
 fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     let mut nd = new_document_settings(s, p)?;
     s.untitled += 1;
     nd.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| format!("Untitled-{}", s.untitled));
-    let d = Document::new(&nd);
+    let d = new_document(&nd);
     let i = s.add_document(DocState::new(d, None));
     Ok(json!({"index": i}))
 }
@@ -259,7 +272,7 @@ impl Session {
             self.untitled += 1;
         }
         nd.title = str_param(p, "title").map(str::to_string).unwrap_or_else(|| self.next_untitled_title());
-        let st = DocState::new(Document::new(&nd), None);
+        let st = DocState::new(new_document(&nd), None);
         let uid = st.uid;
         match replace.and_then(|i| self.docs.get_mut(i).map(|d| (i, d))) {
             Some((i, d)) => {
@@ -2122,5 +2135,37 @@ mod recent_tests {
         assert_eq!(back.recent_files_max, 20);
         let old: crate::Prefs = serde_json::from_slice(br#"{"recoveryMinutes": 2.0}"#).unwrap();
         assert!(old.recent_files.is_empty(), "older prefs.json without the list still load");
+    }
+}
+
+#[cfg(test)]
+mod hyphenation_default_tests {
+    use std::sync::Arc;
+
+    use designcraft_doc::BASIC_PARAGRAPH;
+    use designcraft_doc::build::NewDocument;
+    use serde_json::json;
+
+    use crate::Session;
+
+    fn hyph_flags(d: &designcraft_doc::Document) -> (bool, bool, bool) {
+        let (pp, _) = d.styles.resolve_para(&designcraft_doc::ParaFormat::default());
+        (pp.hyph_capitalized, pp.hyph_last_word, pp.hyph_across_column)
+    }
+
+    #[test]
+    fn new_documents_hyphenate_no_capitalized_last_or_column_end_words_and_imports_keep_theirs() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        assert_eq!(hyph_flags(&s.doc().unwrap().doc), (false, false, false));
+
+        let mut d = designcraft_doc::Document::new(&NewDocument::default());
+        let st = Arc::make_mut(&mut d.styles).para_mut(BASIC_PARAGRAPH).unwrap();
+        st.para.hyph_capitalized = Some(true);
+        st.para.hyph_last_word = Some(true);
+        st.para.hyph_across_column = Some(true);
+        let b64 = super::base64_encode(&designcraft_idml::export_idml(&d));
+        s.execute("file.openIdml", &json!({"base64": b64, "name": "in.idml"})).unwrap();
+        assert_eq!(hyph_flags(&s.doc().unwrap().doc), (true, true, true));
     }
 }
