@@ -161,7 +161,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Insert Pages…",
             ["Layout", "Pages"],
             Some("Cmd+Shift+P"),
-            "{count?: 1 (1 to 9999), after?: 0-based page index (default: the last page), before?: 0-based page index (instead of `after`; 0: at the start), parent?: id|\"A-Parent\"|\"A\"|null}",
+            "{count?: 1 (1 to 9999), after?: 0-based page index (default: the last page; past it: at the end), before?: 0-based page index (instead of `after`; 0: at the start), parent?: id|\"A-Parent\"|\"A\"|null}",
             has_doc,
             |s, p| {
                 const ID: &str = "layout.pages.insert";
@@ -181,15 +181,16 @@ pub fn specs() -> Vec<CommandSpec> {
                 if p.get("after").is_some() && p.get("before").is_some() {
                     return Err(bad("layout.pages.insert", "give `after` or `before`, not both"));
                 }
-                // A page of the document: one past the last isn't, and would insert at the end.
+                // `before` names a page of the document; an `after` past the last page appends
+                // (`insert_pages_bounds.rs` pins that).
                 let index = |k: &str| match p.get(k) {
                     None => Ok(None),
                     Some(v) => v
                         .as_u64()
-                        .and_then(|v| usize::try_from(v).ok())
-                        .filter(|&i| i < n)
-                        .map(Some)
-                        .ok_or_else(|| bad("layout.pages.insert", format!("`{k}` must be the index of one of the {n} pages, not {v}"))),
+                        .map(|v| usize::try_from(v).unwrap_or(usize::MAX))
+                        .filter(|&i| k == "after" || i < n)
+                        .map(|i| Some(i.min(n.saturating_sub(1))))
+                        .ok_or_else(|| bad(ID, format!("`{k}` must be the index of one of the {n} pages, not {v}"))),
                 };
                 // The page the new ones follow; none: they go first.
                 let after = match (index("after")?, index("before")?) {
@@ -2220,7 +2221,6 @@ mod parent_margin_tests {
             json!({"before": null}),
             json!({"after": 1.5}),
             json!({"before": 6}),
-            json!({"after": 6}),
             json!({"before": 99}),
         ] {
             assert!(s.execute("layout.pages.insert", &bad).is_err(), "{bad}");
