@@ -137,6 +137,11 @@ fn text_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, w: f32) {
     }
 }
 
+/// The dialog's chosen table style: none when unset, null or empty (a new table's [Basic Table]).
+fn table_style_field(d: &Dialog) -> Option<String> {
+    d.fields.get("tableStyle").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string)
+}
+
 /// Table › Insert Table, laid out as InDesign's: Table Dimensions (body rows and columns, then
 /// header and footer rows, each a number with a spinner, labels on the right edge of their
 /// column) and the Table Style to apply.
@@ -169,7 +174,7 @@ fn insert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     ui.add_space(8.0);
     let names: Vec<String> = app.session.active().map(|st| st.doc.styles.table.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-    let cur = Some(d.s("tableStyle")).filter(|s| !s.is_empty()).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
+    let cur = table_style_field(d).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
     ui.horizontal(|ui| {
         crate::rtl::label(ui, format!("{}:", crate::i18n::tr(lang, "Table Style")));
         egui::ComboBox::from_id_salt("ins_table_style").selected_text(&cur).width(160.0).show_ui(ui, |ui| {
@@ -3137,7 +3142,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         "insertTable" => {
             // The table and its style in one step; a style that is gone leaves the document alone,
             // and the dialog stays open to be corrected.
-            let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty());
+            let style = table_style_field(&d);
             let r = app.run(
                 "table.insert",
                 json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
@@ -9746,6 +9751,13 @@ mod tests {
             app.run("edit.undo", json!({})).unwrap();
             assert!(app.run("table.get", json!({})).is_err(), "the table is gone");
         }
+        // A null style is no style: the table is made, unstyled.
+        app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+        app.run("app.insertTableDialog", json!({})).unwrap();
+        ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": null}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+        assert_eq!(app.run("table.get", json!({})).unwrap()["style"].as_str().unwrap_or(""), "");
+        app.run("edit.undo", json!({})).unwrap();
         // A style that no longer exists changes nothing.
         let tables = |app: &DesignApp| app.session.active().unwrap().doc.stories.values().map(|s| s.tables.len()).sum::<usize>();
         app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
