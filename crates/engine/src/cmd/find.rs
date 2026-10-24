@@ -372,10 +372,12 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
                     st.replace(range.clone(), new);
                     range.start..range.start + new.len()
                 };
+                // A paragraph style goes to the match's paragraphs, an empty match's (`^`) too;
+                // character formatting needs characters.
+                if let Some(n) = &para_style {
+                    super::style::apply_para_style(st, &styles, n, &changed, false);
+                }
                 if !changed.is_empty() {
-                    if let Some(n) = &para_style {
-                        super::style::apply_para_style(st, &styles, n, &changed, false);
-                    }
                     if let Some(n) = &char_style {
                         super::style::apply_char_style(st, &styles, n, &changed);
                     }
@@ -483,6 +485,34 @@ mod tests {
         assert_eq!(s.execute("find.find", &json!({"find": ".^pc"})).unwrap().as_array().unwrap().len(), 1);
         s.execute("find.next", &json!({"find": "or"})).unwrap();
         assert!(s.doc().unwrap().selection.text.is_some());
+    }
+
+    /// A GREP match that is empty (`^`, the start of each paragraph) gets the paragraph style:
+    /// only character formatting needs characters.
+    #[test]
+    fn change_format_styles_paragraphs_of_empty_matches() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let r = s
+            .execute(
+                "frame.create",
+                &json!({"rect": [36, 36, 300, 300], "content": "text", "text": "One
+Two
+Three"}),
+            )
+            .unwrap();
+        let sid = designcraft_doc::StoryId(r["story"].as_u64().unwrap());
+        s.execute("style.paragraph.create", &json!({"name": "Method"})).unwrap();
+        let r = s.execute("find.change", &json!({"find": "^", "change": "", "grep": true, "paraStyle": "Method"})).unwrap();
+        assert_eq!(r["count"], 3);
+        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
+        assert!(story.paras.iter().all(|p| p.style == "Method"), "{:?}", story.paras.iter().map(|p| &p.style).collect::<Vec<_>>());
+        assert_eq!(
+            story.text,
+            "One
+Two
+Three"
+        );
     }
 
     #[test]

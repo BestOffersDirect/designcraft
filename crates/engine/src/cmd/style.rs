@@ -790,7 +790,7 @@ pub(super) fn apply_para_style(st: &mut designcraft_doc::Story, styles: &Styles,
             f.chars.retain_differences(&style_chars);
         }
     });
-    for (pi, range) in st.para_ranges().into_iter().enumerate().take(last.saturating_add(1)).skip(first) {
+    for (pi, range) in st.paras_touching(r.clone()).into_iter().filter(|(pi, _)| (first..=last).contains(pi)) {
         let Some(pf) = st.paras.get(pi) else { continue };
         let (_, base) = styles.resolve_para(pf);
         let end = range.end.saturating_add(1).min(st.len());
@@ -827,7 +827,7 @@ fn apply_char(s: &mut Session, p: &Value) -> Result<Value> {
 /// Character style `name` applied to `r` in `st`: the text's overrides that the style (over its
 /// paragraph) now gives go.
 pub(super) fn apply_char_style(st: &mut designcraft_doc::Story, styles: &Styles, name: &str, r: &std::ops::Range<usize>) {
-    for (pi, range) in st.para_ranges().into_iter().enumerate() {
+    for (pi, range) in st.paras_touching(r.clone()) {
         let range = range.start.max(r.start)..range.end.saturating_add(1).min(st.len()).min(r.end);
         if range.is_empty() {
             continue;
