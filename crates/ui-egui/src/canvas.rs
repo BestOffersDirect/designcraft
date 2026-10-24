@@ -962,7 +962,8 @@ fn dashed(painter: &egui::Painter, a: Pos2, b: Pos2, stroke: Stroke, dash: f32, 
 const MAX_BASELINES: usize = 216 * 72;
 
 /// Baseline grid lines inside a page, measured from its top: `start + n * increment` for n >= 0 (the bottom
-/// edge is not a line). Lines above the page are skipped without walking them, however far up the start is.
+/// edge is not a line), `start` from [`BaselineGrid::origin`](designcraft_doc::BaselineGrid::origin). Lines
+/// above the page are skipped without walking them, however far up the start is.
 fn baseline_grid_lines(start: f64, increment: f64, height: f64) -> impl Iterator<Item = f64> {
     let step = increment.max(1.0);
     let first = if start < 0.0 { start.rem_euclid(step) } else { start };
@@ -1022,7 +1023,7 @@ fn draw_guides(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc: &Document
             // Baseline grid.
             if app.ui.baseline_grid && xf.zoom >= s.baseline_grid.view_threshold {
                 let g = &s.baseline_grid;
-                for y in baseline_grid_lines(g.start, g.increment, p.height) {
+                for y in baseline_grid_lines(g.origin(p), g.increment, p.height) {
                     painter.line_segment(
                         [pt(Point::new(pr.x0, pr.y0 + y)), pt(Point::new(pr.x1, pr.y0 + y))],
                         Stroke::new(hair(painter), c32(g.color).gamma_multiply(0.8)),
@@ -1251,6 +1252,9 @@ fn draw_selection(app: &DesignApp, painter: &egui::Painter, xf: &Xf, doc: &Docum
         if sel.items.len() == 1 && sel.text.is_none() {
             // InDesign draws a 1 pt bounding box around the selection.
             painter.rect_stroke(xf.rect(a.transform_rect_bbox(it.bounds())), 0.0, Stroke::new(1.0, color), StrokeKind::Middle);
+        } else if sel.key == Some(*id) {
+            // The key object for Align: a thicker bounding box, as in InDesign.
+            painter.rect_stroke(xf.rect(a.transform_rect_bbox(it.bounds())), 0.0, Stroke::new(3.0, color), StrokeKind::Middle);
         }
         let b = xf.rect(a.transform_rect_bbox(it.bounds()));
         union = Some(union.map_or(b, |u| u.union(b)));
@@ -5317,7 +5321,7 @@ mod tests {
         let (pen, direct, text) = (shown("pen"), shown("directSelection"), shown("type"));
         let ppp = h.ctx.pixels_per_point();
         let images = &mut h.state_mut().cursors;
-        match crate::cursors::MODE {
+        match crate::cursors::mode() {
             crate::cursors::Mode::Os => {
                 assert_eq!(pen.1, images.get(Cursor::Pen, ppp), "Pen");
                 assert_eq!(direct.1, images.get(Cursor::ArrowHollow, ppp), "Direct Selection");
