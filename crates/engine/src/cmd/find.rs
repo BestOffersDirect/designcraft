@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 
 use designcraft_compose::grep::{Grep, GrepOptions, translate_replacement};
 use designcraft_doc::story::floor_char_boundary;
-use designcraft_doc::{Document, Selection, Story, StoryId, Styles, TextSel};
+use designcraft_doc::{CellAddr, Document, Selection, Story, StoryId, Styles, TextSel};
 use serde_json::{Value, json};
 
 use super::{CommandSpec, bad, bool_or, cmd, has_doc, str_param};
@@ -61,7 +61,7 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!(query "find.find", "Find", ["Edit", "Find/Change"], None,
-            "{find, grep?: bool, caseSensitive?: bool, wholeWord?: bool, scope?: document|story|selection, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), change?|first?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} → matches [{story, start, end, text}]",
+            "{find, grep?: bool, caseSensitive?: bool, wholeWord?: bool, scope?: document|story|selection, story?, findFormat?: {charStyle?, paraStyle?, chars?: resolved character attributes} (Find Format: only text with it all through; with an empty find, each stretch of text with it), change?|first?|attrs?|charStyle?|paraStyle?: ignored (find.change takes them; one request serves all three Find/Change commands)} → matches [{story, start, end, text, cell?: {table, row, col}}] (document scope also searches table cells; start/end then index the cell's text)",
             has_doc, find),
         cmd!(
             "find.change",
@@ -236,23 +236,24 @@ impl Search {
         self.format.as_ref().map_or(Ok(()), |f| f.check(styles))
     }
 
-    /// Where the Find Format holds in target `r` of story `sid` (`None`: no Find Format).
-    fn spans(&self, d: &Document, sid: StoryId, r: &Range<usize>) -> Option<Vec<Range<usize>>> {
+    /// Where the Find Format holds in target `r` of story `sid` (of its table cell `cell`, if any;
+    /// `None`: no Find Format).
+    fn spans(&self, d: &Document, sid: StoryId, cell: Option<CellAddr>, r: &Range<usize>) -> Option<Vec<Range<usize>>> {
         let f = self.format.as_ref()?;
-        Some(d.story(sid).map(|story| f.spans(&d.styles, story, r)).unwrap_or_default())
+        Some(d.text_story(sid, cell).map(|story| f.spans(&d.styles, story, r)).unwrap_or_default())
     }
 
     /// Up to `limit` matches in `text`, target `r` of story `sid` (offsets in `text`).
-    fn find_all(&self, d: &Document, sid: StoryId, r: &Range<usize>, text: &str, limit: usize) -> Result<Vec<Range<usize>>> {
-        let spans = self.spans(d, sid, r);
+    fn find_all(&self, d: &Document, sid: StoryId, cell: Option<CellAddr>, r: &Range<usize>, text: &str, limit: usize) -> Result<Vec<Range<usize>>> {
+        let spans = self.spans(d, sid, cell, r);
         let Some(re) = &self.re else { return Ok(spans.unwrap_or_default().into_iter().take(limit).collect()) };
         let Some(spans) = spans else { return re.find_all(text, limit).map_err(|e| bad("find", e)) };
         Ok(re.find_all(text, usize::MAX).map_err(|e| bad("find", e))?.into_iter().filter(|m| within(&spans, m)).take(limit).collect())
     }
 
     /// The first match in `text` (target `r` of story `sid`) at or after byte `from`.
-    fn find_at(&self, d: &Document, sid: StoryId, r: &Range<usize>, text: &str, from: usize) -> Result<Option<Range<usize>>> {
-        let spans = self.spans(d, sid, r);
+    fn find_at(&self, d: &Document, sid: StoryId, cell: Option<CellAddr>, r: &Range<usize>, text: &str, from: usize) -> Result<Option<Range<usize>>> {
+        let spans = self.spans(d, sid, cell, r);
         let Some(re) = &self.re else {
             // From inside a stretch, the rest of it.
             return Ok(spans.unwrap_or_default().into_iter().find(|s| s.end > from).map(|s| s.start.max(from)..s.end));
@@ -278,6 +279,7 @@ impl Search {
         &self,
         d: &Document,
         sid: StoryId,
+        cell: Option<CellAddr>,
         r: &Range<usize>,
         text: &str,
         rep: &str,
@@ -285,7 +287,7 @@ impl Search {
         first_only: bool,
     ) -> Result<Vec<(Range<usize>, String)>> {
         let limit = if first_only { 1 } else { usize::MAX };
-        match (&self.re, self.spans(d, sid, r)) {
+        match (&self.re, self.spans(d, sid, cell, r)) {
             (Some(re), None) if grep => re.replacements(text, rep, first_only).map_err(|e| bad("find.change", e)),
             (Some(re), Some(spans)) if grep => Ok(re
                 .replacements(text, rep, false)
@@ -294,7 +296,7 @@ impl Search {
                 .filter(|(m, _)| within(&spans, m))
                 .take(limit)
                 .collect()),
-            _ => Ok(self.find_all(d, sid, r, text, limit)?.into_iter().map(|m| (m, rep.to_string())).collect()),
+            _ => Ok(self.find_all(d, sid, cell, r, text, limit)?.into_iter().map(|m| (m, rep.to_string())).collect()),
         }
     }
 }
@@ -346,6 +348,9 @@ impl Matcher {
     }
 }
 
+/// A searched text: a story, or one table cell of it, and the byte range inside.
+type Target = (StoryId, Option<CellAddr>, Range<usize>);
+
 /// A search owns its original domain, not the selection used to paint the latest hit.
 /// Weak identity avoids retaining an old document merely for this transient cache.
 #[derive(Clone)]
@@ -356,7 +361,7 @@ pub(crate) struct FindContext {
     selection: Selection,
     domain: Domain,
     matcher: Matcher,
-    targets: Vec<(StoryId, Range<usize>)>,
+    targets: Vec<Target>,
     order: Vec<usize>,
     target: usize,
     offset: usize,
@@ -377,21 +382,25 @@ impl FindContext {
         self.target = 0;
         self.last_match_end = None;
         self.order = (0..self.targets.len()).collect();
-        let caret = st.selection.text.filter(|t| t.cell.is_none() && st.selection.cells.is_none());
-        if self.domain == Domain::Document
-            && let Some(t) = st.selection.text
-            && let Some(i) = self.targets.iter().position(|(sid, _)| *sid == t.story)
-        {
+        let caret = st.selection.text.filter(|_| st.selection.cells.is_none());
+        // A caret in a searched cell starts there; one in a footnote starts at its story.
+        let start = st.selection.text.and_then(|t| {
+            let at = |want: Option<CellAddr>| self.targets.iter().position(|(sid, cell, _)| *sid == t.story && *cell == want);
+            at(t.cell).or_else(|| at(None))
+        });
+        if let Some(i) = start.filter(|_| self.domain == Domain::Document) {
             self.order.rotate_left(i);
         }
         let first = self.order.first().and_then(|i| self.targets.get(*i));
         self.offset = match first {
-            Some((sid, r)) if self.domain != Domain::Selection => caret.filter(|t| t.story == *sid).map_or(r.start, |t| t.range().end.min(r.end)),
-            Some((_, r)) => r.start,
+            Some((sid, cell, r)) if self.domain != Domain::Selection => {
+                caret.filter(|t| t.story == *sid && t.cell == *cell).map_or(r.start, |t| t.range().end.min(r.end))
+            }
+            Some((_, _, r)) => r.start,
             None => 0,
         };
-        if let Some((sid, r)) = first {
-            let text = target_text(&st.doc, *sid, r)?;
+        if let Some((sid, cell, r)) = first {
+            let text = target_text(&st.doc, *sid, *cell, r)?;
             if text.get(self.offset.saturating_sub(r.start)..).is_none() {
                 return Err(bad("find", "invalid UTF-8 search cursor"));
             }
@@ -402,7 +411,7 @@ impl FindContext {
     fn advance_target(&mut self) {
         self.target = self.target.saturating_add(1);
         self.last_match_end = None;
-        self.offset = self.order.get(self.target).and_then(|i| self.targets.get(*i)).map_or(0, |(_, r)| r.start);
+        self.offset = self.order.get(self.target).and_then(|i| self.targets.get(*i)).map_or(0, |(_, _, r)| r.start);
     }
 
     fn advance_empty(&mut self, text: &str, relative_end: usize, end: usize) {
@@ -415,8 +424,8 @@ impl FindContext {
     }
 }
 
-fn target_text<'a>(d: &'a Document, sid: StoryId, r: &Range<usize>) -> Result<&'a str> {
-    d.story(sid)
+fn target_text<'a>(d: &'a Document, sid: StoryId, cell: Option<CellAddr>, r: &Range<usize>) -> Result<&'a str> {
+    d.text_story(sid, cell)
         .ok_or_else(|| bad("find", "no such story"))?
         .text
         .get(r.clone())
@@ -439,7 +448,7 @@ fn scope(s: &Session, p: &Value) -> Result<FindContext> {
     let targets = match domain {
         Domain::Explicit(sid) => {
             let len = d.story(sid).ok_or_else(|| bad("find", "no such story"))?.len();
-            vec![(sid, 0..len)]
+            vec![(sid, None, 0..len)]
         }
         Domain::Story | Domain::Selection => {
             if st.selection.cells.is_some() || st.selection.text.is_some_and(|t| t.cell.is_some()) {
@@ -448,10 +457,21 @@ fn scope(s: &Session, p: &Value) -> Result<FindContext> {
             let t = st.selection.text.ok_or_else(|| bad("find", "no text selected"))?;
             let story = d.story(t.story).ok_or_else(|| bad("find", "no such story"))?;
             let r = if domain == Domain::Selection { t.range() } else { 0..story.len() };
-            target_text(d, t.story, &r)?;
-            vec![(t.story, r)]
+            target_text(d, t.story, None, &r)?;
+            vec![(t.story, None, r)]
         }
-        Domain::Document => d.stories.values().map(|x| (x.id, 0..x.len())).collect(),
+        // Table cells hold their own text outside `stories`; search them right after the story that anchors the table.
+        Domain::Document => d
+            .stories
+            .values()
+            .flat_map(|x| {
+                let cells = x.tables.iter().flat_map(move |(id, t)| {
+                    let cols = t.ncols().max(1);
+                    t.cells.iter().enumerate().map(move |(i, c)| (x.id, Some(CellAddr { table: *id, row: i / cols, col: i % cols }), 0..c.text.len()))
+                });
+                std::iter::once((x.id, None, 0..x.len())).chain(cells)
+            })
+            .collect(),
     };
     let mut context = FindContext {
         document: Arc::downgrade(d),
@@ -479,10 +499,14 @@ fn find(s: &mut Session, p: &Value) -> Result<Value> {
     let context = scope(s, p)?;
     let st = s.doc()?;
     let mut out = Vec::new();
-    for (sid, r) in &context.targets {
-        let text = target_text(&st.doc, *sid, r)?;
-        for m in re.find_all(&st.doc, *sid, r, text, MAX_MATCHES.saturating_sub(out.len()))? {
-            out.push(json!({"story": sid.0, "start": r.start + m.start, "end": r.start + m.end, "text": text.get(m)}));
+    for (sid, cell, r) in &context.targets {
+        let text = target_text(&st.doc, *sid, *cell, r)?;
+        for m in re.find_all(&st.doc, *sid, *cell, r, text, MAX_MATCHES.saturating_sub(out.len()))? {
+            let mut hit = json!({"story": sid.0, "start": r.start + m.start, "end": r.start + m.end, "text": text.get(m)});
+            if let Some(c) = cell {
+                hit["cell"] = json!({"table": c.table, "row": c.row, "col": c.col});
+            }
+            out.push(hit);
         }
     }
     s.find_context = Some(context);
@@ -525,16 +549,16 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
     s.edit(|d, sel| {
         let styles = d.styles.clone();
         let mut count = 0usize;
-        for (sid, r) in targets {
-            let Some(story) = d.story(sid) else { continue };
+        for (sid, cell, r) in targets {
+            let Some(story) = d.text_story(sid, cell) else { continue };
             // Collect matches first (positions refer to the original text), apply back to front.
             let text = story.text.get(r.clone()).ok_or_else(|| bad("find", "invalid selection bounds or UTF-8 boundary"))?;
             let edits: Vec<(std::ops::Range<usize>, String)> = re
-                .replacements(d, sid, &r, text, &rep, grep, first_only)?
+                .replacements(d, sid, cell, &r, text, &rep, grep, first_only)?
                 .into_iter()
                 .map(|(m, out)| (r.start + m.start..r.start + m.end, out))
                 .collect();
-            let Some(st) = d.story_mut(sid) else { continue };
+            let Some(st) = d.text_story_mut(sid, cell) else { continue };
             for (range, new) in edits.iter().rev() {
                 let changed = if format_only {
                     range.clone()
@@ -555,7 +579,7 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
                 }
                 count += 1;
             }
-            if let Some(t) = sel.text.as_mut().filter(|t| t.story == sid && t.cell.is_none()) {
+            if let Some(t) = sel.text.as_mut().filter(|t| t.story == sid && t.cell == cell) {
                 // Repair byte validity once against the final story, without remapping valid offsets.
                 let range = t.range();
                 let start = floor_char_boundary(&st.text, range.start);
@@ -583,13 +607,13 @@ fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
     let mut context = scope(s, p)?;
     let st = s.doc()?;
     let mut hit = None;
-    while let Some((sid, r)) = context.order.get(context.target).and_then(|i| context.targets.get(*i)).cloned() {
-        let text = target_text(&st.doc, sid, &r)?;
+    while let Some((sid, cell, r)) = context.order.get(context.target).and_then(|i| context.targets.get(*i)).cloned() {
+        let text = target_text(&st.doc, sid, cell, &r)?;
         let from = context.offset.checked_sub(r.start).ok_or_else(|| bad("find", "invalid search cursor"))?;
         if text.get(from..).is_none() {
             return Err(bad("find", "invalid UTF-8 search cursor"));
         }
-        if let Some(m) = re.find_at(&st.doc, sid, &r, text, from)? {
+        if let Some(m) = re.find_at(&st.doc, sid, cell, &r, text, from)? {
             let (a, b) = (r.start + m.start, r.start + m.end);
             // Match find_iter/captures_iter: suppress an empty match adjacent to the
             // previous match's end, but keep adjacent nonempty matches.
@@ -597,7 +621,7 @@ fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
                 context.advance_empty(text, m.end, b);
                 continue;
             }
-            hit = Some((sid, a, b));
+            hit = Some((sid, cell, a, b));
             context.last_match_end = Some(b);
             if m.is_empty() {
                 context.advance_empty(text, m.end, b);
@@ -608,17 +632,22 @@ fn find_next(s: &mut Session, p: &Value) -> Result<Value> {
         }
         context.advance_target();
     }
-    let Some((sid, a, b)) = hit else {
+    let Some((sid, cell, a, b)) = hit else {
         s.find_context = Some(context);
         return Ok(Value::Null);
     };
     let frame = st.doc.story(sid).and_then(|x| x.frames.first().copied());
+    let cell_json = cell.map(|c| json!({"table": c.table, "row": c.row, "col": c.col}));
     let stm = s.doc_mut()?;
-    stm.selection = Selection::text(TextSel { story: sid, anchor: a, focus: b, frame, cell: None });
+    stm.selection = Selection::text(TextSel { story: sid, anchor: a, focus: b, frame, cell });
     stm.bump_revision();
     context.acknowledge(stm);
     s.find_context = Some(context);
-    Ok(json!({"story": sid.0, "start": a, "end": b}))
+    let mut out = json!({"story": sid.0, "start": a, "end": b});
+    if let Some(c) = cell_json {
+        out["cell"] = c;
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -1341,6 +1370,31 @@ mod tests {
         assert_eq!(s.doc().unwrap().history.undo.len(), history);
     }
 
+    #[test]
+    fn document_scope_searches_and_changes_table_cells() {
+        let (mut s, sid) = scope_session("Ore 12.15 here");
+        scope_select(&mut s, sid, 0, 0);
+        let table = s.execute("table.insert", &json!({"rows": 1, "cols": 2})).unwrap()["table"].as_u64().unwrap();
+        s.execute("table.setCell", &json!({"row": 0, "col": 1, "text": "Ore 12.15"})).unwrap();
+        // The caret sits in the first cell, so Find Next goes to the second cell, then the story.
+        let p = json!({"find": "Ore 12.15", "scope": "document"});
+        let cell = designcraft_doc::CellAddr { table, row: 0, col: 1 };
+        assert_eq!(s.execute("find.next", &p).unwrap(), json!({"story": sid.0, "start": 0, "end": 9, "cell": {"table": table, "row": 0, "col": 1}}));
+        assert_eq!(s.doc().unwrap().selection.text.map(|t| (t.story, t.range(), t.cell)), Some((sid, 0..9, Some(cell))));
+        let next = s.execute("find.next", &p).unwrap();
+        assert!(next.get("start").is_some() && next.get("cell").is_none(), "{next}");
+        let hits = s.execute("find.find", &p).unwrap();
+        let hits = hits.as_array().unwrap();
+        assert_eq!(hits.len(), 2);
+        let in_cell: Vec<_> = hits.iter().filter(|h| h.get("cell").is_some()).collect();
+        assert_eq!(in_cell.len(), 1);
+        assert_eq!((in_cell[0]["cell"]["row"].as_u64(), in_cell[0]["cell"]["col"].as_u64()), (Some(0), Some(1)));
+        let n = s.execute("find.change", &json!({"find": "Ore 12.15", "change": "Ore 13.00", "scope": "document"})).unwrap();
+        assert_eq!(n["count"], 2);
+        assert!(s.execute("find.find", &json!({"find": "12.15", "scope": "document"})).unwrap().as_array().unwrap().is_empty());
+        assert_eq!(s.execute("find.find", &json!({"find": "13.00", "scope": "document"})).unwrap().as_array().unwrap().len(), 2);
+    }
+
     fn child_scope_session(note: bool, child: &str) -> (Session, designcraft_doc::StoryId, designcraft_doc::TextSel) {
         let (mut s, sid) = scope_session("red");
         scope_select(&mut s, sid, 3, 3);
@@ -1385,12 +1439,15 @@ mod tests {
                         p["story"] = json!(sid.0);
                         p["scope"] = json!("selection");
                     }
+                    // Document scope also covers table cells (#1624); an explicit story and footnotes stay top-level.
+                    let in_cell = if explicit || note { 0 } else { child.matches("red").count() };
+                    let changed = if in_cell > 0 { child.replace("red", "blue") } else { child.to_string() };
                     s.doc_mut().unwrap().selection = selection.clone();
-                    assert_eq!(s.execute("find.find", &p).unwrap().as_array().unwrap().len(), 1);
+                    assert_eq!(s.execute("find.find", &p).unwrap().as_array().unwrap().len(), 1 + in_cell);
                     scope_hit(&mut s, &p, sid, 0, 3);
                     s.doc_mut().unwrap().selection = selection.clone();
-                    assert_eq!(s.execute("find.change", &p).unwrap()["count"], 1);
-                    assert_eq!(s.doc().unwrap().doc.text_story(sid, selected.cell).unwrap().text, child);
+                    assert_eq!(s.execute("find.change", &p).unwrap()["count"], 1 + in_cell);
+                    assert_eq!(s.doc().unwrap().doc.text_story(sid, selected.cell).unwrap().text, changed);
                     assert_eq!(s.doc().unwrap().selection, selection, "parent replacement does not clamp child offsets");
                     p["find"] = json!("blue");
                     p["change"] = json!("red");
