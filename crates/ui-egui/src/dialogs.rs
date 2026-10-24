@@ -143,6 +143,22 @@ fn text_field(ui: &mut egui::Ui, d: &mut Dialog, key: &str, w: f32) {
 /// separator's own characters.
 const SEPARATORS: [(&str, &str); 3] = [("tab", "Tab"), ("comma", "Comma"), ("paragraph", "Paragraph")];
 
+/// The characters a separator field stands for (`table.convertFromText` resolves it the same
+/// way), so "comma" and a typed "," are the same separator.
+fn resolved_separator(v: &str) -> &str {
+    match v {
+        "tab" => "\t",
+        "comma" => ",",
+        "paragraph" => "\n",
+        other => other,
+    }
+}
+
+/// Whether the Convert dialog's two separators are the same (Number of Columns then applies).
+fn same_separators(d: &Dialog) -> bool {
+    resolved_separator(&d.s("columnSeparator")) == resolved_separator(&d.s("rowSeparator"))
+}
+
 /// A separator field, as InDesign's: type any characters, or pick Tab, Comma or Paragraph from
 /// its menu. Stored as `tab`/`comma`/`paragraph` or the typed text.
 fn separator_field(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
@@ -187,16 +203,17 @@ fn convert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         if !to_table {
             return;
         }
-        let same = d.s("columnSeparator") == d.s("rowSeparator");
+        let same = same_separators(d);
         label(ui, "Number of Columns", same);
-        let field = crate::widgets::NumField::number("columns", d.n("columns"), "", 0).width(70.0).range(1.0, 10_000.0).spinner().enabled(same);
+        let max = designcraft_engine::cmd::table::MAX_COLUMNS as f64;
+        let field = crate::widgets::NumField::number("columns", d.n("columns"), "", 0).width(70.0).range(1.0, max).spinner().enabled(same);
         if let Some(v) = field.show(ui) {
             d.fields.insert("columns".into(), json!(v.round()));
         }
         ui.end_row();
         label(ui, "Table Style", true);
         let names: Vec<String> = app.session.active().map(|st| st.doc.styles.table.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-        let cur = Some(d.s("tableStyle")).filter(|s| !s.is_empty()).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
+        let cur = table_style_field(d).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
         egui::ComboBox::from_id_salt("convert_table_style").selected_text(&cur).width(170.0).show_ui(ui, |ui| {
             for n in &names {
                 if ui.selectable_label(*n == cur, n).clicked() {
@@ -206,6 +223,11 @@ fn convert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         });
         ui.end_row();
     });
+}
+
+/// The dialog's chosen table style: none when unset, null or empty (a new table's [Basic Table]).
+fn table_style_field(d: &Dialog) -> Option<String> {
+    d.fields.get("tableStyle").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
 /// Table › Insert Table, laid out as InDesign's: Table Dimensions (body rows and columns, then
@@ -240,7 +262,7 @@ fn insert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     ui.add_space(8.0);
     let names: Vec<String> = app.session.active().map(|st| st.doc.styles.table.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
-    let cur = Some(d.s("tableStyle")).filter(|s| !s.is_empty()).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
+    let cur = table_style_field(d).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
     ui.horizontal(|ui| {
         crate::rtl::label(ui, format!("{}:", crate::i18n::tr(lang, "Table Style")));
         egui::ComboBox::from_id_salt("ins_table_style").selected_text(&cur).width(160.0).show_ui(ui, |ui| {
@@ -3212,12 +3234,12 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         }
         "convertTextToTable" | "convertTableToText" => {
             let r = if d.id == "convertTextToTable" {
-                let same = d.s("columnSeparator") == d.s("rowSeparator");
-                let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty() && s != designcraft_doc::BASIC_TABLE);
+                let same = same_separators(&d);
+                let style = table_style_field(&d).filter(|s| s != designcraft_doc::BASIC_TABLE);
                 app.run(
                     "table.convertFromText",
                     json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator"),
-                        "columns": if same { json!(d.n("columns").unwrap_or(1.0).max(1.0) as u64) } else { Value::Null }, "tableStyle": style}),
+                        "columns": if same { d.fields.get("columns").cloned().unwrap_or(json!(1)) } else { Value::Null }, "tableStyle": style}),
                 )
             } else {
                 app.run("table.convertToText", json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator")}))
@@ -3232,7 +3254,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         "insertTable" => {
             // The table and its style in one step; a style that is gone leaves the document alone,
             // and the dialog stays open to be corrected.
-            let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty());
+            let style = table_style_field(&d);
             let r = app.run(
                 "table.insert",
                 json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
@@ -9841,6 +9863,13 @@ mod tests {
             app.run("edit.undo", json!({})).unwrap();
             assert!(app.run("table.get", json!({})).is_err(), "the table is gone");
         }
+        // A null style is no style: the table is made, unstyled.
+        app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+        app.run("app.insertTableDialog", json!({})).unwrap();
+        ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": null}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+        assert_eq!(app.run("table.get", json!({})).unwrap()["style"].as_str().unwrap_or(""), "");
+        app.run("edit.undo", json!({})).unwrap();
         // A style that no longer exists changes nothing.
         let tables = |app: &DesignApp| app.session.active().unwrap().doc.stories.values().map(|s| s.tables.len()).sum::<usize>();
         app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
@@ -9867,6 +9896,14 @@ mod tests {
         app.run("text.select", json!({"story": sid, "anchor": 0, "focus": text.len()})).unwrap();
         assert!(crate::menus::menu_enabled(&app, "app.convertTextToTableDialog"));
         app.run("app.convertTextToTableDialog", json!({})).unwrap();
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("convertTextToTable"));
+        // "comma" and a typed "," are the same separator, so Number of Columns applies; a count of
+        // 0 is refused, not taken as 1, and the dialog stays open.
+        ctl(&mut app, "ui.dialog.set", json!({"field": "columnSeparator", "value": "comma"}));
+        ctl(&mut app, "ui.dialog.set", json!({"field": "rowSeparator", "value": ","}));
+        assert!(same_separators(app.ui.dialog.as_ref().unwrap()));
+        ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": 0}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("convertTextToTable"));
         // An emptied separator: the command refuses it and the dialog stays open, as typed.
         ctl(&mut app, "ui.dialog.set", json!({"field": "rowSeparator", "value": ""}));

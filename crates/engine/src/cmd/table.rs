@@ -99,7 +99,7 @@ fn table_specs() -> Vec<CommandSpec> {
             "Convert Text to Table",
             ["Table"],
             None,
-            "{columnSeparator?: tab|comma|paragraph|text (tab), rowSeparator?: paragraph|tab|comma|text (paragraph), columns?: number of columns when both separators are the same (1), tableStyle?: name, width?: table width (default: the column)} — the selected paragraphs become a table, as InDesign's Convert Text to Table",
+            "{columnSeparator?: tab|comma|paragraph|text (tab), rowSeparator?: paragraph|tab|comma|text (paragraph), columns?: number of columns when both separators are the same (1, at most 200), tableStyle?: name, width?: table width (default: the column)} — the selected paragraphs become a table, as InDesign's Convert Text to Table; the words tab, comma and paragraph name those separators, any other text is the separator itself",
             has_text,
             convert_from_text
         ),
@@ -649,9 +649,10 @@ fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
     // With one separator for both, InDesign fills rows of Number of Columns cells.
     let per_row = match p.get("columns") {
         None | Some(Value::Null) => 1,
-        Some(v) => {
-            v.as_u64().filter(|n| (1..=10_000).contains(n)).ok_or_else(|| bad(ID, "`columns` must be a whole number from 1 to 10000"))? as usize
-        }
+        Some(v) => v
+            .as_u64()
+            .filter(|n| (1..=MAX_COLUMNS).contains(n))
+            .ok_or_else(|| bad(ID, format!("`columns` must be a whole number from 1 to {MAX_COLUMNS}")))? as usize,
     };
     let style = table_style_param(s, p, ID)?;
     let width = p.get("width").and_then(Value::as_f64).unwrap_or_else(|| column_width(s, &t));

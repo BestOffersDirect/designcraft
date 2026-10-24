@@ -497,10 +497,16 @@ fn convert_text_to_table_with_indesigns_separators() {
     s.execute("style.table.create", &json!({"name": "Grid"})).unwrap();
     let r = convert(&mut s, "x\ty", json!({"tableStyle": "Grid"})).unwrap();
     assert_eq!(s.execute("table.get", &json!({"table": r["table"]})).unwrap()["style"], "Grid");
+    // A short last row: its padding cell takes the text's format too.
+    let r = convert(&mut s, "a\nb\nc", json!({"columnSeparator": "paragraph", "rowSeparator": "paragraph", "columns": 2})).unwrap();
+    let t = s.doc().unwrap().doc.story(designcraft_doc::StoryId(sid)).unwrap().tables[&r["table"].as_u64().unwrap()].clone();
+    let fmt = |c: usize| t.cell(1, c).unwrap().text.chars[0].format.clone();
+    assert_eq!(fmt(1), fmt(0), "the padding cell's format is the text's");
     for bad in [
         json!({"columnSeparator": ""}),
         json!({"rowSeparator": 3}),
         json!({"columns": 0}),
+        json!({"columns": crate::cmd::table::MAX_COLUMNS + 1}),
         json!({"tableStyle": "Missing"}),
         json!({"tableStyle": 123}),
     ] {
