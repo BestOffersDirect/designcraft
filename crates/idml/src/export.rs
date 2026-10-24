@@ -1944,12 +1944,12 @@ impl<'a> Ex<'a> {
         }
         if let Content::Text(t) = &it.content {
             el.push(text_frame_pref(&t.options, &self.sw(&t.options.column_rule_color)));
-            if let Some((start, inc)) = t.options.baseline_grid {
+            if let Some(g) = t.options.baseline_grid {
                 el.push(
                     El::new("BaselineFrameGridOption")
                         .attr("UseCustomBaselineFrameGrid", "true")
-                        .attr("StartingOffsetForBaselineFrameGrid", num(start))
-                        .attr("BaselineFrameGridIncrement", num(inc)),
+                        .attr("StartingOffsetForBaselineFrameGrid", num(g.start))
+                        .attr("BaselineFrameGridIncrement", num(g.increment)),
                 );
             }
         }
