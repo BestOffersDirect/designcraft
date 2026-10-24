@@ -3135,14 +3135,20 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
             }
         }
         "insertTable" => {
-            // The table and its style in one step; a style that is gone leaves the document alone.
+            // The table and its style in one step; a style that is gone leaves the document alone,
+            // and the dialog stays open to be corrected.
             let style = Some(d.s("tableStyle")).filter(|s| !s.is_empty());
-            app.run(
+            let r = app.run(
                 "table.insert",
                 json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
                     "headerRows": d.n("headerRows").unwrap_or(0.0).max(0.0) as u64, "footerRows": d.n("footerRows").unwrap_or(0.0).max(0.0) as u64,
                     "tableStyle": style}),
-            )
+            );
+            if let Err(e) = &r {
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+            }
+            r
         }
         "numberingSection" => {
             // On an error the dialog stays open to be corrected.
@@ -9747,6 +9753,8 @@ mod tests {
         ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": "Gone"}));
         assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
         assert_eq!(tables(&app), 0);
+        let d = app.ui.dialog.as_ref().expect("the dialog stays open to be corrected");
+        assert_eq!((d.id.as_str(), d.s("tableStyle")), ("insertTable", "Gone".to_string()));
     }
 
     #[test]
