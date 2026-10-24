@@ -408,10 +408,11 @@ fn grid_origin(cx: &ToolContext, req: &SnapRequest<'_>, axis: Axis) -> Option<f6
 
 /// Baseline grid. No overlay.
 ///
-/// Lines are `page.y0 + start + n * increment` for n >= 0 while the line is inside the page
-/// (the bottom edge is not a line, matching the canvas). An increment of 0 or less skips the
-/// pass. `relative_to` and `view_threshold` are not read, and hiding the baseline grid does not
-/// turn this off. Only a page the rect crosses on x contributes. A dragged ruler guide
+/// Lines are `page.y0 + origin + n * increment` for n >= 0 while the line is inside the page
+/// (the bottom edge is not a line, matching the canvas), `origin` from
+/// [`BaselineGrid::origin`](designcraft_doc::BaselineGrid::origin). An increment of 0 or less
+/// skips the pass. `view_threshold` is not read, and hiding the baseline grid does not turn this
+/// off. Only a page the rect crosses on x contributes. A dragged ruler guide
 /// ([`Gesture::Guide`]) doesn't snap to it.
 fn pass_baseline(cx: &ToolContext, req: &SnapRequest<'_>, axis: Axis, tol: f64) -> Option<AxisHit> {
     if !matches!(axis, Axis::Y) || !cx.snap.snap_to_guides || matches!(req.gesture, Gesture::Guide) {
@@ -432,7 +433,10 @@ fn pass_baseline(cx: &ToolContext, req: &SnapRequest<'_>, axis: Axis, tol: f64) 
         if !ranges_overlap(moving_lo, moving_hi, lo, hi) {
             continue;
         }
-        let origin = bounds.y0 + baseline.start;
+        let origin = bounds.y0 + baseline.origin(page);
+        if !origin.is_finite() {
+            continue;
+        }
         offer_enabled(&mut best, req.rect, flags, axis, tol, |v| nearest_baseline(v, origin, increment, bounds.y0, bounds.y1));
     }
     best.map(|b| b.hit)
@@ -1795,6 +1799,22 @@ mod tests {
         let cx = ctx_on(&dead, &sel, &cache, &layout);
         let hit = snap(&cx, y_req(Rect::new(100.0, 49.0, 140.0, 80.0)));
         assert_eq!(hit.delta.y, 0.0);
+    }
+
+    #[test]
+    fn baseline_relative_to_the_top_margin_snaps_from_the_margin() {
+        let mut doc = Document::new(&NewDocument::default());
+        std::sync::Arc::make_mut(&mut doc.spreads[0]).pages[0].margins.top = 37.0;
+        doc.settings.baseline_grid.start = 0.0;
+        doc.settings.baseline_grid.increment = 10.0;
+        doc.settings.baseline_grid.relative_to = designcraft_doc::GridRelative::TopMargin;
+        let cache = Cache::new();
+        let layout = CanvasLayout::new(&doc, false);
+        let sel = Selection::default();
+        let cx = ctx_on(&doc, &sel, &cache, &layout);
+        // Lines at 37 + 10n: a top at 58 goes up to 57, not down to the page-relative 60.
+        let hit = snap(&cx, y_req(Rect::new(100.0, 58.0, 140.0, 80.0)));
+        assert!((hit.delta.y - -1.0).abs() < 1e-6, "{}", hit.delta.y);
     }
 
     #[test]
