@@ -202,6 +202,9 @@ Kind: **F** feature · **U** UI/UX · **T** typography · **FF** file format · 
 - **Estimate:** 20–35 h.
 
 ### 19. Placed graphics depth (FF)
+- **Safety:** PDF visibility variants preserve catalog/configuration entries and nonzero-generation
+  references, redefining the existing catalog rather than choosing an arbitrary object number.
+  Encrypted, hybrid-reference and over-budget rewrites are rejected; no print-fidelity claim.
 - **Missing:** EPS is shown through its preview only (no PostScript interpreter); PSD layer
   comps beyond visibility; the Clipping Path Options dialog (tracing into a clip that keeps the
   frame, Threshold/Tolerance/Inset Frame preview, picking an alpha channel or a path saved in a

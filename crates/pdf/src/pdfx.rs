@@ -285,7 +285,7 @@ fn device_rgb(pdf: &[u8]) -> Vec<String> {
     found
         .into_iter()
         .map(|(what, pages)| {
-            let list: Vec<String> = pages.iter().take(10).map(|p| p.to_string()).collect();
+            let list: Vec<String> = pages.iter().take(10).map(ToString::to_string).collect();
             let more = if pages.len() > 10 { ", …" } else { "" };
             let s = if pages.len() == 1 { "" } else { "s" };
             format!("{what} on page{s} {}{more}: under a CMYK output intent RGB needs an ICC profile", list.join(", "))
@@ -392,22 +392,25 @@ impl RgbScan {
                 }
                 b"BI" | b"EI" if !managed => {
                     if let Some(Object::Stream(img)) = last {
-                        let cs = img.dict().get::<Object<'_>>(b"CS").or_else(|| img.dict().get::<Object<'_>>(b"ColorSpace"));
-                        let cs = match cs {
-                            Some(Object::Name(n))
-                                if !matches!(n.as_ref(), b"DeviceRGB" | b"RGB" | b"G" | b"DeviceGray" | b"CMYK" | b"DeviceCMYK") =>
-                            {
-                                res.get_color_space(&n)
-                            }
-                            cs => cs,
-                        };
-                        if cs.is_some_and(|cs| is_device_rgb(&cs)) {
-                            self.add("an RGB inline image".into());
-                        }
+                        self.inline_image(&img, res);
                     }
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// An inline image (`BI … EI`) in an RGB space, named directly or through the resources.
+    fn inline_image(&mut self, img: &Stream<'_>, res: &Resources<'_>) {
+        let cs = img.dict().get::<Object<'_>>(b"CS").or_else(|| img.dict().get::<Object<'_>>(b"ColorSpace"));
+        let cs = match cs {
+            Some(Object::Name(n)) if !matches!(n.as_ref(), b"DeviceRGB" | b"RGB" | b"G" | b"DeviceGray" | b"CMYK" | b"DeviceCMYK") => {
+                res.get_color_space(&n)
+            }
+            cs => cs,
+        };
+        if cs.is_some_and(|cs| is_device_rgb(&cs)) {
+            self.add("an RGB inline image".into());
         }
     }
 

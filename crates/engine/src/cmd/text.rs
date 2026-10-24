@@ -2105,7 +2105,7 @@ fn open_type_features(s: &mut Session, _p: &Value) -> Result<Value> {
             continue;
         }
         let names: std::collections::BTreeSet<&String> = fonts.values().filter_map(|f| f.stylistic_sets.get(&set)).collect();
-        let name = if names.len() == 1 { names.first().map(|n| n.to_string()) } else { None };
+        let name = if names.len() == 1 { names.first().map(ToString::to_string) } else { None };
         let (applied, available) = measure(&tag);
         sets.push(json!({"set": set, "tag": tag, "name": name, "applied": applied, "available": available}));
     }
