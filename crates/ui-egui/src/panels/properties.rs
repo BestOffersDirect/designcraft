@@ -982,7 +982,9 @@ fn align_row(app: &mut DesignApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
-        let to = app.ui.align_to.clone();
+        // A key object switches Align To to Key Object; choosing another target drops the key.
+        let key = app.session.active().and_then(|st| st.selection.key.filter(|_| st.selection.items.len() > 1));
+        let to = if key.is_some() { "keyObject".to_string() } else { app.ui.align_to.clone() };
         let to_label = match to.as_str() {
             "selection" => "Selection",
             "keyObject" => "Key Object",
@@ -1001,7 +1003,10 @@ fn align_row(app: &mut DesignApp, ui: &mut Ui) {
                 ("Align to Page", "page"),
                 ("Align to Spread", "spread"),
             ] {
-                if ui.selectable_label(app.ui.align_to == id, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, label))).clicked() {
+                if ui.selectable_label(to == id, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, label))).clicked() {
+                    if let Some(k) = key.filter(|_| id != "keyObject") {
+                        let _ = app.run("selection.key", json!({"id": k.0}));
+                    }
                     app.ui.align_to = id.into();
                     ui.close();
                 }
@@ -3148,8 +3153,19 @@ mod tests {
     /// are translated, with a sample of each script's figures.
     #[test]
     fn digits_choices_use_the_reference_names() {
-        let shown: Vec<String> = DIGIT_OPTIONS.iter().map(|o| digit_label("fr", *o)).collect();
-        assert_eq!(shown, ["Par défaut", "Arabe  0123", "Hindi  ٠١٢٣", "Persan  ۰۱۲۳", "Natif"].map(String::from));
+        assert_eq!(DIGIT_OPTIONS.map(|o| o.1), ["Default", "Arabic", "Hindi", "Farsi", "Native"]);
+        for (lang, _) in crate::i18n::LANGUAGES {
+            let tr = |s| crate::i18n::tr(lang, s);
+            let shown: Vec<String> = DIGIT_OPTIONS.iter().map(|o| digit_label(lang, *o)).collect();
+            let expected = [
+                tr("Default").to_string(),
+                format!("{}  0123", tr("Arabic")),
+                format!("{}  ٠١٢٣", tr("Hindi")),
+                format!("{}  ۰۱۲۳", tr("Farsi")),
+                tr("Native").to_string(),
+            ];
+            assert_eq!(shown, expected, "{lang}");
+        }
     }
 
     #[test]
