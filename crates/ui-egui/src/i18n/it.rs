@@ -28,6 +28,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Taglia"),
     ("Copy", "Copia"),
     ("Paste", "Incolla"),
+    ("Cannot be edited", "Non modificabile"),
     ("Paste Vector Art", "Incolla grafica vettoriale"),
     ("Baseline Options", "Opzioni linea di base"),
     ("Fixed Number", "Numero fisso"),

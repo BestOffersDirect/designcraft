@@ -281,6 +281,34 @@ fn row_marks(sw: &designcraft_color::swatch::Swatch) -> RowMarks {
     }
 }
 
+/// A row's accessible name: the swatch's name, then what its marks show (colour type, colour
+/// mode, that it can't be edited). [None] and [Registration] say their mode by name.
+fn row_label(lang: &str, name: &str, marks: RowMarks) -> String {
+    let tr = |s: &str| crate::i18n::tr(lang, s).to_string();
+    let mut parts = vec![name.to_string()];
+    match marks.kind {
+        Some(ColorType::Process) => parts.push(tr("Process")),
+        Some(ColorType::Spot) => parts.push(tr("Spot")),
+        None => {}
+    }
+    match marks.mode {
+        Some(RowMode::Cmyk) => parts.push(tr("CMYK")),
+        Some(RowMode::Rgb) => parts.push(tr("RGB")),
+        Some(RowMode::Gray) => parts.push(tr("Gray")),
+        Some(RowMode::None | RowMode::Registration) | None => {}
+    }
+    if marks.not_editable {
+        parts.push(tr("Cannot be edited"));
+    }
+    parts.join(", ")
+}
+
+/// Whether accessible name `label` is swatch `name`'s row (its name, then its marks).
+#[cfg(test)]
+pub(crate) fn names_swatch(label: &str, name: &str) -> bool {
+    label.strip_prefix(name).is_some_and(|rest| rest.is_empty() || rest.starts_with(", "))
+}
+
 /// A pencil with a stroke through it: the swatch can't be edited. Drawn in code.
 fn paint_not_editable(p: &egui::Painter, r: egui::Rect, ink: egui::Color32) {
     // The pencil: its tip at the lower left, its body up to the right.
@@ -379,7 +407,10 @@ fn swatch_row(
     let t = Tokens::get(ui.ctx());
     // Rows can be dragged onto the Gradient panel's ramp.
     let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &sw.name));
+    // What the row's marks show, for screen readers too: "Cyan, Process, CMYK".
+    let marks = row_marks(sw);
+    let spoken = row_label(&app.ui.language, &sw.name, marks);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &spoken));
     resp.dnd_set_drag_payload(SwatchDrag(sw.name.clone()));
     if resp.dragged()
         && let Some(p) = ui.ctx().pointer_interact_pos()
@@ -401,7 +432,6 @@ fn swatch_row(
     crate::widgets::paint_chip(ui.painter(), chip, c, g);
     ui.painter().text(row.min + vec2(28.0 + indent, 11.0), egui::Align2::LEFT_CENTER, &sw.name, egui::FontId::proportional(12.5), t.text);
     // InDesign's columns on the right: not editable, colour type, colour mode.
-    let marks = row_marks(sw);
     let col = |k: f32| egui::Rect::from_min_size(egui::pos2(row.max.x - 19.0 - 18.0 * k, row.min.y + 4.5), vec2(13.0, 13.0));
     if marks.not_editable {
         paint_not_editable(ui.painter(), col(2.0), t.text_dim);
@@ -1205,7 +1235,7 @@ mod gradient_panel_tests {
         // The thumbnail sits left of the Type row.
         let ty = h.get_by_label("Type:").rect();
         let from = egui::pos2(ty.min.x - 21.0, ty.min.y + 12.0);
-        let to = h.get_by_label(label).rect().center();
+        let to = h.get_by(|n| n.label().is_some_and(|l| crate::panels::swatches::names_swatch(&l, label))).rect().center();
         h.event(Event::PointerMoved(from));
         h.step();
         h.event(Event::PointerButton { pos: from, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });
@@ -1317,14 +1347,14 @@ mod swatches_header_tests {
         let mut h = harness(app);
         h.run_steps(3);
         // Fill in front: a swatch is the fill.
-        h.get_by_label("C=0 M=100 Y=0 K=0").click();
+        h.get_by(|n| n.label().is_some_and(|l| crate::panels::swatches::names_swatch(&l, "C=0 M=100 Y=0 K=0"))).click();
         h.run_steps(2);
         assert_eq!(items(h.state())[0].fill.swatch, "C=0 M=100 Y=0 K=0");
         // The proxy brings the stroke to the front; the next swatch is the stroke.
         h.get_by_label("Fill").click();
         h.run_steps(2);
         assert!(h.state().ui.stroke_front);
-        h.get_by_label("C=100 M=0 Y=0 K=0").click();
+        h.get_by(|n| n.label().is_some_and(|l| crate::panels::swatches::names_swatch(&l, "C=100 M=0 Y=0 K=0"))).click();
         h.run_steps(2);
         let it = &items(h.state())[0];
         assert_eq!((it.fill.swatch.as_str(), it.stroke.swatch.as_str()), ("C=0 M=100 Y=0 K=0", "C=100 M=0 Y=0 K=0"));
@@ -1336,7 +1366,7 @@ mod swatches_header_tests {
         h.run_steps(2);
         assert!(!h.state().ui.formatting_affects_text);
         // Delete Swatch removes the swatch last clicked.
-        h.get_by_label("Brand").click();
+        h.get_by(|n| n.label().is_some_and(|l| crate::panels::swatches::names_swatch(&l, "Brand"))).click();
         h.run_steps(2);
         h.get_by_label("Delete Swatch").click();
         h.run_steps(2);
@@ -1375,7 +1405,25 @@ mod row_mark_tests {
     use designcraft_color::swatch::{Swatch, default_swatches};
     use designcraft_color::{Color, ColorType, SwatchValue};
 
-    use super::{RowMarks, RowMode, row_marks};
+    use super::{RowMarks, RowMode, row_label, row_marks};
+
+    /// A row's accessible name says what its marks show.
+    #[test]
+    fn swatch_rows_say_their_marks() {
+        let all = default_swatches();
+        let label = |name: &str| row_label("", name, row_marks(all.iter().find(|s| s.name == name).unwrap()));
+        assert_eq!(label("[Black]"), "[Black], Process, CMYK, Cannot be edited");
+        assert_eq!(label("[None]"), "[None], Cannot be edited");
+        assert_eq!(label("[Paper]"), "[Paper]");
+        let cyan = all.iter().find(|s| matches!(&s.value, SwatchValue::Color { .. }) && !s.locked).unwrap();
+        let spot = Swatch {
+            name: "Pantone".into(),
+            value: SwatchValue::Color { color: Color::Rgb { r: 1.0, g: 0.0, b: 0.0 }, color_type: ColorType::Spot },
+            locked: false,
+            ..cyan.clone()
+        };
+        assert_eq!(row_label("it", &spot.name, row_marks(&spot)), "Pantone, Tinta piatta, RGB");
+    }
 
     /// The Swatches panel's right-hand columns, as InDesign's: [None], [Registration] and [Black]
     /// can't be edited, [Paper] can; colours show their type and mode.

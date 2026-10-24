@@ -31,6 +31,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "ამოჭრა"),
     ("Copy", "კოპირება"),
     ("Paste", "ჩასმა"),
+    ("Cannot be edited", "რედაქტირება შეუძლებელია"),
     ("Inches Decimal", "ინჩები (ათობითი)"),
     ("Back", "უკან"),
     ("Warning", "გაფრთხილება"),

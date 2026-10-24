@@ -31,6 +31,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Cut", "Recortar"),
     ("Copy", "Copiar"),
     ("Paste", "Colar"),
+    ("Cannot be edited", "Não editável"),
     ("Paste Vector Art", "Colar arte vetorial"),
     ("Baseline Options", "Opções de linha de base"),
     ("Fixed Number", "Número fixo"),
