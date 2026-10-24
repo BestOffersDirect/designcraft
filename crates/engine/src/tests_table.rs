@@ -148,6 +148,15 @@ fn escape_toggles_text_and_cell_selection() {
     assert_eq!((t.cell, t.range()), (Some(cell), 0..5), "the cell's text is selected");
     s.execute("table.prevCell", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().selection.text.unwrap().cell, Some(designcraft_doc::CellAddr { col: 0, ..cell }));
+    // With the cell selected, typing replaces its text and leaves the caret after it.
+    s.execute("table.nextCell", &json!({})).unwrap();
+    s.execute("table.toggleSelection", &json!({})).unwrap();
+    s.execute("text.insert", &json!({"text": "Fax"})).unwrap();
+    let t = s.execute("table.get", &json!({"table": tid})).unwrap();
+    assert_eq!(t["cells"][1]["text"], "Fax");
+    let sel = s.doc().unwrap().selection.clone();
+    assert!(sel.cells.is_none());
+    assert_eq!(sel.text.unwrap().range(), 3..3);
     // A selection that starts inside a merged cell goes back to the merged cell's text.
     s.execute("table.select", &json!({"rows": [0, 1], "cols": [0, 0]})).unwrap();
     s.execute("table.merge", &json!({})).unwrap();

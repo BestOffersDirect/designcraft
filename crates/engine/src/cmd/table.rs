@@ -1558,6 +1558,22 @@ pub(crate) fn step_cell(s: &mut Session, forward: bool) -> Result<Value> {
     Ok(json!({"row": row, "col": col}))
 }
 
+/// With one cell selected (a merged one counts as one), select its whole text instead, so what is
+/// typed next replaces it, as InDesign does. Other selections are left as they are.
+pub(crate) fn one_selected_cell_to_text(s: &mut Session) -> Result<()> {
+    let st = s.doc_mut()?;
+    let (Some(cs), Some(t)) = (st.selection.cells, st.selection.text) else { return Ok(()) };
+    let Some(tb) = st.doc.story(cs.story).and_then(|x| x.tables.get(&cs.table)) else { return Ok(()) };
+    let (row, col) = tb.owner(cs.range.r0, cs.range.c0);
+    if tb.owner(cs.range.r1, cs.range.c1) != (row, col) {
+        return Ok(());
+    }
+    let cell = CellAddr { table: cs.table, row, col };
+    let len = st.doc.text_story(cs.story, Some(cell)).map_or(0, |x| x.len());
+    st.selection = Selection::text(TextSel { story: cs.story, anchor: 0, focus: len, cell: Some(cell), ..t });
+    Ok(())
+}
+
 /// Esc in a table: text in a cell becomes that cell's selection, and selected cells the text of
 /// the first one (InDesign toggles between the two).
 fn toggle_selection(s: &mut Session) -> Result<Value> {
