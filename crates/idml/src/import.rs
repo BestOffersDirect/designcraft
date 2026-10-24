@@ -1649,28 +1649,7 @@ impl<'r> Importer<'r> {
                 a.strikethrough_tint = tint;
             }
         }
-        // OpenType features (only when the element sets any).
-        let mut otf_list: Vec<String> = Vec::new();
-        let mut any = false;
-        for (tag, _, attr) in designcraft_doc::otf::TOGGLES {
-            if let Some(on) = e.boolean(attr) {
-                designcraft_doc::otf::set(&mut otf_list, tag, on);
-                any = true;
-            }
-        }
-        if let Some(fig) = e.prop("OTFFigureStyle")
-            && let Some((id, ..)) = designcraft_doc::otf::FIGURES.iter().find(|f| f.3 == fig.trim())
-        {
-            designcraft_doc::otf::set_figures(&mut otf_list, id);
-            any = true;
-        }
-        if let Some(m) = e.num("OTFStylisticSets") {
-            designcraft_doc::otf::set_stylistic_sets(&mut otf_list, m.max(0.0) as u32);
-            any = true;
-        }
-        if any {
-            a.otf_features = Some(otf_list);
-        }
+        read_otf_features(e, &mut a);
         a.glyph_form = e.prop("GlyphForm");
         a.no_break = e.boolean("NoBreak");
         a.tate_chu_yoko = e.boolean("Tatechuyoko");
@@ -2457,6 +2436,7 @@ impl<'r> Importer<'r> {
                                         object_point: names::anchor_in(s("AnchorPoint")),
                                         ref_point: row * 3 + col,
                                         keep_within_column: s("PinPosition") == "true",
+                                        spine_relative: s("SpineRelative") == "true",
                                     }
                                 }
                                 _ => designcraft_doc::AnchorPosition::Inline { y_offset: get("AnchorYoffset") },
@@ -3002,8 +2982,10 @@ impl<'r> Importer<'r> {
                 if let Some(g) = self.with_style(e, "BaselineFrameGridOption")
                     && g.get("UseCustomBaselineFrameGrid") == Some("true")
                 {
-                    options.baseline_grid =
-                        Some((g.num("StartingOffsetForBaselineFrameGrid").unwrap_or(0.0), g.num("BaselineFrameGridIncrement").unwrap_or(12.0)));
+                    options.baseline_grid = Some(designcraft_doc::FrameBaselineGrid {
+                        start: g.num("StartingOffsetForBaselineFrameGrid").unwrap_or(0.0),
+                        increment: g.num("BaselineFrameGridIncrement").unwrap_or(12.0),
+                    });
                 }
                 it.content = Content::Text(TextFrame { story, options });
                 self.ctx.threads.push((
@@ -3893,6 +3875,31 @@ impl Importer<'_> {
         a.shatai_angle = finite("ShataiDegreeAngle").map(|v| v / crate::cjk::SHATAI_ANGLE_UNITS);
         a.shatai_adjust_rotation = e.boolean("ShataiAdjustRotation");
         a.shatai_adjust_tsume = e.boolean("ShataiAdjustTsume");
+    }
+}
+
+/// OpenType features (only when the element sets any).
+fn read_otf_features(e: &El, a: &mut CharAttrs) {
+    let mut otf_list: Vec<String> = Vec::new();
+    let mut any = false;
+    for (tag, _, attr) in designcraft_doc::otf::TOGGLES {
+        if let Some(on) = e.boolean(attr) {
+            designcraft_doc::otf::set(&mut otf_list, tag, on);
+            any = true;
+        }
+    }
+    if let Some(fig) = e.prop("OTFFigureStyle")
+        && let Some((id, ..)) = designcraft_doc::otf::FIGURES.iter().find(|f| f.3 == fig.trim())
+    {
+        designcraft_doc::otf::set_figures(&mut otf_list, id);
+        any = true;
+    }
+    if let Some(m) = e.num("OTFStylisticSets") {
+        designcraft_doc::otf::set_stylistic_sets(&mut otf_list, m.max(0.0) as u32);
+        any = true;
+    }
+    if any {
+        a.otf_features = Some(otf_list);
     }
 }
 

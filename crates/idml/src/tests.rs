@@ -10,6 +10,8 @@ use super::*;
 mod assets;
 mod clipping;
 mod decorations;
+mod facing_ltr;
+mod frame_grid;
 mod index_sort;
 mod liquid_guides;
 mod object_styles;
@@ -1354,6 +1356,7 @@ fn anchored_objects_take_unset_settings_from_object_styles() {
         object_point,
         ref_point: 6,
         keep_within_column,
+        spine_relative: false,
     };
     let positions: Vec<_> = s.objects.iter().map(|o| o.position.clone()).collect();
     assert_eq!(
@@ -1364,6 +1367,44 @@ fn anchored_objects_take_unset_settings_from_object_styles() {
             custom(R::PageMargin, R::Anchor, -2.0, 0.0, 8, false),
         ]
     );
+}
+
+/// Relative to Spine comes from the object style chain like the other anchored settings, an
+/// item's own setting wins, and export writes it back.
+#[test]
+fn anchored_spine_relative_comes_from_object_styles_and_round_trips() {
+    use designcraft_doc::AnchorPosition;
+    let styles = STYLES.replace(
+        r#"<ObjectStyle Self="ObjectStyle/$ID/[None]" Name="$ID/[None]"/>"#,
+        r#"<ObjectStyle Self="ObjectStyle/$ID/[None]" Name="$ID/[None]"/>
+        <ObjectStyle Self="ObjectStyle/Side" Name="Side"><AnchoredObjectSetting SpineRelative="true"/></ObjectStyle>
+        <ObjectStyle Self="ObjectStyle/Note" Name="Note"><Properties><BasedOn type="object">ObjectStyle/Side</BasedOn></Properties></ObjectStyle>"#,
+    );
+    let rect = |style: &str, setting: &str| {
+        format!(
+            r#"<Rectangle Self="r{style}" AppliedObjectStyle="ObjectStyle/{style}" ItemTransform="1 0 0 1 0 0">
+              <Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray>
+                <PathPointType Anchor="0 0"/><PathPointType Anchor="0 10"/><PathPointType Anchor="10 10"/><PathPointType Anchor="10 0"/>
+              </PathPointArray></GeometryPathType></PathGeometry></Properties>
+              <AnchoredObjectSetting AnchoredPosition="Anchored" {setting}/>
+            </Rectangle>"#
+        )
+    };
+    let story = format!(
+        r#"<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging"><Story Self="s1">
+          <ParagraphStyleRange><CharacterStyleRange><Content>a</Content>{}{}{}</CharacterStyleRange></ParagraphStyleRange>
+        </Story></idPkg:Story>"#,
+        rect("Note", ""),
+        rect("Note", r#"SpineRelative="false""#),
+        rect("$ID/[None]", ""),
+    );
+    let spine = |d: &Document| -> Vec<bool> {
+        let s = d.stories.values().find(|s| !s.objects.is_empty()).unwrap();
+        s.objects.iter().map(|o| matches!(o.position, AnchorPosition::Custom { spine_relative: true, .. })).collect()
+    };
+    let d = import_idml(&fixture_with_table_styles(&styles, &story)).unwrap();
+    assert_eq!(spine(&d), [true, false, false]);
+    assert_eq!(spine(&import_idml(&export_idml(&d)).unwrap()), [true, false, false]);
 }
 
 /// IDML measures a left-aligned anchored object's X offset leftwards; the document model and
