@@ -2036,8 +2036,8 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
                     egui::ComboBox::from_id_salt("pref_language").width(180.0).height(400.0).selected_text(crate::rtl::widget(ui, current)).show_ui(
                         ui,
                         |ui| {
-                            for (code, name) in crate::i18n::LANGUAGES {
-                                if ui.selectable_label(*code == app.ui.language, crate::rtl::widget(ui, *name)).clicked() {
+                            for (code, name) in crate::i18n::picker_languages() {
+                                if ui.selectable_label(code == app.ui.language, crate::rtl::widget(ui, name)).clicked() {
                                     // Applied by `show` right after this frame, which has `&mut DesignApp`.
                                     d.fields.insert("applyLanguage".into(), json!(code));
                                 }
@@ -2501,6 +2501,9 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                         {
                             match app.session.execute("color.loadProfile", &json!({"path": path})) {
                                 Ok(_) => {
+                                    // Replayed in load order at start-up, so the latest load of a path comes last.
+                                    app.ui.color_profiles.retain(|p| p != &path);
+                                    app.ui.color_profiles.push(path);
                                     let f = app.session.execute("color.settings", &json!({})).unwrap_or_default();
                                     d.fields.insert("profiles".into(), f["profiles"].clone());
                                 }
@@ -2867,6 +2870,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             if matches!(d.id.as_str(), "paragraphStyleOptions" | "characterStyleOptions") && !d.b("new") {
                 check(ui, &mut d, "preview", crate::i18n::tr(&app.ui.language, "Preview"));
+                app.ui.style_preview = d.b("preview");
                 style_options_preview(app, &mut d);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3311,13 +3315,29 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         }
         "pdfImport" => {
             let crop = d.s("crop");
+            // One page number, 1 or more; a blank field is page 1. A range or list ("4-5", "2,5"), a
+            // fraction or a negative is refused rather than placing some other page.
+            let raw = if d.fields.get("page").is_none_or(Value::is_null) { String::new() } else { d.s("page") };
+            let page = match raw.trim() {
+                "" => 1,
+                t => match t.parse::<u64>() {
+                    Ok(n) if n >= 1 => n,
+                    _ => {
+                        let e = "Enter a single page number; one page is placed at a time".to_string();
+                        let mut d = d;
+                        d.fields.insert("status".into(), json!(e));
+                        app.ui.dialog = Some(d);
+                        return Err(e);
+                    }
+                },
+            };
             if d.b("async") {
-                return app.confirm_pdf_import(d.n("page").unwrap_or(1.0).max(1.0) as u64, if crop.is_empty() { "crop".into() } else { crop });
+                return app.confirm_pdf_import(page, if crop.is_empty() { "crop".into() } else { crop });
             }
             if let Some(target) = d.fields.get("target").and_then(Value::as_u64) {
                 app.activate_import_target(&crate::ImportRequest { purpose: "place".into(), target: Some(target) })?;
             }
-            app.place_file(json!({"path": d.s("path"), "pdfPage": d.n("page").unwrap_or(1.0).max(1.0) as u64, "pdfCrop": if crop.is_empty() { "crop".to_string() } else { crop }}))
+            app.place_file(json!({"path": d.s("path"), "pdfPage": page, "pdfCrop": if crop.is_empty() { "crop".to_string() } else { crop }}))
         }
         "print" => {
             let pages = if d.s("range") == "all" { Value::Null } else { json!(d.s("pages")) };
@@ -3373,7 +3393,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
                 params["title"] = json!(title);
             }
             let name = if title.is_empty() { "Export.pdf".to_string() } else { format!("{title}.pdf") };
-            match app.services.pick_save.as_mut().and_then(|f| f(&name)) {
+            match app.pick_save(&name) {
                 Some(path) => {
                     params["path"] = json!(path);
                     crate::menus::export_pdf(app, &params)
@@ -3695,18 +3715,13 @@ fn check_paragraph_style_justification(app: &DesignApp, d: &Dialog) -> Result<()
     check_justification(d, "p.", &base)
 }
 
-fn confirm_paragraph_style_options(app: &mut DesignApp, d: &mut Dialog) -> Result<Value, String> {
-    let name = d.s("name");
-    if let Err(e) = check_paragraph_style_justification(app, d) {
-        // The caller shows the reason in the dialog's status line.
-        d.fields.insert("section".into(), json!("justify"));
-        return Err(e);
-    }
+/// The `p.*` and `c.*` dialog fields as the paragraph and character attribute maps a style
+/// command takes. `p.ruleAbove.weight` is one field of a rule (the command keeps the others).
+fn style_option_maps(d: &Dialog) -> (serde_json::Map<String, Value>, serde_json::Map<String, Value>) {
     let mut para = serde_json::Map::new();
     let mut chars = serde_json::Map::new();
     for (k, v) in &d.fields {
         if let Some(a) = k.strip_prefix("p.") {
-            // `p.ruleAbove.weight`: one field of a rule (the command keeps the others).
             match a.split_once('.') {
                 Some((attr, field)) => {
                     if let Value::Object(m) = para.entry(attr).or_insert_with(|| json!({})) {
@@ -3721,6 +3736,17 @@ fn confirm_paragraph_style_options(app: &mut DesignApp, d: &mut Dialog) -> Resul
             chars.insert(a.into(), v.clone());
         }
     }
+    (para, chars)
+}
+
+fn confirm_paragraph_style_options(app: &mut DesignApp, d: &mut Dialog) -> Result<Value, String> {
+    let name = d.s("name");
+    if let Err(e) = check_paragraph_style_justification(app, d) {
+        // The caller shows the reason in the dialog's status line.
+        d.fields.insert("section".into(), json!("justify"));
+        return Err(e);
+    }
+    let (para, chars) = style_option_maps(d);
     let based = d.s("basedOn");
     let rename = d.s("rename");
     let (r, style) = if d.b("new") {
@@ -3755,6 +3781,26 @@ fn confirm_paragraph_style_options(app: &mut DesignApp, d: &mut Dialog) -> Resul
     Ok(r)
 }
 
+/// Copies the dialog's `c.*` (and, for a paragraph style, `p.*`) fields into the preview params.
+fn fill_style_preview_fields(params: &mut Value, d: &Dialog, paragraph: bool) {
+    for (key, value) in &d.fields {
+        if let Some(attr) = key.strip_prefix("c.") {
+            params["chars"][attr] = value.clone();
+        } else if paragraph && let Some(attr) = key.strip_prefix("p.") {
+            if let Some((attr, field)) = attr.split_once('.') {
+                if params["para"][attr].is_null() {
+                    params["para"][attr] = json!({});
+                }
+                if let Some(fields) = params["para"][attr].as_object_mut() {
+                    fields.insert(field.into(), value.clone());
+                }
+            } else {
+                params["para"][attr] = value.clone();
+            }
+        }
+    }
+}
+
 /// Preview the changed style attributes through the same engine commands as OK. Renaming and
 /// export tagging have no visual effect and wait for OK, so the dialog can keep looking up the
 /// original style while the preview is visible. The interaction restores its starting document
@@ -3784,22 +3830,7 @@ fn style_options_preview(app: &mut DesignApp, d: &mut Dialog) {
     if paragraph {
         params["para"] = json!({});
     }
-    for (key, value) in &d.fields {
-        if let Some(attr) = key.strip_prefix("c.") {
-            params["chars"][attr] = value.clone();
-        } else if paragraph && let Some(attr) = key.strip_prefix("p.") {
-            if let Some((attr, field)) = attr.split_once('.') {
-                if params["para"][attr].is_null() {
-                    params["para"][attr] = json!({});
-                }
-                if let Some(fields) = params["para"][attr].as_object_mut() {
-                    fields.insert(field.into(), value.clone());
-                }
-            } else {
-                params["para"][attr] = value.clone();
-            }
-        }
-    }
+    fill_style_preview_fields(&mut params, d, paragraph);
     if let Some(based) = d.fields.get("basedOn") {
         params["basedOn"] = match based.as_str() {
             Some(designcraft_doc::NO_PARA_STYLE | designcraft_doc::NO_CHAR_STYLE) => Value::Null,
@@ -5190,7 +5221,7 @@ pub fn open_style_options(app: &mut DesignApp, para: bool, name: &str) {
         return;
     }
     let id = if para { "paragraphStyleOptions" } else { "characterStyleOptions" };
-    app.ui.dialog = Some(Dialog::new(id, json!({"name": name})));
+    app.ui.dialog = Some(Dialog::new(id, json!({"name": name, "preview": app.ui.style_preview})));
 }
 
 /// New Paragraph Style… / New Character Style…: the style options for a style made on OK, named
@@ -5200,6 +5231,57 @@ pub fn open_new_style(app: &mut DesignApp, para: bool) {
     let name = next_style_name(&st.doc.styles, para);
     let id = if para { "paragraphStyleOptions" } else { "characterStyleOptions" };
     app.ui.dialog = Some(Dialog::new(id, json!({"new": true, "rename": name})));
+}
+
+/// The General section of the Character Style Options dialog: name, Based On, and a summary of
+/// the style's settings.
+fn character_style_general(
+    lang: &str,
+    ui: &mut egui::Ui,
+    d: &mut Dialog,
+    styles: &designcraft_doc::Styles,
+    style: &designcraft_doc::CharacterStyle,
+    based: &str,
+) {
+    let (name, new) = (d.s("name"), d.b("new"));
+    egui::Grid::new("csg").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+        crate::rtl::label(ui, crate::i18n::tr(lang, "Style Name:"));
+        text_field(ui, d, "rename", 220.0);
+        ui.end_row();
+        crate::rtl::label(ui, crate::i18n::tr(lang, "Based On:"));
+        egui::ComboBox::from_id_salt("csbased").selected_text(crate::rtl::widget(ui, crate::i18n::style_name(lang, based))).width(220.0).show_ui(
+            ui,
+            |ui| {
+                // Not itself, nor a style based on it.
+                for s in styles.character.iter().filter(|s| new || !styles.char_based_on_cycles(&name, &s.name)) {
+                    if ui.selectable_label(s.name == based, crate::rtl::widget(ui, crate::i18n::style_name(lang, &s.name))).clicked() {
+                        d.fields.insert("basedOn".into(), json!(s.name));
+                    }
+                }
+            },
+        );
+        ui.end_row();
+    });
+    let status = d.s("status");
+    if !status.is_empty() {
+        crate::rtl::label(ui, egui::RichText::new(status).color(crate::theme::Tokens::get(ui.ctx()).text_strong));
+    }
+    ui.add_space(8.0);
+    crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(lang, "Style Settings:")).font(semibold(12.0)));
+    // What OK would leave the style setting, after its Based On.
+    let mut own = serde_json::to_value(&style.chars).unwrap_or_default();
+    if let Some(o) = own.as_object_mut() {
+        for (k, v) in d.fields.iter().filter_map(|(k, v)| Some((k.strip_prefix("c.")?, v))) {
+            if v.is_null() {
+                o.remove(k);
+            } else {
+                o.insert(k.to_string(), v.clone());
+            }
+        }
+    }
+    let mut parts = vec![crate::i18n::style_name(lang, based).to_string()];
+    parts.extend(own.as_object().into_iter().flatten().map(|(k, v)| format!("{}: {}", setting_label(lang, k), setting_text(v))));
+    ui.add(egui::Label::new(egui::RichText::new(parts.join(" + ")).color(crate::theme::Tokens::get(ui.ctx()).text_dim)).wrap());
 }
 
 /// Character Style Options: General, then the character sections it shares with Paragraph Style
@@ -5264,46 +5346,7 @@ fn character_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
             "underline" => line_options(&lang, ui, d, &cf, &doc, "underline"),
             "strikethrough" => line_options(&lang, ui, d, &cf, &doc, "strikethrough"),
             s if style_cjk::is_section(s) => style_cjk::section_ui(app, ui, d, s, &cf, None, &doc),
-            _ => {
-                egui::Grid::new("csg").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                    crate::rtl::label(ui, crate::i18n::tr(&lang, "Style Name:"));
-                    text_field(ui, d, "rename", 220.0);
-                    ui.end_row();
-                    crate::rtl::label(ui, crate::i18n::tr(&lang, "Based On:"));
-                    egui::ComboBox::from_id_salt("csbased")
-                        .selected_text(crate::rtl::widget(ui, crate::i18n::style_name(&lang, &based)))
-                        .width(220.0)
-                        .show_ui(ui, |ui| {
-                            // Not itself, nor a style based on it.
-                            for s in styles.character.iter().filter(|s| new || !styles.char_based_on_cycles(&name, &s.name)) {
-                                if ui.selectable_label(s.name == based, crate::rtl::widget(ui, crate::i18n::style_name(&lang, &s.name))).clicked() {
-                                    d.fields.insert("basedOn".into(), json!(s.name));
-                                }
-                            }
-                        });
-                    ui.end_row();
-                });
-                let status = d.s("status");
-                if !status.is_empty() {
-                    crate::rtl::label(ui, egui::RichText::new(status).color(crate::theme::Tokens::get(ui.ctx()).text_strong));
-                }
-                ui.add_space(8.0);
-                crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Style Settings:")).font(semibold(12.0)));
-                // What OK would leave the style setting, after its Based On.
-                let mut own = serde_json::to_value(&style.chars).unwrap_or_default();
-                if let Some(o) = own.as_object_mut() {
-                    for (k, v) in d.fields.iter().filter_map(|(k, v)| Some((k.strip_prefix("c.")?, v))) {
-                        if v.is_null() {
-                            o.remove(k);
-                        } else {
-                            o.insert(k.to_string(), v.clone());
-                        }
-                    }
-                }
-                let mut parts = vec![crate::i18n::style_name(&lang, &based).to_string()];
-                parts.extend(own.as_object().into_iter().flatten().map(|(k, v)| format!("{}: {}", setting_label(&lang, k), setting_text(v))));
-                ui.add(egui::Label::new(egui::RichText::new(parts.join(" + ")).color(crate::theme::Tokens::get(ui.ctx()).text_dim)).wrap());
-            }
+            _ => character_style_general(&lang, ui, d, styles, &style, &based),
         });
     });
 }
@@ -7807,6 +7850,33 @@ mod tests {
     }
 
     #[test]
+    fn style_options_preview_choice_is_remembered_on_reopen() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("style.paragraph.create", json!({"name":"Tutorial","chars":{"size":10}})).unwrap();
+        open_style_options(&mut app, true, "Tutorial");
+        let mut h = Harness::builder().with_size(egui::vec2(1000.0, 800.0)).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::new("style_preview_remember_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui.ctx());
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_label("Preview").click();
+        h.run_steps(3);
+        cancel(h.state_mut());
+        open_style_options(h.state_mut(), true, "Tutorial");
+        assert!(h.state().ui.dialog.as_ref().unwrap().b("preview"), "Preview stays checked on reopen");
+    }
+
+    #[test]
     fn style_options_preview_updates_all_uses_cancels_and_commits_once() {
         use egui_kittest::{Harness, kittest::Queryable};
         for paragraph in [true, false] {
@@ -9138,7 +9208,11 @@ mod tests {
             for _ in 0..3 {
                 dialog_frame(&mut app, &ctx, screen, vec![]);
             }
-            let height = visible_label(&dialog_frame(&mut app, &ctx, screen, vec![]), screen, "66p1");
+            // With craft-fonts' Noto Sans Arabic the rows above are taller, so at the smallest size the
+            // Height field starts partly below the body's clip: scroll to it like the other fields.
+            let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+            let (_, _, body) = labels.iter().find(|(text, _, _)| text.trim() == "66p1").expect("66p1 is painted");
+            let height = scroll_to_label(&mut app, &ctx, screen, body.center(), "66p1");
             click_dialog(&mut app, &ctx, screen, height.center());
             dialog_frame(
                 &mut app,
