@@ -2109,9 +2109,10 @@ fn text_wrap(s: &mut Session, p: &Value) -> Result<Value> {
     };
     // Per side [top, left, bottom, right]; a null side keeps each object's own offset there, so
     // an edit of one side keeps the others of every object.
+    // An array with no number in it changes no offset (and so keeps a custom boundary).
     let off: Option<[Option<f64>; 4]> = match p.get("offset") {
         Some(Value::Number(n)) => Some([n.as_f64(); 4]),
-        Some(v) => serde_json::from_value(v.clone()).ok(),
+        Some(v) => serde_json::from_value::<[Option<f64>; 4]>(v.clone()).ok().filter(|o| o.iter().any(Option::is_some)),
         None => None,
     };
     let invert = p.get("invert").and_then(Value::as_bool);
