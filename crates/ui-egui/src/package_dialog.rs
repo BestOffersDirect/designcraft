@@ -325,7 +325,8 @@ pub fn confirm_instructions(app: &mut DesignApp, d: &Dialog) -> Result<Value, St
 /// Ask for the folder to create ("<title> Folder") and package the document into it.
 pub fn package_to_folder(app: &mut DesignApp, idml: bool, pdf: bool, instructions: Option<String>) -> Result<Value, String> {
     let name = app.session.active().map(|d| format!("{} Folder", d.doc.title)).unwrap_or_default();
-    let Some(dir) = app.services.pick_save.as_mut().and_then(|f| f(&name)) else { return Ok(Value::Null) };
+    // Beside the document, or where the last file was saved (main's `pick_save`, #1653).
+    let Some(dir) = app.pick_save(&name) else { return Ok(Value::Null) };
     let mut p = json!({"dir": dir, "idml": idml, "pdf": pdf});
     if let Some(t) = instructions {
         p["instructions"] = json!(t);
