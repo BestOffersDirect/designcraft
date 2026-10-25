@@ -313,7 +313,6 @@ fn dial_angle(c: egui::Pos2, p: egui::Pos2) -> Option<f64> {
     let d = p - c;
     // Straight left is 180° (not −180°, which a negative zero would give).
     (d.length() > 2.0).then(|| f64::from((-d.y).atan2(d.x)).to_degrees().round()).map(|a| if a <= -180.0 { 180.0 } else { a })
-    r
 }
 
 fn flag(ui: &mut egui::Ui, d: &mut Dialog, path: &[&str], label: &str) {
