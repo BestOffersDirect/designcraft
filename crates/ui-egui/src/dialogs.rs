@@ -7115,8 +7115,10 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
     }
+    // Let go over the picker itself it takes nothing, though a page may lie under it.
     if resp.drag_stopped()
         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
+        && ui.ctx().layer_id_at(pos) != Some(ui.layer_id())
         && let Some(c) = crate::canvas::color_at(app, ui.ctx(), pos)
     {
         p = Picked::from_rgb(c.map(|v| f32::from(v) / 255.0), p.hsb[0]);
@@ -10523,6 +10525,18 @@ mod tests {
         h.drop_at(egui::pos2(2.0, 2.0));
         h.run_steps(3);
         assert_eq!(h.state().ui.dialog.as_ref().unwrap().s("hex"), hex);
+        // Let go over the picker's own colour field, with the page under it: nothing either.
+        let field = h.get_by_label("Color field").rect().center();
+        let ctx = h.ctx.clone();
+        assert!(crate::canvas::color_at(h.state_mut(), &ctx, field).is_some(), "the page lies under the field");
+        h.hover_at(from);
+        h.drag_at(from);
+        h.run_steps(1);
+        h.hover_at(field);
+        h.run_steps(1);
+        h.drop_at(field);
+        h.run_steps(3);
+        assert_eq!(h.state().ui.dialog.as_ref().unwrap().s("hex"), hex, "the picker isn't sampled");
     }
 
     #[test]
