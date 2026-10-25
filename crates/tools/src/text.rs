@@ -364,7 +364,8 @@ impl Tool for TypeTool {
             let steps = if mods.cmd || mods.ctrl { 5.0 } else { 1.0 };
             vec![Action::Exec("type.kernStep".into(), json!({"steps": sign * steps}))]
         };
-        let in_cell = cx.selection.text.is_some_and(|t| t.cell.is_some());
+        // A table cell's text, not a footnote's (which is addressed as a cell too).
+        let in_cell = cx.selection.text.is_some_and(|t| t.cell.is_some_and(|c| c.footnote_id().is_none()));
         match key {
             ToolKey::Left if mods.alt && !mods.shift => kern(-1.0),
             ToolKey::Right if mods.alt && !mods.shift => kern(1.0),

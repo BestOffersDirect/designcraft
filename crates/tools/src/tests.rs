@@ -1469,10 +1469,13 @@ fn type_tool_keys_in_a_table_cell() {
     assert_eq!(t.key(&cx, ToolKey::Tab, shift), exec("table.prevCell", serde_json::json!({})));
     assert_eq!(t.key(&cx, ToolKey::Tab, Mods::default()), exec("text.insert", serde_json::json!({"text": "\t"})));
     assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), exec("table.toggleSelection", serde_json::json!({})));
-    let s = Selection::text(designcraft_doc::TextSel::caret(sid, 0));
-    let cx = ctx(&d, &s, &c, &l);
-    assert_eq!(t.key(&cx, ToolKey::Tab, shift), exec("text.insert", serde_json::json!({"text": "\t"})));
-    assert!(matches!(t.key(&cx, ToolKey::Escape, Mods::default()).first(), Some(Action::SwitchTool(_))));
+    // Out of a table, and in footnote text (addressed as a cell too).
+    for cell in [None, Some(designcraft_doc::CellAddr::footnote(1))] {
+        let s = Selection::text(designcraft_doc::TextSel { cell, ..designcraft_doc::TextSel::caret(sid, 0) });
+        let cx = ctx(&d, &s, &c, &l);
+        assert_eq!(t.key(&cx, ToolKey::Tab, shift), exec("text.insert", serde_json::json!({"text": "\t"})), "{cell:?}");
+        assert!(matches!(t.key(&cx, ToolKey::Escape, Mods::default()).first(), Some(Action::SwitchTool(_))), "{cell:?}");
+    }
 }
 
 #[test]

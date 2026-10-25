@@ -127,6 +127,21 @@ fn table_edit_after_anchor_removal_floors_parent_caret() {
     }
 }
 
+/// Footnote text is addressed as a cell, but the table commands don't take it for one.
+#[test]
+fn the_cell_commands_refuse_footnote_text() {
+    let (mut s, sid, _) = session_with_frame();
+    s.execute("story.setText", &json!({"story": sid, "text": "Hello"})).unwrap();
+    s.execute("text.select", &json!({"story": sid, "anchor": 5, "focus": 5})).unwrap();
+    s.execute("footnote.insert", &json!({"text": "Note"})).unwrap();
+    let before = s.doc().unwrap().selection.clone();
+    assert!(before.text.and_then(|t| t.cell).and_then(|c| c.footnote_id()).is_some(), "the caret is in the footnote");
+    for cmd in ["table.toggleSelection", "table.prevCell", "table.nextCell"] {
+        assert!(s.execute(cmd, &json!({})).is_err(), "{cmd}");
+    }
+    assert_eq!(s.doc().unwrap().selection, before);
+}
+
 /// Esc in a table toggles between the text and the cell (InDesign's Esc): the caret in a cell
 /// selects that cell, and selected cells select the first one's text; Shift+Tab goes back a cell.
 #[test]

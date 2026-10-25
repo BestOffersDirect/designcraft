@@ -438,7 +438,9 @@ fn in_table_or_ids(s: &Session) -> std::result::Result<(), String> {
 
 fn in_cell(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
-    if s.active().is_some_and(|d| d.selection.text.is_some_and(|t| t.cell.is_some())) { Ok(()) } else { Err("not in a table cell".into()) }
+    // Footnote text is addressed as a cell too, but isn't in a table.
+    let in_table = |c: CellAddr| c.footnote_id().is_none();
+    if s.active().is_some_and(|d| d.selection.text.is_some_and(|t| t.cell.is_some_and(in_table))) { Ok(()) } else { Err("not in a table cell".into()) }
 }
 
 /// The table a command acts on and its target cell range.
@@ -1594,7 +1596,7 @@ fn toggle_selection(s: &mut Session) -> Result<Value> {
     const ID: &str = "table.toggleSelection";
     let st = s.doc_mut()?;
     let t = st.selection.text.ok_or_else(|| bad(ID, "no caret"))?;
-    let c = t.cell.ok_or_else(|| bad(ID, "not in a cell"))?;
+    let c = t.cell.filter(|c| c.footnote_id().is_none()).ok_or_else(|| bad(ID, "not in a cell"))?;
     let cells = match st.selection.cells {
         Some(cs) => {
             // A merged cell's text belongs to the cell at its top left.
