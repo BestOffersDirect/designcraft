@@ -577,6 +577,7 @@ fn same_as_clipping_wrap_follows_the_clipping_path() {
     );
     let triangle = PathData::single(SubPath::polyline(&[Point::new(75.0, 0.0), Point::new(150.0, 200.0), Point::new(0.0, 200.0)], true));
     it.content = designcraft_doc::Content::Graphic(designcraft_doc::Graphic {
+        layer_options: None,
         asset: designcraft_doc::AssetId(1),
         size: (150.0, 200.0),
         xf: designcraft_geom::Affine::translate((150.0, 100.0)),
@@ -725,6 +726,7 @@ fn an_image_contour_stops_at_its_frame() {
     let mut it = designcraft_doc::Item::new(ItemId(d.alloc()), lid, designcraft_doc::Shape::Polygon, frame);
     // The image overhangs the frame on every side.
     it.content = designcraft_doc::Content::Graphic(designcraft_doc::Graphic {
+        layer_options: None,
         asset: designcraft_doc::AssetId(d.alloc()),
         size: (300.0, 250.0),
         xf: designcraft_geom::Affine::IDENTITY,
@@ -769,6 +771,7 @@ fn a_clipping_path_contour_stops_at_its_frame() {
         true,
     ));
     it.content = designcraft_doc::Content::Graphic(designcraft_doc::Graphic {
+        layer_options: None,
         asset: designcraft_doc::AssetId(1),
         size: (150.0, 200.0),
         xf: designcraft_geom::Affine::translate((150.0, 100.0)),
@@ -1356,6 +1359,111 @@ fn optical_margin_hangs_punctuation() {
     let lines = all_lines(&hung);
     assert!(lines[..lines.len() - 1].iter().any(|l| l.end_x > l.x1 + 0.5), "no line hangs");
     assert!(lines.iter().all(|l| l.end_x <= l.x1 + 12.0));
+}
+
+#[test]
+fn optical_margin_hangs_the_edges_of_lines_with_tabs() {
+    // Both line breakers let the edge glyphs of a line hang, tab or not, so layout hangs them
+    // too: a line that fits only because its period hangs is not squeezed into the measure or
+    // set past it. The left hang leaves tab stops where they are.
+    let stop = designcraft_doc::TabStop { position: 40.0, align: TabAlign::Left, leader: String::new(), align_on: String::new() };
+    let rest = "right here. More words follow it on the next line.";
+    let cases = [
+        ("tab", format!("“A”\tsits {rest}"), Align::LeftJustified),
+        ("no tab", format!("“A” sits {rest}"), Align::LeftJustified),
+        ("right indent tab", format!("“A” sits{}{rest}", story::RIGHT_INDENT_TAB), Align::Left),
+    ];
+    for (name, text, align) in &cases {
+        let ch = |g: &PlacedGlyph| text.get(g.byte..).and_then(|s| s.chars().next()).unwrap_or(' ');
+        let edge_glyphs = |l: &Line| -> Vec<PlacedGlyph> { l.glyphs.iter().filter(|g| g.visible && !ch(g).is_whitespace()).cloned().collect() };
+        for composer in [Composer::Paragraph, Composer::SingleLine] {
+            let mut ending = 0;
+            for w in 100..=240 {
+                let para = ParaAttrs {
+                    align: Some(*align),
+                    optical_margin: Some(true),
+                    hyphenate: Some(false),
+                    composer: Some(composer),
+                    tabs: Some(vec![stop.clone()]),
+                    ..Default::default()
+                };
+                let (d, sid, _) = doc_with(text, Rect::new(0.0, 0.0, f64::from(w), 1000.0), para);
+                let cs = compose_story(&d, sid, &ComposeOptions::default());
+                let lines = all_lines(&cs);
+                for (i, l) in lines.iter().enumerate() {
+                    let Some(last) = edge_glyphs(l).last().cloned() else { continue };
+                    let hang = breaker::hang(ch(&last)).1 * last.adv;
+                    let end = last.x + last.adv;
+                    assert!(end <= l.x1 + hang + 0.01, "{name}, {composer:?}, width {w}: line {i} ends at {end}, past {} and its hang {hang}", l.x1);
+                }
+                let glyphs = edge_glyphs(lines[0]);
+                let (x0, x1) = (lines[0].x0, lines[0].x1);
+                let first = &glyphs[0];
+                assert!((first.x + first.adv - x0).abs() < 0.01, "{name}, {composer:?}, width {w}: the opening quote is at {}", first.x);
+                if *name == "tab" {
+                    let s = glyphs.iter().find(|g| ch(g) == 's').unwrap();
+                    assert!((s.x - (x0 + 40.0)).abs() < 0.01, "{composer:?}, width {w}: the text after the tab starts at {}", s.x);
+                }
+                // Line 0 ends with the period of "here.": the period hangs past the measure.
+                let last = glyphs.last().unwrap();
+                if text.get(last.byte..).is_some_and(|s| s.starts_with(". More")) {
+                    ending += 1;
+                    assert!((last.x - x1).abs() < 0.01, "{name}, {composer:?}, width {w}: the period starts at {}, not at {x1}", last.x);
+                }
+            }
+            assert!(ending > 3, "{name}, {composer:?}: line 0 ends with the period at {ending} widths");
+        }
+    }
+}
+
+/// How far the opening quote of a one-line paragraph at `text_size` hangs into the left margin,
+/// with the story's Optical Margin Alignment `story` (on, size) and the paragraph's attributes.
+fn quote_hang(text_size: f64, story: Option<f64>, para: ParaAttrs) -> f64 {
+    let text = "“Quoted” words.";
+    let first_x = |story: Option<f64>, para: ParaAttrs| {
+        let (mut d, sid, _) = doc_with(text, Rect::new(0.0, 0.0, 400.0, 200.0), para);
+        let st = d.story_mut(sid).unwrap();
+        st.format_chars(0..text.len(), |f| f.over.size = Some(text_size));
+        if let Some(size) = story {
+            st.optical_margin = designcraft_doc::OpticalMargin { on: true, size };
+        }
+        let cs = compose_story(&d, sid, &ComposeOptions::default());
+        let lines = all_lines(&cs);
+        assert_eq!(lines.len(), 1);
+        lines[0].glyphs[0].x
+    };
+    first_x(None, ParaAttrs::default()) - first_x(story, para)
+}
+
+#[test]
+fn story_optical_margin_hang_scales_with_its_size() {
+    let at12 = quote_hang(12.0, Some(12.0), ParaAttrs::default());
+    let at24 = quote_hang(12.0, Some(24.0), ParaAttrs::default());
+    assert!(at12 > 1.0, "{at12}");
+    assert!((at24 - 2.0 * at12).abs() < 0.01, "{at12} {at24}");
+    // The size is the type size the hang is set for: 24 pt text at 24 hangs like 12 at 12, twice as far.
+    let big = quote_hang(24.0, Some(24.0), ParaAttrs::default());
+    assert!((big - 2.0 * at12).abs() < 0.01, "{at12} {big}");
+}
+
+#[test]
+fn ignore_optical_margin_paragraph_does_not_hang() {
+    let ignored = ParaAttrs { ignore_optical_margin: Some(true), optical_margin: Some(true), ..Default::default() };
+    assert_eq!(quote_hang(12.0, Some(12.0), ignored.clone()), 0.0);
+    assert_eq!(quote_hang(12.0, None, ignored), 0.0);
+}
+
+#[test]
+fn paragraph_optical_margin_hangs_at_the_text_size() {
+    // Documents saved before the story setting existed: the paragraph's switch hangs each
+    // character by its own size, not the story's default 12 pt.
+    let own = ParaAttrs { optical_margin: Some(true), ..Default::default() };
+    let at24 = quote_hang(24.0, None, own.clone());
+    assert!((at24 - quote_hang(24.0, Some(24.0), ParaAttrs::default())).abs() < 0.01);
+    assert!((at24 - 2.0 * quote_hang(12.0, None, own)).abs() < 0.01);
+    // The story setting, when on, sets the size.
+    let story = quote_hang(24.0, Some(12.0), ParaAttrs { optical_margin: Some(true), ..Default::default() });
+    assert!((story - at24 / 2.0).abs() < 0.01, "{story} {at24}");
 }
 
 // ---------- golden paragraph corpus ----------
@@ -6697,7 +6805,7 @@ fn roman_word_break_breaks_inside_words_without_hyphens() {
 fn grid_doc(text: &str, para: ParaAttrs, edit: impl FnOnce(&mut Document, StoryId)) -> (Vec<Line>, (f64, f64)) {
     let (mut d, sid, fid) = doc_with(text, Rect::new(0.0, 0.0, 300.0, 400.0), para);
     if let Some(tf) = d.item_mut(fid).and_then(|i| i.text_frame_mut()) {
-        tf.options.baseline_grid = Some(designcraft_doc::FrameBaselineGrid { start: 0.0, increment: 12.0 });
+        tf.options.baseline_grid = Some(designcraft_doc::FrameBaselineGrid::new(0.0, 12.0));
     }
     edit(&mut d, sid);
     // Vertical frames have no baseline grid.
@@ -7453,6 +7561,37 @@ fn baseline_grid_relative_to_the_top_margin_starts_at_each_pages_margin() {
     assert_eq!(lines.len(), 41);
 }
 
+/// A frame's custom grid (start 10, increment 13) measured from the page top, the top margin
+/// (36), the frame top (100) or the top inset (6 below it).
+#[test]
+fn frame_baseline_grid_relative_to_page_margin_frame_or_inset() {
+    use designcraft_doc::{FrameBaselineGrid, FrameGridRelative as R};
+    let first_baseline = |relative_to: Option<R>| {
+        let mut d = Document::new(&NewDocument { margins: designcraft_doc::Margins::uniform(36.0), ..Default::default() });
+        let lid = d.default_layer();
+        let para = ParaFormat { para: ParaAttrs { grid_align: Some(GridAlign::AllLines), ..Default::default() }, ..Default::default() };
+        let (fid, sid) = d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 100.0, 336.0, 400.0), lid, "Grid", para).unwrap();
+        let st = d.story_mut(sid).unwrap();
+        st.paras[0].chars =
+            designcraft_doc::CharAttrs { size: Some(11.0), leading: Some(designcraft_doc::Leading::Points(13.0)), ..Default::default() };
+        let tf = d.item_mut(fid).unwrap().text_frame_mut().unwrap();
+        tf.options.inset = [6.0, 0.0, 0.0, 0.0];
+        tf.options.baseline_grid = relative_to.map(|r| FrameBaselineGrid { relative_to: r, ..FrameBaselineGrid::new(10.0, 13.0) });
+        // A document grid that matches none of the frame grids.
+        d.settings.baseline_grid.start = 0.0;
+        d.settings.baseline_grid.increment = 0.0;
+        compose_story(&d, sid, &ComposeOptions::default()).frames[0].lines[0].baseline
+    };
+    // Without a grid the first baseline sits an ascent below the top inset.
+    let natural = first_baseline(None);
+    assert!(natural > 106.0 && natural < 120.0, "{natural}");
+    for (r, origin) in [(R::TopOfPage, 10.0), (R::TopMargin, 46.0), (R::TopOfFrame, 110.0), (R::TopInset, 116.0)] {
+        let want = (0..).map(|n| origin + 13.0 * f64::from(n)).find(|y| *y >= natural - 1e-9).unwrap();
+        let got = first_baseline(Some(r));
+        assert!((got - want).abs() < 1e-6, "{r:?}: first baseline {got}, want {want} (natural {natural})");
+    }
+}
+
 /// A group's transform moves a frame from the left page of a spread to the right one: the grid
 /// starts at the right page's top margin.
 #[test]
@@ -7703,4 +7842,92 @@ fn an_rtl_first_line_indent_is_at_the_right_edge() {
     let lines = all_lines(&cs);
     assert!((left_edge(lines[0]) - rect.x0).abs() < 1.0, "left to right, first line at the edge: {}", left_edge(lines[0]));
     assert!((left_edge(lines[1]) - (rect.x0 + 10.0 * MM)).abs() < 1.0, "left to right, wrapped line indented: {}", left_edge(lines[1]));
+}
+
+/// A marginal note (an anchored text frame, Only Align First Line to Grid, 9/10) hangs 15 pt
+/// above its anchor's baseline on a right-hand page. It composes against the document grid where
+/// it is placed: its first line moves down onto the grid line, the second follows 10 pt below,
+/// and its page is the host's. Composed where it was stored, it snapped to a grid measured from
+/// its own top edge and sat on no page.
+#[test]
+fn anchored_text_frames_compose_against_the_grid_where_they_are_placed() {
+    use designcraft_doc::anchored::AnchorRelative as R;
+    let mut d = Document::new(&NewDocument { pages: 3, ..Default::default() });
+    d.settings.baseline_grid.start = 36.0;
+    d.settings.baseline_grid.increment = 10.0;
+    let lid = d.default_layer();
+    let page = d.spreads[1].pages[1].clone();
+    assert_eq!(page.side, designcraft_doc::PageSide::Right);
+    // Body lines at 46, 56, 66, … (on the grid) while the frame top is at 36.
+    let body = "One.\nTwo.\nThree.\nFour.";
+    let rect = Rect::new(page.x + 108.0, 36.0, page.x + page.width - 36.0, 400.0);
+    let (bf, sid) = d.add_text_frame(SpreadRef::Doc(1), rect, lid, body, ParaFormat::default()).unwrap();
+    d.item_mut(bf).unwrap().text_frame_mut().unwrap().options.first_baseline = FirstBaseline::Leading;
+    let nine_ten = |f: &mut designcraft_doc::story::CharFormat| {
+        f.over.size = Some(9.0);
+        f.over.leading = Some(designcraft_doc::Leading::Points(10.0));
+    };
+    d.story_mut(sid).unwrap().format_chars(0..body.len(), nine_ten);
+    // The note: its own story in a 60 × 40 frame anchored in the third line.
+    let (nid, nsid) = (ItemId(d.alloc()), StoryId(d.alloc()));
+    let text = "Note one\u{2028}note two";
+    let para = ParaFormat { para: ParaAttrs { grid_align: Some(GridAlign::FirstLineOnly), ..Default::default() }, ..Default::default() };
+    let mut story = Story::with_text(nsid, text, para);
+    story.format_chars(0..text.len(), nine_ten);
+    story.frames.push(nid);
+    d.stories.insert(nsid, Arc::new(story));
+    let mut note =
+        designcraft_doc::Item::new(nid, lid, designcraft_doc::Shape::Rectangle, designcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 60.0, 40.0)));
+    note.content = Content::Text(designcraft_doc::TextFrame { story: nsid, options: Default::default() });
+    let position = designcraft_doc::AnchorPosition::Custom {
+        x_relative: R::TextFrame,
+        y_relative: R::Anchor,
+        x_offset: -72.0,
+        y_offset: -15.0,
+        object_point: 0,
+        ref_point: 0,
+        keep_within_column: false,
+        spine_relative: false,
+    };
+    let at = body.find("Three").unwrap();
+    d.story_mut(sid).unwrap().insert_object(at, designcraft_doc::AnchoredObject::new(note, position));
+
+    let cache = Cache::new();
+    let on_grid = |y: f64| on_grid(y, (36.0, 10.0));
+    // (anchor line baseline, note baselines), in spread space.
+    let baselines = |d: &Document, cs: &ComposedStory| {
+        let host = compose_story(d, sid, &ComposeOptions::default());
+        let ft = host.frame(bf).unwrap();
+        let o = &ft.objects[0];
+        let fxf = d.item(bf).unwrap().xf;
+        let anchor = (fxf * Point::new(0.0, ft.lines[o.line].baseline)).y;
+        let nxf = fxf * Affine::translate(o.origin.to_vec2()) * d.anchored_item(nid).unwrap().xf;
+        (anchor, all_lines(cs).iter().map(|l| (nxf * Point::new(0.0, l.baseline)).y).collect::<Vec<_>>())
+    };
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+
+    let (anchor, lines) = baselines(&d, &cache.get(&d, nsid, None));
+    assert!(near(anchor, 66.0), "anchor baseline {anchor}");
+    assert_eq!(lines.len(), 2);
+    assert!(near(lines[0], anchor) && near(lines[1], anchor + 10.0), "note baselines {lines:?}, anchor {anchor}");
+    assert_eq!(baselines(&d, &compose_story(&d, nsid, &ComposeOptions::default())).1, lines);
+    // The note is on the host's right-hand page, with that page's rectangle.
+    let placed = placed::placements(&d, nsid, &mut |h| Arc::new(compose_story(&d, h, &ComposeOptions::default())));
+    let spec = &frame_specs_placed(&d, nsid, &placed)[0];
+    assert_eq!((spec.page, spec.right_page, spec.left_page), (Some(2), true, false));
+    assert!(spec.page_rect.is_some());
+
+    // Host moved down 5 pt: the anchor is off the grid, and the note's first line moves down from
+    // 10 pt above it onto the grid line 5 pt above it. The cache composes the note again.
+    let xf = d.item(bf).unwrap().xf;
+    d.item_mut(bf).unwrap().xf = Affine::translate((0.0, 5.0)) * xf;
+    let (anchor, lines) = baselines(&d, &cache.get(&d, nsid, None));
+    assert!(near(anchor, 71.0), "anchor baseline {anchor}");
+    assert!(on_grid(lines[0]) && near(lines[0], anchor - 5.0) && near(lines[1], lines[0] + 10.0), "note baselines {lines:?}, anchor {anchor}");
+    assert_eq!(baselines(&d, &compose_story(&d, nsid, &ComposeOptions::default())).1, lines);
+
+    // The host's page turns into a left-hand page: the note is composed again for that side.
+    let before = cache.get(&d, nsid, None);
+    Arc::make_mut(&mut d.spreads[1]).pages[1].side = designcraft_doc::PageSide::Left;
+    assert!(!Arc::ptr_eq(&before, &cache.get(&d, nsid, None)));
 }
