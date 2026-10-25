@@ -11,6 +11,16 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
+    // Another document (switched to, or moved to this one's place by a close) drops a rename in
+    // place: a swatch of the same name there isn't the one being renamed.
+    let uid = st.uid;
+    if ui.data(|d| d.get_temp::<u64>(egui::Id::new(RENAME_DOC))) != Some(uid) {
+        ui.data_mut(|d| {
+            d.remove_temp::<(String, String)>(egui::Id::new(RENAMING));
+            d.remove_temp::<(String, f64)>(egui::Id::new(RENAME_CLICK));
+            d.insert_temp(egui::Id::new(RENAME_DOC), uid);
+        });
+    }
     let target = super::color_target(app);
     header(app, ui, &doc, target.as_ref());
     // The row of the colour in front of the proxy is highlighted.
@@ -159,6 +169,8 @@ const RENAMING: &str = "swatches_renaming";
 /// Temp-data key of a click on the picked swatch's name: (swatch, time). Unless it turns into a
 /// double-click (Swatch Options), it starts renaming.
 const RENAME_CLICK: &str = "swatches_rename_click";
+/// Temp-data key of the document (its uid) the panel last showed: a rename belongs to it.
+const RENAME_DOC: &str = "swatches_rename_doc";
 
 /// The Swatches panel's top row, as InDesign's: a Fill/Stroke proxy (click: the other in front),
 /// Formatting Affects Container / Text, and the tint of the colour in front. `target` is
@@ -1295,6 +1307,30 @@ mod swatches_header_tests {
     /// clicking it, then clicking its name again: the name becomes a field, and Enter renames the
     /// swatch (and what uses it). A double-click still opens Swatch Options, Escape keeps the name,
     /// and [Black] can't be renamed.
+    /// A rename in place belongs to its document: with another one active, a swatch of the same
+    /// name there gets no field, and nothing is renamed.
+    #[test]
+    fn a_rename_in_place_ends_with_its_document() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let color = json!({"color": {"c": 14, "m": 8, "y": 95, "k": 0}});
+        let name = app.run("swatch.create", color.clone()).unwrap()["name"].as_str().unwrap().to_string();
+        let mut h = Harness::builder().with_size(vec2(300.0, 520.0)).build_ui_state(|ui, app: &mut DesignApp| super::show(app, ui), app);
+        h.run_steps(2);
+        let fields = h.query_all_by_role(egui::accesskit::Role::TextInput).count();
+        let renaming = egui::Id::new(super::RENAMING);
+        h.ctx.data_mut(|d| d.insert_temp(renaming, (name.clone(), "Typed".to_string())));
+        h.run_steps(2);
+        assert!(h.query_all_by_role(egui::accesskit::Role::TextInput).count() > fields, "the name is a field");
+        // Another document with a swatch of the same name.
+        h.state_mut().run("file.new", json!({})).unwrap();
+        h.state_mut().run("swatch.create", color).unwrap();
+        h.run_steps(3);
+        assert!(h.ctx.data(|d| d.get_temp::<(String, String)>(renaming)).is_none(), "the rename is dropped");
+        let doc = &h.state().session.active().unwrap().doc;
+        assert!(doc.swatch(&name).is_some() && doc.swatch("Typed").is_none());
+    }
+
     #[test]
     fn a_second_click_on_the_picked_swatch_renames_it_in_place() {
         use egui::accesskit::Role;
