@@ -15,8 +15,8 @@ use std::io::Write;
 
 use designcraft_doc::geom::{Affine, Rect};
 use designcraft_doc::{
-    Align, AnchorPosition, AnchoredObject, CharAttrs, CharProps, Content, Document, ENDNOTE_REF, FOOTNOTE_REF, Item, ItemId, OBJECT_MARK, ParaProps,
-    SpreadRef, Story, StoryId, Styles, Table, story,
+    Align, AnchorPosition, AnchoredObject, CharAttrs, CharProps, Content, Document, ENDNOTE_REF, EpubSplit, FOOTNOTE_REF, Item, ItemId, OBJECT_MARK,
+    ParaProps, SpreadRef, Story, StoryId, Styles, Table, story,
 };
 
 #[derive(Clone, Debug)]
@@ -38,6 +38,8 @@ pub struct EpubOptions {
     pub modified: Option<i64>,
     /// Title of the navigation (table of contents); from `language` when absent.
     pub toc_title: Option<String>,
+    /// Split Document: where content files start; the document's setting when absent.
+    pub split: Option<EpubSplit>,
 }
 
 /// A font file packaged with an EPUB: the face of `family` in `style` (`Bold Italic`…).
@@ -123,19 +125,13 @@ fn font_file(k: usize, f: &EmbeddedFont) -> (String, &'static str) {
 }
 
 /// An ISO 8601 UTC timestamp (`2026-10-13T09:30:00Z`) for Unix seconds `t`.
+/// A time outside chrono's year range still converts: the calendar repeats every 400 years, so the
+/// instant is moved into range by whole cycles and only the year is carried (matches the old
+/// `civil_from_days`), rather than resetting to the epoch.
 fn iso8601(t: i64) -> String {
-    let (days, secs) = (t.div_euclid(86_400), t.rem_euclid(86_400));
-    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z", secs / 3600, secs % 3600 / 60, secs % 60)
+    let (y, dt) = designcraft_doc::time::utc_parts(t, 0);
+    // `{:04}` rather than `%Y`, which writes a `+` before years past 9999.
+    format!("{y:04}-{}", dt.format("%m-%dT%H:%M:%SZ"))
 }
 
 /// The package's `dcterms:modified`: the given time, else the document's last save or creation.
@@ -193,9 +189,7 @@ pub struct FixedPage {
 
 /// A pre-paginated (fixed-layout) EPUB: one XHTML page per document page.
 pub fn export_fixed_epub(doc: &Document, pages: &[FixedPage], opts: &EpubOptions) -> Result<Vec<u8>, EpubError> {
-    let io = |e: std::io::Error| EpubError(e.to_string());
-    let zerr = |e: zip::result::ZipError| EpubError(e.to_string());
-    let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
+    let title = opts.title.clone().unwrap_or_else(|| doc.metadata_title().to_string());
     let lang = language_tag(&opts.language);
     let id = identifier(doc, opts, &title);
     let modified = modified(doc, opts);
@@ -226,12 +220,41 @@ pub fn export_fixed_epub(doc: &Document, pages: &[FixedPage], opts: &EpubOptions
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE html>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"{lang}\">\n<head><meta charset=\"utf-8\"/><title>{}</title></head>\n<body><nav epub:type=\"page-list\" id=\"toc\"><h1>Pages</h1><ol>{nav_items}</ol></nav></body>\n</html>\n",
         xml_text(&title)
     );
-    let author = opts.author.as_deref().map(|a| format!("<dc:creator>{}</dc:creator>", xml_text(a))).unwrap_or_default();
-    let opf = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"bookid\" xml:lang=\"{lang}\" prefix=\"rendition: http://www.idpf.org/vocab/rendition/#\">\n<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n<dc:identifier id=\"bookid\">{}</dc:identifier>\n<dc:title>{}</dc:title>\n<dc:language>{lang}</dc:language>{author}\n<meta property=\"dcterms:modified\">{modified}</meta>\n<meta property=\"rendition:layout\">pre-paginated</meta>\n<meta property=\"rendition:spread\">auto</meta>\n<meta name=\"original-resolution\" content=\"{vw}x{vh}\"/>\n<meta name=\"generator\" content=\"DesignCraft\"/>\n</metadata>\n<manifest>\n{manifest}</manifest>\n<spine>\n{spine}</spine>\n</package>\n",
-        xml_text(&id),
-        xml_text(&title)
+    let rendition = format!(
+        "\n<meta property=\"rendition:layout\">pre-paginated</meta>\n<meta property=\"rendition:spread\">auto</meta>\n<meta name=\"original-resolution\" content=\"{vw}x{vh}\"/>"
     );
+    let head = PackageHead { lang, id: &id, title: &title, author: opts.author.as_deref().or(doc.metadata_author()), modified: &modified };
+    let opf = package_opf(&head, " prefix=\"rendition: http://www.idpf.org/vocab/rendition/#\"", &rendition, &manifest, &spine);
+    let entries = files.iter().map(|(name, data)| (name.clone(), data.as_slice(), name.ends_with(".png")));
+    write_package(&opf, &nav, entries)
+}
+
+/// The package metadata both EPUB flavours share.
+struct PackageHead<'a> {
+    lang: &'a str,
+    id: &'a str,
+    title: &'a str,
+    author: Option<&'a str>,
+    modified: &'a str,
+}
+
+/// The OPF package document. `prefix` goes on `<package>` (with its leading space), `meta` after
+/// `dcterms:modified` (with its leading newline); `manifest` and `spine` are the item lines.
+fn package_opf(h: &PackageHead, prefix: &str, meta: &str, manifest: &str, spine: &str) -> String {
+    let PackageHead { lang, id, title, author, modified } = h;
+    let author = author.map(|a| format!("<dc:creator>{}</dc:creator>", xml_text(a))).unwrap_or_default();
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"bookid\" xml:lang=\"{lang}\"{prefix}>\n<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n<dc:identifier id=\"bookid\">{}</dc:identifier>\n<dc:title>{}</dc:title>\n<dc:language>{lang}</dc:language>{author}\n<meta property=\"dcterms:modified\">{modified}</meta>{meta}\n<meta name=\"generator\" content=\"DesignCraft\"/>\n</metadata>\n<manifest>\n{manifest}</manifest>\n<spine>\n{spine}</spine>\n</package>\n",
+        xml_text(id),
+        xml_text(title)
+    )
+}
+
+/// Zips an EPUB: the stored `mimetype`, `container.xml`, the OPF and nav, then `entries` in order
+/// as (path, bytes, stored uncompressed).
+fn write_package<'a>(opf: &str, nav: &str, entries: impl IntoIterator<Item = (String, &'a [u8], bool)>) -> Result<Vec<u8>, EpubError> {
+    let io = |e: std::io::Error| EpubError(e.to_string());
+    let zerr = |e: zip::result::ZipError| EpubError(e.to_string());
     let container = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\"><rootfiles><rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/></rootfiles></container>\n";
     let mut buf = std::io::Cursor::new(Vec::new());
     {
@@ -246,9 +269,8 @@ pub fn export_fixed_epub(doc: &Document, pages: &[FixedPage], opts: &EpubOptions
             z.start_file(name, deflate).map_err(zerr)?;
             z.write_all(data).map_err(io)?;
         }
-        for (name, data) in &files {
-            let o = if name.ends_with(".png") { stored } else { deflate };
-            z.start_file(name.as_str(), o).map_err(zerr)?;
+        for (name, data, store) in entries {
+            z.start_file(name, if store { stored } else { deflate }).map_err(zerr)?;
             z.write_all(data).map_err(io)?;
         }
         z.finish().map_err(zerr)?;
@@ -268,6 +290,7 @@ impl Default for EpubOptions {
             fonts: Vec::new(),
             modified: None,
             toc_title: None,
+            split: None,
         }
     }
 }
@@ -430,11 +453,12 @@ fn char_css(doc: &Document, c: &CharProps, base_size: f64, generics: &BTreeMap<S
         }
         _ => {}
     }
-    if c.underline {
-        out.push_str("text-decoration: underline; ");
-    }
-    if c.strikethrough {
-        out.push_str("text-decoration: line-through; ");
+    // One declaration: a later `text-decoration` would replace the earlier one.
+    match (c.underline, c.strikethrough) {
+        (true, true) => out.push_str("text-decoration: underline line-through; "),
+        (true, false) => out.push_str("text-decoration: underline; "),
+        (false, true) => out.push_str("text-decoration: line-through; "),
+        (false, false) => {}
     }
     if let Some(h) = hex(doc, &c.fill, c.fill_tint) {
         let _ = write!(out, "color: {h}; ");
@@ -648,6 +672,8 @@ struct StoryWriter<'a, 'f> {
     /// Prefix of the `id`s the current story's headings get (`{prefix}-p{paragraph index}`, the
     /// targets of the table of contents); only top-level paragraphs get one.
     heading_ids: Option<String>,
+    /// Where EPUB content files start (see [`starts_chapter`]).
+    split: EpubSplit,
 }
 
 impl<'a, 'f> StoryWriter<'a, 'f> {
@@ -666,6 +692,7 @@ impl<'a, 'f> StoryWriter<'a, 'f> {
             images: BTreeMap::new(),
             no_alt: Vec::new(),
             heading_ids: None,
+            split: doc.settings.epub_split.clone(),
         }
     }
 
@@ -704,6 +731,12 @@ impl<'a, 'f> StoryWriter<'a, 'f> {
                 let (tag, class) = export_mapping(&doc.styles, &pf.style, false, &self.pc);
                 let props = doc.styles.resolve_para(pf).0;
                 let rtl = props.direction == designcraft_doc::TextDirection::RightToLeft;
+                // Chapter files start only at top-level paragraphs, after any open list or
+                // preformatted block is closed, so each file stays balanced.
+                if depth == 0 && self.heading_ids.is_some() && starts_chapter(&self.split, &doc.styles, &pf.style) {
+                    close_blocks(&mut list, &mut pre, out);
+                    out.push_str(CHAPTER_MARK);
+                }
                 let continues_pre = tag == "pre" && pre.as_ref() == Some(&(class.clone(), rtl));
                 if !continues_pre && pre.take().is_some() {
                     out.push_str("</pre>\n");
@@ -719,11 +752,6 @@ impl<'a, 'f> StoryWriter<'a, 'f> {
                         let _ = writeln!(out, "<{l}>");
                     }
                     list = list_tag;
-                }
-                // An EPUB chapter file starts before each top-level h1, outside any open list or
-                // preformatted block.
-                if depth == 0 && self.heading_ids.is_some() && heading_level(tag) == Some(1) {
-                    out.push_str(CHAPTER_MARK);
                 }
                 if continues_pre {
                     out.push('\n');
@@ -765,6 +793,39 @@ impl<'a, 'f> StoryWriter<'a, 'f> {
         close_blocks(&mut list, &mut pre, out);
     }
 
+    /// The markup for one run's text `raw` (starting at byte `a` of the story): anchored objects
+    /// and notes where their marks are.
+    fn run_markup(&mut self, st: &Story, raw: &str, a: usize, depth: usize, after: &mut String) -> String {
+        let doc = self.doc;
+        let mut t = String::new();
+        let mut seg_start = 0;
+        // Index of the next anchored object: marks count from the story start, as
+        // `Story::object_at` counts them (counted once, at the run's first mark).
+        let mut mark: Option<usize> = None;
+        for (i, c) in raw.char_indices() {
+            if c != FOOTNOTE_REF && c != ENDNOTE_REF && c != OBJECT_MARK {
+                continue;
+            }
+            t.push_str(&run_text(doc, raw.get(seg_start..i).unwrap_or_default()));
+            seg_start = i + c.len_utf8();
+            if c == OBJECT_MARK {
+                let k = mark.unwrap_or_else(|| st.text.get(..a).map_or(0, |t| t.matches(OBJECT_MARK).count()));
+                mark = Some(k.saturating_add(1));
+                if let Some(o) = st.objects.get(k) {
+                    t.push_str(&self.object(o));
+                }
+            } else if depth < MAX_DEPTH {
+                if c == FOOTNOTE_REF {
+                    self.footnote(st, a + i, depth, &mut t, after);
+                } else {
+                    self.endnote(st, a + i, depth, &mut t);
+                }
+            }
+        }
+        t.push_str(&run_text(doc, raw.get(seg_start..).unwrap_or_default()));
+        t
+    }
+
     /// The runs of paragraph `para` of `st`; footnotes go to `after`.
     fn runs(&mut self, st: &Story, para: std::ops::Range<usize>, depth: usize, out: &mut String, after: &mut String) {
         let doc = self.doc;
@@ -779,32 +840,7 @@ impl<'a, 'f> StoryWriter<'a, 'f> {
                 continue;
             }
             let Some(raw) = st.text.get(a..b) else { continue };
-            let mut t = String::new();
-            let mut seg_start = 0;
-            // Index of the next anchored object: marks count from the story start, as
-            // `Story::object_at` counts them (counted once, at the run's first mark).
-            let mut mark: Option<usize> = None;
-            for (i, c) in raw.char_indices() {
-                if c != FOOTNOTE_REF && c != ENDNOTE_REF && c != OBJECT_MARK {
-                    continue;
-                }
-                t.push_str(&run_text(doc, raw.get(seg_start..i).unwrap_or_default()));
-                seg_start = i + c.len_utf8();
-                if c == OBJECT_MARK {
-                    let k = mark.unwrap_or_else(|| st.text.get(..a).map_or(0, |t| t.matches(OBJECT_MARK).count()));
-                    mark = Some(k.saturating_add(1));
-                    if let Some(o) = st.objects.get(k) {
-                        t.push_str(&self.object(o));
-                    }
-                } else if depth < MAX_DEPTH {
-                    if c == FOOTNOTE_REF {
-                        self.footnote(st, a + i, depth, &mut t, after);
-                    } else {
-                        self.endnote(st, a + i, depth, &mut t);
-                    }
-                }
-            }
-            t.push_str(&run_text(doc, raw.get(seg_start..).unwrap_or_default()));
+            let t = self.run_markup(st, raw, a, depth, after);
             let (ctag, cls) = if f.style != story::NO_CHAR_STYLE {
                 let (tag, class) = export_mapping(&doc.styles, &f.style, true, &self.cc);
                 (tag, format!(" class=\"{}\"", xml_attr(&class)))
@@ -1021,7 +1057,18 @@ pub fn story_html(doc: &Document, sid: StoryId) -> String {
     StoryWriter::new(doc, true, None).story(sid, None)
 }
 
-/// Where the EPUB body splits into chapter files: before each `h1`.
+/// Whether an EPUB chapter file starts before a paragraph of `style` (Split Document): never
+/// when it's off, before each paragraph of the one style it names, or before each paragraph of
+/// a style whose Export Tagging has Split Document on.
+fn starts_chapter(split: &EpubSplit, st: &Styles, style: &str) -> bool {
+    match split {
+        EpubSplit::Off => false,
+        EpubSplit::Style(name) => name == style,
+        EpubSplit::ExportTags => st.export_tag(style, false).is_some_and(|e| e.split),
+    }
+}
+
+/// Where the EPUB body splits into chapter files (see [`starts_chapter`]).
 const CHAPTER_MARK: &str = "<!--dc:chapter-->";
 
 /// The body split at its [`CHAPTER_MARK`]s into chapter bodies, each with its sections closed
@@ -1277,9 +1324,12 @@ struct Body<'a> {
 
 /// The content in reading order as HTML sections and figures; `img_src` names each image
 /// (a package path, or a data URI for single-file HTML).
-fn body_html<'a>(doc: &'a Document, epub: bool, img_src: &dyn Fn(&str, &str, &[u8]) -> String) -> Body<'a> {
+fn body_html<'a>(doc: &'a Document, epub: bool, split: Option<&EpubSplit>, img_src: &dyn Fn(&str, &str, &[u8]) -> String) -> Body<'a> {
     let order = reading_order(doc);
     let mut writer = StoryWriter::new(doc, epub, Some(img_src));
+    if let Some(split) = split {
+        writer.split = split.clone();
+    }
     let mut body = String::new();
     let mut toc = toc_entries(doc, &order);
     for (k, b) in order.iter().enumerate() {
@@ -1326,7 +1376,7 @@ fn body_html<'a>(doc: &'a Document, epub: bool, img_src: &dyn Fn(&str, &str, &[u
 /// Placed and anchored images (not video or sound) without alt text, by asset name: they are exported as
 /// decorative (`alt=""`), which an export can report.
 pub fn images_without_alt(doc: &Document) -> Vec<String> {
-    body_html(doc, true, &|name, _, _| name.to_string()).no_alt
+    body_html(doc, true, None, &|name, _, _| name.to_string()).no_alt
 }
 
 /// Options for [`export_html`].
@@ -1341,10 +1391,10 @@ pub struct HtmlOptions {
 /// File › Export › HTML: one self-contained page (styles inline, images as data URIs) with the
 /// document's stories and graphics in reading order.
 pub fn export_html(doc: &Document, opts: &HtmlOptions) -> String {
-    let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
+    let title = opts.title.clone().unwrap_or_else(|| doc.metadata_title().to_string());
     let language = opts.language.as_deref().unwrap_or("en");
     let lang = language_tag(language);
-    let body = body_html(doc, false, &|_, mime, data| format!("data:{mime};base64,{}", base64(data))).html;
+    let body = body_html(doc, false, None, &|_, mime, data| format!("data:{mime};base64,{}", base64(data))).html;
     format!(
         "<!DOCTYPE html>\n<html lang=\"{lang}\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"generator\" content=\"DesignCraft\">\n<title>{}</title>\n<style>\nbody {{ max-width: 40em; margin: 2em auto; padding: 0 1em; }}\nfigure {{ margin: 1em 0; }} figure img {{ max-width: 100%; height: auto; }}\n{}</style>\n</head>\n<body>\n{body}</body>\n</html>\n",
         xml_text(&title),
@@ -1366,14 +1416,12 @@ fn base64(data: &[u8]) -> String {
 
 /// Export the document as a reflowable EPUB 3.
 pub fn export_epub(doc: &Document, opts: &EpubOptions) -> Result<Vec<u8>, EpubError> {
-    let io = |e: std::io::Error| EpubError(e.to_string());
-    let zerr = |e: zip::result::ZipError| EpubError(e.to_string());
-    let title = opts.title.clone().unwrap_or_else(|| doc.title.clone());
+    let title = opts.title.clone().unwrap_or_else(|| doc.metadata_title().to_string());
     let id = identifier(doc, opts, &title);
     let modified = modified(doc, opts);
-    let Body { html: body, images, toc, .. } = body_html(doc, true, &|name, _, _| name.to_string());
+    let Body { html: body, images, toc, .. } = body_html(doc, true, opts.split.as_ref(), &|name, _, _| name.to_string());
     let lang = language_tag(&opts.language);
-    // One file per chapter (split before each h1), so e-readers needn't load the whole book.
+    // One file per chapter (see `starts_chapter`); one file in all when Split Document is off.
     let chapters: Vec<String> = split_chapters(&body)
         .into_iter()
         .map(|part| {
@@ -1428,56 +1476,26 @@ pub fn export_epub(doc: &Document, opts: &EpubOptions) -> Result<Vec<u8>, EpubEr
         );
     }
     let cover_spine = if opts.cover.is_some() { "<itemref idref=\"cover\"/>\n" } else { "" };
-    let author = opts.author.as_deref().map(|a| format!("<dc:creator>{}</dc:creator>", xml_text(a))).unwrap_or_default();
-    let opf = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<package xmlns=\"http://www.idpf.org/2007/opf\" version=\"3.0\" unique-identifier=\"bookid\" xml:lang=\"{lang}\">\n<metadata xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n<dc:identifier id=\"bookid\">{}</dc:identifier>\n<dc:title>{}</dc:title>\n<dc:language>{lang}</dc:language>{author}\n<meta property=\"dcterms:modified\">{modified}</meta>\n<meta name=\"generator\" content=\"DesignCraft\"/>\n</metadata>\n<manifest>\n{manifest}</manifest>\n<spine>\n{cover_spine}{spine}</spine>\n</package>\n",
-        xml_text(&id),
-        xml_text(&title)
-    );
-    let container = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<container version=\"1.0\" xmlns=\"urn:oasis:names:tc:opendocument:xmlns:container\"><rootfiles><rootfile full-path=\"OEBPS/content.opf\" media-type=\"application/oebps-package+xml\"/></rootfiles></container>\n";
-    let mut buf = std::io::Cursor::new(Vec::new());
-    {
-        let mut z = zip::ZipWriter::new(&mut buf);
-        let stored = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-        let deflate = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-        z.start_file("mimetype", stored).map_err(zerr)?;
-        z.write_all(b"application/epub+zip").map_err(io)?;
-        for (name, data) in [
-            ("META-INF/container.xml", container.as_bytes()),
-            ("OEBPS/content.opf", opf.as_bytes()),
-            ("OEBPS/nav.xhtml", nav.as_bytes()),
-            ("OEBPS/style.css", stylesheet_with(doc, &opts.generic_families, &opts.fonts).as_bytes()),
-        ] {
-            z.start_file(name, deflate).map_err(zerr)?;
-            z.write_all(data).map_err(io)?;
-        }
-        for (k, c) in chapters.iter().enumerate() {
-            z.start_file(format!("OEBPS/{}", chapter_file(k)), deflate).map_err(zerr)?;
-            z.write_all(c.as_bytes()).map_err(io)?;
-        }
-        for (name, (_, data)) in &images {
-            z.start_file(format!("OEBPS/{name}"), stored).map_err(zerr)?;
-            z.write_all(data).map_err(io)?;
-        }
-        for (k, f) in opts.fonts.iter().enumerate() {
-            z.start_file(format!("OEBPS/{}", font_file(k, f).0), deflate).map_err(zerr)?;
-            z.write_all(&f.data).map_err(io)?;
-        }
-        if let Some(c) = &opts.cover {
-            z.start_file(format!("OEBPS/{}", cover_file(c).0), stored).map_err(zerr)?;
-            z.write_all(c).map_err(io)?;
-            let xhtml = format!(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE html>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"{lang}\">\n<head><meta charset=\"utf-8\"/><title>{}</title><style>body{{margin:0;text-align:center}} img{{max-width:100%;max-height:100vh}}</style></head>\n<body epub:type=\"cover\"><img src=\"{}\" alt=\"{}\"/></body>\n</html>\n",
-                xml_text(&title),
-                cover_file(c).0,
-                xml_attr(&title)
-            );
-            z.start_file("OEBPS/cover.xhtml", deflate).map_err(zerr)?;
-            z.write_all(xhtml.as_bytes()).map_err(io)?;
-        }
-        z.finish().map_err(zerr)?;
+    let head = PackageHead { lang, id: &id, title: &title, author: opts.author.as_deref().or(doc.metadata_author()), modified: &modified };
+    let opf = package_opf(&head, "", "", &manifest, &format!("{cover_spine}{spine}"));
+    let css = stylesheet_with(doc, &opts.generic_families, &opts.fonts);
+    let mut entries: Vec<(String, &[u8], bool)> = vec![("OEBPS/style.css".into(), css.as_bytes(), false)];
+    entries.extend(chapters.iter().enumerate().map(|(k, c)| (format!("OEBPS/{}", chapter_file(k)), c.as_bytes(), false)));
+    entries.extend(images.iter().map(|(name, (_, data))| (format!("OEBPS/{name}"), *data, true)));
+    entries.extend(opts.fonts.iter().enumerate().map(|(k, f)| (format!("OEBPS/{}", font_file(k, f).0), f.data.as_slice(), false)));
+    let cover_xhtml = opts.cover.as_ref().map(|c| {
+        format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE html>\n<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"{lang}\">\n<head><meta charset=\"utf-8\"/><title>{}</title><style>body{{margin:0;text-align:center}} img{{max-width:100%;max-height:100vh}}</style></head>\n<body epub:type=\"cover\"><img src=\"{}\" alt=\"{}\"/></body>\n</html>\n",
+            xml_text(&title),
+            cover_file(c).0,
+            xml_attr(&title)
+        )
+    });
+    if let (Some(c), Some(xhtml)) = (&opts.cover, &cover_xhtml) {
+        entries.push((format!("OEBPS/{}", cover_file(c).0), c.as_slice(), true));
+        entries.push(("OEBPS/cover.xhtml".into(), xhtml.as_bytes(), false));
     }
-    Ok(buf.into_inner())
+    write_package(&opf, &nav, entries)
 }
 
 #[cfg(test)]
@@ -1535,6 +1553,7 @@ mod tests {
             let mut item = Item::new(ItemId(d.alloc()), lid, Shape::Rectangle, shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)));
             item.alt_text = alt.into();
             item.content = Content::Graphic(Graphic {
+                layer_options: None,
                 asset: aid,
                 size: (1.0, 1.0),
                 xf: Affine::IDENTITY,
@@ -1582,6 +1601,14 @@ mod tests {
             (951_782_400, "2000-02-29T00:00:00Z"),
             (1_791_891_000, "2026-10-13T11:30:00Z"),
             (-86_400, "1969-12-31T00:00:00Z"),
+            // Years past 9999 keep the plain zero-padded year (no `+`).
+            (253_402_300_800, "10000-01-01T00:00:00Z"),
+            // Beyond chrono's range the old `civil_from_days` still converted; pin that output
+            // (never the epoch) in both directions and at the `i64` extremes.
+            (10_000_000_000_000, "318857-05-20T17:46:40Z"),
+            (-10_000_000_000_000, "-314918-08-13T06:13:20Z"),
+            (i64::MAX, "292277026596-12-04T15:30:07Z"),
+            (i64::MIN, "-292277022657-01-27T08:29:52Z"),
         ] {
             assert_eq!(iso8601(t), want);
         }
@@ -1648,7 +1675,9 @@ mod tests {
                 chars: CharAttrs::default(),
                 shortcut: String::new(),
             });
-            d.styles_mut().export_tags.insert(format!("p:{name}"), designcraft_doc::ExportTag { tag: tag.into(), class: String::new() });
+            d.styles_mut()
+                .export_tags
+                .insert(format!("p:{name}"), designcraft_doc::ExportTag { tag: tag.into(), class: String::new(), ..Default::default() });
         }
         let text = "Intro\nfirst\nsecond\none\ntwo\nx = 1\ny = 2\nEnd\n• typed";
         let (_, sid) = d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 300.0), lid, text, ParaFormat::default()).unwrap();
@@ -1691,7 +1720,9 @@ mod tests {
                 chars: CharAttrs::default(),
                 shortcut: String::new(),
             });
-            d.styles_mut().export_tags.insert(format!("p:{name}"), designcraft_doc::ExportTag { tag: tag.into(), class: String::new() });
+            d.styles_mut()
+                .export_tags
+                .insert(format!("p:{name}"), designcraft_doc::ExportTag { tag: tag.into(), class: String::new(), ..Default::default() });
         }
         let text = "One\nBody\nOne point one\nMore\nTwo\nText";
         let (_, sid) = d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 300.0), lid, text, ParaFormat::default()).unwrap();
@@ -1710,12 +1741,12 @@ mod tests {
         let nl = EpubOptions { language: "nl".into(), ..Default::default() };
         let nav = read(&d, &nl, "OEBPS/nav.xhtml");
         let link = |f: &str, t: &str, l: &str| format!("<a href=\"{f}#{t}\">{l}</a>");
-        // Each h1 starts a chapter file (#768).
+        // Split Document is off: every heading is in the one content file.
         let want = format!(
             "<h1>Inhoud</h1><ol><li>{}<ol><li>{}</li></ol></li><li>{}</li></ol>",
             link("content.xhtml", "s0-p0", "One"),
             link("content.xhtml", "s0-p2", "One point one"),
-            link("content2.xhtml", "s0-p4", "Two")
+            link("content.xhtml", "s0-p4", "Two")
         );
         assert!(nav.contains(&want), "{nav}");
         assert!(!nav.contains("Text after the figure"), "{nav}");
@@ -1755,10 +1786,11 @@ mod tests {
         );
     }
 
-    /// #768: the book is split into one file per chapter, before each h1, with well-formed
-    /// sections; the spine and manifest list the files in order.
+    /// Split Document off (the default) gives one content file, h1s and all. Single Paragraph
+    /// Style starts a file before each paragraph of that style, with well-formed sections; the
+    /// spine and manifest list the files in order.
     #[test]
-    fn chapters_are_split_at_h1() {
+    fn chapters_split_before_a_single_paragraph_style() {
         let mut d = Document::new(&NewDocument { pages: 3, ..Default::default() });
         let lid = d.default_layer();
         d.styles_mut().paragraph.push(designcraft_doc::ParagraphStyle {
@@ -1769,7 +1801,9 @@ mod tests {
             chars: CharAttrs::default(),
             shortcut: String::new(),
         });
-        d.styles_mut().export_tags.insert("p:Chapter".into(), designcraft_doc::ExportTag { tag: "h1".into(), class: String::new() });
+        d.styles_mut()
+            .export_tags
+            .insert("p:Chapter".into(), designcraft_doc::ExportTag { tag: "h1".into(), class: String::new(), ..Default::default() });
         // A title page without a heading, then a story that opens with a chapter and has a
         // second one in the middle.
         d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 100.0), lid, "Title page", ParaFormat::default()).unwrap();
@@ -1779,6 +1813,15 @@ mod tests {
         let st = d.story_mut(sid).unwrap();
         st.paras[0].style = "Chapter".into();
         st.paras[2].style = "Chapter".into();
+        let one_file = |d: &Document, opts: &EpubOptions| {
+            let mut z = zip::ZipArchive::new(std::io::Cursor::new(export_epub(d, opts).unwrap())).unwrap();
+            let mut c = String::new();
+            z.by_name("OEBPS/content.xhtml").unwrap().read_to_string(&mut c).unwrap();
+            z.by_name("OEBPS/content2.xhtml").is_err() && c.contains("Title page") && c.contains("Second text") && !c.contains(CHAPTER_MARK)
+        };
+        assert!(one_file(&d, &EpubOptions::default()), "off by default");
+        d.settings.epub_split = EpubSplit::Style("Chapter".into());
+        assert!(one_file(&d, &EpubOptions { split: Some(EpubSplit::Off), ..Default::default() }), "the export's own setting wins");
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(export_epub(&d, &EpubOptions::default()).unwrap())).unwrap();
         let mut read = |path: &str| {
             let mut s = String::new();
@@ -1804,6 +1847,61 @@ mod tests {
         assert!(!html.contains(CHAPTER_MARK) && html.contains("Second text"));
     }
 
+    /// Based on export tags, a style with Split Document on starts each chapter file and an h1
+    /// without it doesn't; navigation and endnote links point at the files their targets ended
+    /// up in.
+    #[test]
+    fn chapters_split_before_split_document_styles() {
+        let mut d = Document::new(&NewDocument::default());
+        d.settings.epub_split = EpubSplit::ExportTags;
+        let lid = d.default_layer();
+        for (name, tag, split) in [("Part", "p", true), ("Chapter", "h1", false)] {
+            d.styles_mut().paragraph.push(designcraft_doc::ParagraphStyle {
+                name: name.into(),
+                based_on: None,
+                next_style: None,
+                para: Default::default(),
+                chars: CharAttrs::default(),
+                shortcut: String::new(),
+            });
+            d.styles_mut().export_tags.insert(format!("p:{name}"), designcraft_doc::ExportTag { tag: tag.into(), split, ..Default::default() });
+        }
+        d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 100.0), lid, "Title page", ParaFormat::default()).unwrap();
+        let (_, sid) = d
+            .add_text_frame(
+                SpreadRef::Doc(0),
+                Rect::new(36.0, 200.0, 300.0, 600.0),
+                lid,
+                "Part One\nChapter A\ntext a\nPart Two\nChapter B\ntext b",
+                ParaFormat::default(),
+            )
+            .unwrap();
+        let st = d.story_mut(sid).unwrap();
+        for (i, style) in [(0, "Part"), (1, "Chapter"), (3, "Part"), (4, "Chapter")] {
+            st.paras[i].style = style.into();
+        }
+        // After "text a".
+        st.insert_endnote(25, "End note", ParaFormat::default());
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(export_epub(&d, &EpubOptions::default()).unwrap())).unwrap();
+        let mut read = |path: &str| {
+            let mut s = String::new();
+            z.by_name(path).unwrap().read_to_string(&mut s).unwrap();
+            s
+        };
+        let (c1, c2, c3) = (read("OEBPS/content.xhtml"), read("OEBPS/content2.xhtml"), read("OEBPS/content3.xhtml"));
+        assert!(c1.contains("Title page") && !c1.contains("Part One"), "{c1}");
+        assert!(c2.contains("Part One") && c2.contains("<h1 id=\"s1-p1\"") && !c2.contains("Part Two"), "the h1 stays with its part: {c2}");
+        assert!(c3.contains("Part Two") && c3.contains("<h1 id=\"s1-p4\"") && c3.contains("End note"), "{c3}");
+        for c in [&c1, &c2, &c3] {
+            assert_eq!(c.matches("<section").count(), c.matches("</section>").count(), "{c}");
+        }
+        let nav = read("OEBPS/nav.xhtml");
+        assert!(nav.contains("href=\"content2.xhtml#s1-p1\"") && nav.contains("href=\"content3.xhtml#s1-p4\""), "{nav}");
+        assert!(c2.contains("href=\"content3.xhtml#en-1\""), "{c2}");
+        assert!(c3.contains("href=\"content2.xhtml#enref-1\""), "the endnote links back across files: {c3}");
+        assert!(z.by_name("OEBPS/content4.xhtml").is_err());
+    }
+
     /// Note links stay working across chapter files: endnotes end the book, in the last file.
     #[test]
     fn note_links_point_at_the_chapter_file_of_their_target() {
@@ -1817,7 +1915,9 @@ mod tests {
             chars: CharAttrs::default(),
             shortcut: String::new(),
         });
-        d.styles_mut().export_tags.insert("p:Chapter".into(), designcraft_doc::ExportTag { tag: "h1".into(), class: String::new() });
+        d.styles_mut()
+            .export_tags
+            .insert("p:Chapter".into(), designcraft_doc::ExportTag { tag: "h1".into(), class: String::new(), ..Default::default() });
         let (_, sid) = d
             .add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 400.0), lid, "One\nFirst text\nTwo\nSecond text", ParaFormat::default())
             .unwrap();
@@ -1827,6 +1927,7 @@ mod tests {
         // After "First": an endnote and a footnote.
         st.insert_endnote(9, "End note", ParaFormat::default());
         st.insert_note(9, "Foot note", ParaFormat::default());
+        d.settings.epub_split = EpubSplit::Style("Chapter".into());
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(export_epub(&d, &EpubOptions::default()).unwrap())).unwrap();
         let mut read = |path: &str| {
             let mut s = String::new();
@@ -1837,6 +1938,61 @@ mod tests {
         assert!(first.contains("id=\"enref-1\" href=\"content2.xhtml#en-1\""), "{first}");
         assert!(first.contains("href=\"#fn-1\"") && first.contains("href=\"#fnref-1\""), "a footnote stays in its chapter: {first}");
         assert!(last.contains("Second text") && last.contains("<a href=\"content.xhtml#enref-1\">"), "{last}");
+    }
+
+    /// A split before a list item or a preformatted line closes the open list or block first and
+    /// reopens it in the new file, so every file is balanced.
+    #[test]
+    fn chapter_files_split_inside_lists_and_pre_stay_balanced() {
+        let mut d = Document::new(&NewDocument::default());
+        d.settings.epub_split = EpubSplit::ExportTags;
+        let lid = d.default_layer();
+        for (name, tag) in [("Item", "li"), ("Code", "pre")] {
+            d.styles_mut().paragraph.push(designcraft_doc::ParagraphStyle {
+                name: name.into(),
+                based_on: None,
+                next_style: None,
+                para: Default::default(),
+                chars: CharAttrs::default(),
+                shortcut: String::new(),
+            });
+            d.styles_mut().export_tags.insert(format!("p:{name}"), designcraft_doc::ExportTag { tag: tag.into(), split: true, ..Default::default() });
+        }
+        let (_, sid) = d
+            .add_text_frame(
+                SpreadRef::Doc(0),
+                Rect::new(36.0, 36.0, 300.0, 300.0),
+                lid,
+                "Intro
+one
+two
+x = 1
+y = 2
+End",
+                ParaFormat::default(),
+            )
+            .unwrap();
+        let st = d.story_mut(sid).unwrap();
+        for (i, style) in [(1, "Item"), (2, "Item"), (3, "Code"), (4, "Code")] {
+            st.paras[i].style = style.into();
+        }
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(export_epub(&d, &EpubOptions::default()).unwrap())).unwrap();
+        let mut read = |path: &str| {
+            let mut s = String::new();
+            z.by_name(path).unwrap().read_to_string(&mut s).unwrap();
+            s
+        };
+        let files: Vec<String> =
+            ["content", "content2", "content3", "content4", "content5"].iter().map(|f| read(&format!("OEBPS/{f}.xhtml"))).collect();
+        for (c, text) in files.iter().zip(["Intro", "one", "two", "x = 1", "y = 2"]) {
+            assert!(c.contains(text), "{text}: {c}");
+            for (open, close) in [("<ul", "</ul>"), ("<pre", "</pre>"), ("<section", "</section>")] {
+                assert_eq!(c.matches(open).count(), c.matches(close).count(), "{open}: {c}");
+            }
+        }
+        assert!(files[1].contains("<ul") && files[2].contains("<ul") && files[3].contains("<pre") && files[4].contains("<pre"));
+        assert!(files[4].contains("End"));
+        assert!(z.by_name("OEBPS/content6.xhtml").is_err());
     }
 
     #[test]
@@ -1935,6 +2091,7 @@ mod tests {
             let mut item = Item::new(ItemId(d.alloc()), lid, Shape::Rectangle, shapes::rectangle(Rect::new(36.0, y, 72.0, y + 36.0)));
             item.alt_text = alt.into();
             item.content = Content::Graphic(Graphic {
+                layer_options: None,
                 asset: aid,
                 size: (1.0, 1.0),
                 xf: Affine::IDENTITY,
@@ -2029,9 +2186,10 @@ mod tests {
         d.title = "Field Notes & <Edition>".into();
         let lid = d.default_layer();
         let (_, sid) = d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 100.0), lid, "A&B <C> \"D\"", ParaFormat::default()).unwrap();
-        d.styles_mut()
-            .export_tags
-            .insert(format!("p:{}", story::BASIC_PARAGRAPH), designcraft_doc::ExportTag { tag: "h2".into(), class: "Primary \"Copy\"".into() });
+        d.styles_mut().export_tags.insert(
+            format!("p:{}", story::BASIC_PARAGRAPH),
+            designcraft_doc::ExportTag { tag: "h2".into(), class: "Primary \"Copy\"".into(), ..Default::default() },
+        );
         if let Some(basic) = d.styles_mut().paragraph.iter_mut().find(|s| s.name == story::BASIC_PARAGRAPH) {
             basic.chars.font_family = Some("Quoted \"Serif\" <Alt>".into());
         }
@@ -2051,6 +2209,7 @@ mod tests {
         let mut item = Item::new(ItemId(d.alloc()), lid, Shape::Rectangle, shapes::rectangle(Rect::new(36.0, 120.0, 72.0, 156.0)));
         item.alt_text = "Cover \"A\" & B".into();
         item.content = Content::Graphic(Graphic {
+            layer_options: None,
             asset: aid,
             size: (1.0, 1.0),
             xf: Affine::IDENTITY,
@@ -2093,6 +2252,30 @@ mod tests {
         assert!(opf.contains("<dc:identifier id=\"bookid\">notes&amp;edition</dc:identifier>"));
         assert!(opf.contains("<dc:creator>A &amp; B</dc:creator>"));
         assert!(opf.contains("media-type=\"image/png\""));
+    }
+
+    /// File › File Info's Document Title and Author name the EPUB and the HTML page; the export
+    /// options' title and author replace them.
+    #[test]
+    fn file_info_titles_the_epub_and_the_html_page() {
+        let mut d = Document::new(&NewDocument { title: "flyer-v3".into(), ..Default::default() });
+        d.file_info.document_title = "Spring & Summer".into();
+        d.file_info.author = "Ana Ruiz".into();
+        let opf = |d: &Document, opts: &EpubOptions| {
+            let mut z = zip::ZipArchive::new(std::io::Cursor::new(export_epub(d, opts).unwrap())).unwrap();
+            let mut opf = String::new();
+            z.by_name("OEBPS/content.opf").unwrap().read_to_string(&mut opf).unwrap();
+            opf
+        };
+        let o = opf(&d, &EpubOptions::default());
+        assert!(o.contains("<dc:title>Spring &amp; Summer</dc:title>") && o.contains("<dc:creator>Ana Ruiz</dc:creator>"), "{o}");
+        let o = opf(&d, &EpubOptions { title: Some("Proof".into()), author: Some("Studio".into()), ..Default::default() });
+        assert!(o.contains("<dc:title>Proof</dc:title>") && o.contains("<dc:creator>Studio</dc:creator>"), "{o}");
+        let html = export_html(&d, &HtmlOptions::default());
+        assert!(html.contains("<title>Spring &amp; Summer</title>"));
+        d.file_info = Default::default();
+        let o = opf(&d, &EpubOptions::default());
+        assert!(o.contains("<dc:title>flyer-v3</dc:title>") && !o.contains("<dc:creator>"), "{o}");
     }
 
     /// "Body¹ text", a 2×2 table, then "Closing" with an endnote.
@@ -2165,7 +2348,9 @@ mod tests {
                 chars: CharAttrs::default(),
                 shortcut: String::new(),
             });
-            d.styles_mut().export_tags.insert("p:Grouped".into(), designcraft_doc::ExportTag { tag: tag.into(), class: String::new() });
+            d.styles_mut()
+                .export_tags
+                .insert("p:Grouped".into(), designcraft_doc::ExportTag { tag: tag.into(), class: String::new(), ..Default::default() });
             let sid = d.stories.keys().copied().find(|sid| d.story(*sid).is_some_and(|st| !st.notes.is_empty())).unwrap();
             for p in &mut d.story_mut(sid).unwrap().paras {
                 p.style = "Grouped".into();
@@ -2226,5 +2411,22 @@ mod tests {
         );
         let last = "<li id=\"en-1\"><a href=\"#enref-1\">1</a> End note</li>";
         assert_eq!(link_across_chapters(last, "content2.xhtml", &files), "<li id=\"en-1\"><a href=\"content.xhtml#enref-1\">1</a> End note</li>");
+    }
+
+    #[test]
+    fn char_css_joins_underline_and_strikethrough_in_one_declaration() {
+        let d = Document::new(&NewDocument::default());
+        let css = |u: bool, s: bool| {
+            let c = CharProps { underline: u, strikethrough: s, ..CharProps::default() };
+            let mut out = String::new();
+            char_css(&d, &c, 12.0, &BTreeMap::new(), &mut out);
+            out
+        };
+        let both = css(true, true);
+        assert_eq!(both.matches("text-decoration:").count(), 1, "{both}");
+        assert!(both.contains("text-decoration: underline line-through;"), "{both}");
+        assert!(css(true, false).contains("text-decoration: underline;"));
+        assert!(css(false, true).contains("text-decoration: line-through;"));
+        assert!(!css(false, false).contains("text-decoration"));
     }
 }

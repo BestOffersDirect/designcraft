@@ -88,8 +88,9 @@ fn ordinary_panel_tab_drag_enters_shared_docking_and_can_redock_into_another_tab
     drag(&mut h, source, egui::pos2(160.0, 140.0));
     let layout = h.state().ui.docking.as_ref().expect("ordinary tab drag starts shared docking");
     assert!(layout.floating.iter().any(|g| g.panels.contains(&"layers".into())), "{layout:?}");
-    let source = h.ctx.read_response(egui::Id::new("designcraft-panel-docking").with(("tab", &"layers".to_string()))).unwrap().rect.center();
-    let destination = h.ctx.read_response(egui::Id::new("designcraft-panel-docking").with(("tab", &"properties".to_string()))).unwrap().rect.center();
+    let source = h.ctx.read_response(egui::Id::unique("designcraft-panel-docking").with(("tab", &"layers".to_string()))).unwrap().rect.center();
+    let destination =
+        h.ctx.read_response(egui::Id::unique("designcraft-panel-docking").with(("tab", &"properties".to_string()))).unwrap().rect.center();
     drag(&mut h, source, destination);
     let layout = h.state().ui.docking.as_ref().unwrap();
     assert!(!layout.floating.iter().any(|g| g.panels.contains(&"layers".into())));
@@ -159,7 +160,7 @@ fn capture_custom_panel_docking_visual_fixtures() {
                     .save(directory.join(format!("designcraft-shared-docking-{}-{language}-{width}-{scale}x.png", theme.id())))
                     .unwrap();
                 if language == "ar" {
-                    let tab = egui::Id::new("designcraft-panel-docking").with(("tab", &"swatches".to_string()));
+                    let tab = egui::Id::unique("designcraft-panel-docking").with(("tab", &"swatches".to_string()));
                     let at = harness.ctx.read_response(tab).unwrap().rect.center();
                     harness.input_mut().events.extend([
                         Event::PointerMoved(at),
@@ -291,8 +292,8 @@ fn populated_canvas_keeps_a_real_stroke_edit_after_floating_and_redocking() {
         std::fs::create_dir_all(directory).unwrap();
         h.render().unwrap().save(directory.join("designcraft-populated-stroke-floating.png")).unwrap();
     }
-    let from = h.ctx.read_response(egui::Id::new("designcraft-panel-docking").with(("tab", &"stroke".to_string()))).unwrap().rect.center();
-    let to = h.ctx.read_response(egui::Id::new("designcraft-panel-docking").with(("tab", &"properties".to_string()))).unwrap().rect.center();
+    let from = h.ctx.read_response(egui::Id::unique("designcraft-panel-docking").with(("tab", &"stroke".to_string()))).unwrap().rect.center();
+    let to = h.ctx.read_response(egui::Id::unique("designcraft-panel-docking").with(("tab", &"properties".to_string()))).unwrap().rect.center();
     drag(&mut h, from, to);
     assert!(h.state().ui.docking.as_ref().unwrap().floating.is_empty());
     assert_eq!(h.state().session.active().unwrap().doc.item(designcraft_doc::ItemId(id)).unwrap().stroke.join, designcraft_doc::Join::Bevel);
@@ -448,7 +449,7 @@ fn modal_overlay_blocks_a_real_tab_drag_release() {
     let mut app = app();
     app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
     let mut h = harness(app, vec2(1280.0, 800.0));
-    let area = egui::Id::new("designcraft-panel-docking");
+    let area = egui::Id::unique("designcraft-panel-docking");
     let source = h.ctx.read_response(area.with(("tab", &"properties".to_string()))).unwrap().rect.center();
     h.event(Event::PointerMoved(source));
     h.run_steps(1);
@@ -498,7 +499,7 @@ fn first_story_editor_frame_conservatively_blocks_owned_tab_release() {
     app.run("window.panel.float", json!({"panel":"layers"})).unwrap();
     let doc = serde_json::to_value(&app.session.active().unwrap().doc).unwrap();
     let mut h = crate::test_window::open(app, vec2(1440.0, 900.0));
-    let tab = egui::Id::new("designcraft-panel-docking").with(("tab", &"properties".to_string()));
+    let tab = egui::Id::unique("designcraft-panel-docking").with(("tab", &"properties".to_string()));
     let from = h.ctx.read_response(tab).unwrap().rect.center();
     h.event(Event::PointerMoved(from));
     h.run_steps(1);
@@ -507,7 +508,7 @@ fn first_story_editor_frame_conservatively_blocks_owned_tab_release() {
     h.event(Event::PointerMoved(from - vec2(90.0, 0.0)));
     h.run_steps(2);
     assert_eq!(h.ctx.dragged_id(), Some(tab), "must own a real tab drag before opening editor");
-    assert!(h.ctx.memory(|m| m.area_rect(egui::Id::new("story_editor"))).is_none());
+    assert!(h.ctx.memory(|m| m.area_rect(egui::Id::unique("story_editor"))).is_none());
     let layout = h.state().app.ui.docking.clone();
     let frame_before = h.ctx.cumulative_frame_nr();
     h.state_mut().app.run("app.storyEditor", json!({"story":story})).unwrap();
@@ -519,19 +520,19 @@ fn first_story_editor_frame_conservatively_blocks_owned_tab_release() {
     ]);
     h.run_steps(1);
     assert_eq!(h.ctx.cumulative_frame_nr() - frame_before, 1, "release must occur in the first editor frame");
-    let measured = h.ctx.memory(|m| m.area_rect(egui::Id::new("story_editor"))).unwrap();
+    let measured = h.ctx.memory(|m| m.area_rect(egui::Id::unique("story_editor"))).unwrap();
     assert!(!measured.contains(release), "fixture exercises the conservative first-frame guard outside eventual editor bounds");
     assert_eq!(h.state().app.ui.docking, layout, "first editor frame must block release before it has a measured rectangle");
     assert_eq!(serde_json::to_value(&h.state().app.session.active().unwrap().doc).unwrap(), doc);
     h.run_steps(3);
-    let editor = h.ctx.memory(|m| m.area_rect(egui::Id::new("story_editor"))).unwrap();
+    let editor = h.ctx.memory(|m| m.area_rect(egui::Id::unique("story_editor"))).unwrap();
     let screen = h.ctx.content_rect();
     let outside = [screen.left_bottom() + vec2(80.0, -80.0), screen.right_bottom() + vec2(-450.0, -80.0)]
         .into_iter()
         .find(|p| !editor.contains(*p))
         .expect("fixture has space outside editor");
     let before_outside = h.state().app.ui.docking.clone();
-    let tab = egui::Id::new("designcraft-panel-docking").with(("tab", &"layers".to_string()));
+    let tab = egui::Id::unique("designcraft-panel-docking").with(("tab", &"layers".to_string()));
     let from = h.ctx.read_response(tab).unwrap().rect.center();
     h.event(Event::PointerMoved(from));
     h.run_steps(1);
@@ -608,7 +609,13 @@ fn capture_legacy_panel_menu_visual_fixture() {
     assert!(before.is_none_or(|rect| !submenu.contains_rect(rect)), "actual submenu must require scrolling to reach its last target");
     h.input_mut().events.extend([
         Event::PointerMoved(scroll_at),
-        Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: vec2(0.0, -1600.0), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE },
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(0.0, -1600.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+            source: egui::MouseWheelSource::Unknown,
+        },
     ]);
     h.run_steps(12);
     let target = h.query_all_by_label(logical).find(|node| submenu.x_range().contains(node.rect().center().x)).unwrap().rect();
@@ -636,7 +643,7 @@ fn legacy_dock_menu_button_opens_the_active_panel_menu() {
     let mut h = harness(app, vec2(1280.0, 800.0));
     assert!(h.state().ui.docking.is_none());
     let tab = h.query_all_by_label("Pages").find(|node| node.rect().height() <= 45.0).unwrap().rect();
-    let dock = egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("dock")).unwrap().outer_rect;
+    let dock = egui::containers::panel::PanelState::load(&h.ctx, h.ui_id().with("dock")).unwrap().outer_rect;
     let at = egui::pos2(dock.right() - 15.0, tab.center().y);
     h.event(Event::PointerMoved(at));
     h.run_steps(1);
@@ -768,7 +775,7 @@ fn pages_keeps_its_panel_menu_in_the_docking_layout() {
     assert!(app.ui.docking.is_some());
     let mut h = harness(app, vec2(1280.0, 800.0));
     let tab = h.query_all_by_label("Pages").find(|node| node.rect().height() <= 45.0).unwrap().rect();
-    let dock = egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("shared-panel-dock")).unwrap().outer_rect;
+    let dock = egui::containers::panel::PanelState::load(&h.ctx, h.ui_id().with("shared-panel-dock")).unwrap().outer_rect;
     click(&mut h, egui::pos2(dock.right() - 12.0, tab.center().y), PointerButton::Primary);
     assert!(egui::Popup::is_any_open(&h.ctx), "the three-line button must open a menu");
     for item in ["Numbering & Section Options…", "Close Tab Group", "Float Panel"] {

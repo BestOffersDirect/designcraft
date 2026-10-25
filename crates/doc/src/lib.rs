@@ -20,6 +20,7 @@ pub mod cjk_settings;
 pub mod datamerge;
 mod edit;
 pub mod endnotes;
+pub mod file_info;
 pub mod flex;
 pub mod ids;
 pub mod index;
@@ -35,6 +36,7 @@ pub mod story;
 pub mod styles;
 mod swatch_refs;
 pub mod table;
+pub mod time;
 pub mod vars;
 pub mod xref;
 
@@ -52,6 +54,7 @@ pub use designcraft_color as color;
 pub use designcraft_geom as geom;
 pub use edit::{ItemLoc, ItemPath, SpreadRef, hit_descendant, item_hit as edit_hit};
 pub use endnotes::{ENDNOTE_REF, EditorialNote, EndnoteOptions, NOTE_MARK};
+pub use file_info::FileInfo;
 pub use flex::{FlexAlign, FlexDirection, FlexJustify, FlexLayout, FlexSize};
 pub use ids::*;
 pub use index::{INDEX_MARK, IndexRef};
@@ -143,6 +146,17 @@ pub struct BaselineGrid {
 impl Default for BaselineGrid {
     fn default() -> Self {
         BaselineGrid { start: 36.0, increment: 12.0, relative_to: GridRelative::TopOfPage, color: [140, 205, 230], view_threshold: 0.75 }
+    }
+}
+
+impl BaselineGrid {
+    /// The first grid line on `page`, measured down from the page top: `start` from the top of
+    /// the page or from its top margin. The other lines follow every `increment` below it.
+    pub fn origin(&self, page: &page::Page) -> f64 {
+        match self.relative_to {
+            GridRelative::TopOfPage => self.start,
+            GridRelative::TopMargin => self.start + page.margins.top,
+        }
     }
 }
 
@@ -331,6 +345,26 @@ pub enum ChapterSource {
     SameAsPrevious,
 }
 
+/// EPUB Export Options › Split Document: where a reflowable EPUB starts a new content file.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EpubSplit {
+    /// One content file.
+    #[default]
+    Off,
+    /// Single Paragraph Style: a file starts before each paragraph of the named style.
+    Style(String),
+    /// Based on Paragraph Style Export Tags: a file starts before each paragraph of a style whose
+    /// Export Tagging has Split Document on.
+    ExportTags,
+}
+
+impl EpubSplit {
+    pub fn is_off(&self) -> bool {
+        *self == EpubSplit::Off
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DocSettings {
@@ -398,9 +432,20 @@ pub struct DocSettings {
     /// Lock Zero Point: dragging from the ruler corner leaves it where it is.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub zero_point_locked: bool,
+    /// View › Grids & Guides › Lock Column Guides (IDML `ColumnGuideLocked`): column guides can't
+    /// be dragged. On in new documents, as in InDesign.
+    #[serde(skip_serializing_if = "is_true")]
+    pub column_guides_locked: bool,
     /// The fill and stroke new shapes are drawn with: what the Tools panel's proxy shows and sets
     /// with nothing selected (InDesign's document defaults).
     pub new_object: NewObjectColors,
+    /// EPUB Export Options › Split Document.
+    #[serde(skip_serializing_if = "EpubSplit::is_off")]
+    pub epub_split: EpubSplit,
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 fn is_origin(p: &[f64; 2]) -> bool {
@@ -460,7 +505,9 @@ impl Default for DocSettings {
             ruler_origin: RulerOrigin::Spread,
             zero_point: [0.0, 0.0],
             zero_point_locked: false,
+            column_guides_locked: true,
             new_object: NewObjectColors::default(),
+            epub_split: EpubSplit::Off,
         }
     }
 }
@@ -619,6 +666,9 @@ fn is_zero(v: &u32) -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     pub title: String,
+    /// File › File Info.
+    #[serde(default, skip_serializing_if = "FileInfo::is_empty")]
+    pub file_info: FileInfo,
     pub settings: DocSettings,
     pub spreads: Vec<Arc<Spread>>,
     pub parents: Vec<Arc<Spread>>,
