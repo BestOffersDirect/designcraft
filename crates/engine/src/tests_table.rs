@@ -512,6 +512,15 @@ fn convert_text_to_table_with_indesigns_separators() {
     ] {
         assert!(convert(&mut s, "p\tq", bad.clone()).is_err(), "{bad}");
     }
+    // Text that would make too wide or too big a table is refused, and stays as it was.
+    use crate::cmd::table::{MAX_COLUMNS, MAX_CONVERTED_CELLS};
+    let wide = vec!["x"; MAX_COLUMNS as usize + 1].join("\t");
+    assert!(convert(&mut s, &wide, json!({})).is_err(), "a row wider than a table can be");
+    let long = vec!["a\tb"; MAX_CONVERTED_CELLS as usize / 2 + 1].join("\n");
+    assert!(convert(&mut s, &long, json!({})).is_err(), "more cells than a table can have");
+    assert_eq!(s.doc().unwrap().doc.story(designcraft_doc::StoryId(sid)).unwrap().text, format!("{long}\nAfter"));
+    let at_most = vec!["x"; MAX_COLUMNS as usize].join("\t");
+    assert!(convert(&mut s, &at_most, json!({})).is_ok(), "a row as wide as a table can be");
     check(&s);
     // Back to text with a comma between columns and a tab between rows.
     let r = convert(&mut s, "Plum\t80%\nSunset\t45%", json!({})).unwrap();

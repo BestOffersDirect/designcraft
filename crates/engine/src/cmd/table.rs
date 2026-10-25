@@ -569,6 +569,9 @@ fn para_direction(d: &Document, story: StoryId, offset: usize) -> designcraft_do
 pub const MAX_BODY_ROWS: u64 = 500;
 pub const MAX_COLUMNS: u64 = 200;
 pub const MAX_HEADER_FOOTER_ROWS: u64 = 100;
+/// The most cells `table.convertFromText` makes: as many as the largest table `table.insert`
+/// makes, however the rows and columns divide them (a long list can make a long table).
+pub const MAX_CONVERTED_CELLS: u64 = MAX_BODY_ROWS * MAX_COLUMNS;
 
 /// A command's `tableStyle`: none for an absent one or [Basic Table] (a new table's look), else the
 /// resolved style and the cell styles it names. Anything but an existing style's name is an error.
@@ -673,6 +676,14 @@ fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
         } else {
             text.split(row_sep.as_str()).map(|row| row.split(col_sep.as_str()).map(|c| c.trim().to_string()).collect()).collect()
         };
+        // The table is as wide as its widest row; refuse what no table here could hold.
+        let cols = data.iter().map(Vec::len).max().unwrap_or(1) as u64;
+        if cols > MAX_COLUMNS {
+            return Err(bad(ID, format!("the text makes {cols} columns; a table has at most {MAX_COLUMNS}")));
+        }
+        if cols * data.len() as u64 > MAX_CONVERTED_CELLS {
+            return Err(bad(ID, format!("the text makes more than {MAX_CONVERTED_CELLS} cells")));
+        }
         let pf = st.paras[pa].clone();
         let cf = st.format_after(a).clone();
         let mut table = Table::from_strings(id, &data, width, &pf, &cf);
