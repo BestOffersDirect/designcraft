@@ -22,6 +22,7 @@ mod modal_drag;
 mod new_document;
 mod object_control;
 pub mod package_dialog;
+mod page_history;
 mod panel_docking;
 pub mod panels;
 mod prefs;
@@ -195,6 +196,12 @@ pub struct UiState {
     /// The view (by its `views` key) Presentation was entered from; leaving puts it back.
     #[serde(skip)]
     pub presentation_view: Option<(u64, View)>,
+    /// The page in that view and the place on it, for Go Back after leaving Presentation.
+    #[serde(skip)]
+    pub presentation_page: Option<(designcraft_doc::ids::PageId, designcraft_geom::Vec2)>,
+    /// That view's Go Back / Go Forward history; leaving puts it back with one jump added.
+    #[serde(skip)]
+    pub(crate) presentation_history: Option<page_history::PageHistory>,
     pub frame_edges: bool,
     pub rulers: bool,
     pub guides: bool,
@@ -372,6 +379,8 @@ impl Default for UiState {
             screen_mode: ScreenMode::Normal,
             presentation_return: ScreenMode::Normal,
             presentation_view: None,
+            presentation_page: None,
+            presentation_history: None,
             frame_edges: true,
             rulers: true,
             guides: true,
@@ -573,6 +582,8 @@ pub struct DesignApp {
     pub ui: UiState,
     pub services: Services,
     pub views: HashMap<u64, View>,
+    /// Layout ▸ Go Back / Go Forward, by view (like `views`).
+    pub(crate) page_history: HashMap<u64, page_history::PageHistory>,
     /// The canvas cache and rect of the pane in `pane` (the other pane's are in `other_pane`).
     pub canvas: CanvasCache,
     pub canvas_rect: Option<egui::Rect>,
@@ -676,6 +687,7 @@ impl DesignApp {
             ui: UiState::default(),
             services,
             views: HashMap::new(),
+            page_history: HashMap::new(),
             canvas: CanvasCache::new(),
             canvas_rect: None,
             split: false,
@@ -739,6 +751,13 @@ impl DesignApp {
     pub fn view_mut(&mut self) -> Option<&mut View> {
         let k = self.view_key()?;
         Some(self.views.entry(k).or_default())
+    }
+    pub(crate) fn page_history(&self) -> Option<&page_history::PageHistory> {
+        self.page_history.get(&self.view_key()?)
+    }
+    pub(crate) fn page_history_mut(&mut self) -> Option<&mut page_history::PageHistory> {
+        let k = self.view_key()?;
+        Some(self.page_history.entry(k).or_default())
     }
     /// Make `pane` current: its canvas cache and rect move in.
     pub fn switch_pane(&mut self, pane: u8) {
