@@ -1151,8 +1151,9 @@ pub fn status_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
                     t.text,
                 );
                 ui.painter().text(fr.right_center() - vec2(5.0, 0.0), egui::Align2::RIGHT_CENTER, "▾", small.clone(), t.text);
+                let label = crate::i18n::tr(&app.ui.language, "Page");
                 fresp.widget_info(|| {
-                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, "Page");
+                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, label);
                     info.current_text_value = Some(name.clone());
                     info
                 });
@@ -1717,6 +1718,10 @@ mod tests {
         assert!(!h.state().app.session.active().unwrap().editing_parents);
         assert_eq!(crate::canvas::current_page(&h.state().app), Some(2));
         assert_eq!(shown(&h), "3");
+        // Its accessible name is in the interface's language.
+        h.state_mut().app.ui.language = "de".into();
+        h.run_steps(3);
+        assert!(h.query_by(|n| n.role() == Role::ComboBox && n.label().as_deref() == Some("Seite")).is_some(), "the page box is Seite");
     }
 
     /// As in InDesign, double-clicking the preflight count (or its light) shows the panel.
