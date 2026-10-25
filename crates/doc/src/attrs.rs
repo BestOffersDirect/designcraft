@@ -1317,7 +1317,7 @@ attr_set! {
         border_weights: [f64; 4] = [1.0; 4],
         border_color: String = "[Black]".into(),
         border_tint: f32 = 1.0,
-        /// Overprint the border's stroke (stored and kept through IDML, as `shading_overprint`).
+        /// Overprint the border's stroke (stored and kept through IDML, as `ParagraphBorderOverprint`).
         border_overprint: bool = false,
         border_offsets: [f64; 4] = [0.0; 4],
         /// The border's stroke type (a document stroke style by name, or a built-in type), cap and
