@@ -7233,11 +7233,11 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         },
     );
     let fr = put(at::field());
-    let fresp = ui.interact(fr, ui.id().with("cp_field"), egui::Sense::click_and_drag());
+    let fresp = ui.interact(fr, ui.scope_id().with("cp_field"), egui::Sense::click_and_drag());
     let (tv, _, _) = p.coords(comp);
     let cells = if matches!(comp, PickComp::R | PickComp::G | PickComp::Bl | PickComp::H) { 2 } else { 24 };
     gradient_mesh(ui.painter(), fr, cells, cells, |x, y| p.at(comp, tv, x, y).rgb);
-    fresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Color field"));
+    fresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Unknown, true, "Color field"));
     if let Some(pos) = fresp.interact_pointer_pos().filter(|_| fresp.is_pointer_button_down_on() || fresp.clicked()) {
         let u = ((pos.x - fr.left()) / fr.width()).clamp(0.0, 1.0);
         let v = ((fr.bottom() - pos.y) / fr.height()).clamp(0.0, 1.0);
@@ -7256,9 +7256,9 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     // The slider, with a marker on each side.
     let sr = put(at::slider());
-    let sresp = ui.interact(sr.expand2(egui::vec2(6.0, 0.0)), ui.id().with("cp_slider"), egui::Sense::click_and_drag());
+    let sresp = ui.interact(sr.expand2(egui::vec2(6.0, 0.0)), ui.scope_id().with("cp_slider"), egui::Sense::click_and_drag());
     gradient_mesh(ui.painter(), sr, 1, 48, |_, y| p.slider_at(comp, y));
-    sresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, "Color slider"));
+    sresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, true, "Color slider"));
     if let Some(pos) = sresp.interact_pointer_pos().filter(|_| sresp.is_pointer_button_down_on() || sresp.clicked()) {
         let tn = ((sr.bottom() - pos.y) / sr.height()).clamp(0.0, 1.0);
         let (_, u, v) = p.coords(comp);
@@ -7285,7 +7285,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     // OK, Cancel, Add CMYK Swatch: rounded, OK filled.
     let pill = |ui: &mut egui::Ui, i: usize, label: &str, primary: bool| -> bool {
         let r = put(at::button(i));
-        let resp = ui.interact(r, ui.id().with(("cp_button", i)), egui::Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("cp_button", i)), egui::Sense::click());
         let (fill, fg, stroke) = if primary {
             (t.accent_strong, egui::Color32::WHITE, egui::Stroke::NONE)
         } else {
@@ -7293,7 +7293,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         };
         ui.painter().rect(r, r.height() / 2.0, fill, stroke, egui::StrokeKind::Inside);
         ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), fg);
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
         resp.clicked()
     };
     if pill(ui, 0, &tr("OK"), true) || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -7340,12 +7340,12 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         match c {
             Some(c) => {
                 let rr = egui::Rect::from_center_size(egui::pos2(x, cy), egui::vec2(14.0, 14.0));
-                let resp = ui.interact(rr, ui.id().with(("cp_radio", key)), egui::Sense::click());
+                let resp = ui.interact(rr, ui.scope_id().with(("cp_radio", key)), egui::Sense::click());
                 ui.painter().circle(rr.center(), 6.0, t.input, egui::Stroke::new(1.0, t.text_dim));
                 if comp_now == c {
                     ui.painter().circle_filled(rr.center(), 2.6, t.text_strong);
                 }
-                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, comp_now == c, label));
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, comp_now == c, label));
                 if resp.clicked() {
                     comp_now = c;
                 }
@@ -7355,7 +7355,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             None => text(ui, egui::pos2(x + 28.0, cy), egui::Align2::RIGHT_CENTER, label),
         }
         let fr = egui::Rect::from_min_size(egui::pos2(x + 35.0, cy - 10.5), egui::vec2(44.0, 21.0));
-        if let Some(v) = picker_field(ui, d, fr, key, value, range) {
+        if let Some(v) = picker_field(ui, d, fr, key, label.trim_end_matches(':'), value, range) {
             if matches!(key, "r" | "g" | "bl") {
                 d.fields.insert("model".into(), json!("rgb"));
             }
@@ -7395,11 +7395,12 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let cy = area.min.y + at::ROWS[7];
     text(ui, egui::pos2(area.min.x + 321.0, cy), egui::Align2::LEFT_CENTER, "#:");
     let hr = egui::Rect::from_min_size(egui::pos2(area.min.x + 341.0, cy - 10.5), egui::vec2(64.0, 21.0));
-    let id = egui::Id::new("color_picker_hex");
+    let id = egui::Id::unique("color_picker_hex");
     let editing = ui.memory(|m| m.has_focus(id));
     let mut h = if editing { d.s("hexEdit") } else { p.hex().trim_start_matches('#').to_string() };
     if ui
-        .put(hr, egui::TextEdit::singleline(&mut h).id(id).font(font).vertical_align(egui::Align::Center).margin(egui::Margin::symmetric(4, 2)))
+        .put(hr, egui::TextEdit::singleline(&mut h).id(id).font(font).align(egui::Align2::LEFT_CENTER).margin(egui::Margin::symmetric(4, 2)))
+        .accessible_name("Hex".to_owned())
         .changed()
         && (h.len() == 6 || (h.len() == 7 && h.starts_with('#')))
         && let Some(c) = designcraft_color::Color::from_hex(&h)
@@ -11398,21 +11399,24 @@ mod picker_layout {
     pub const RIGHT: f32 = 457.0;
 }
 
-/// A value field: the text typed stays while it has the focus; a number that parses applies.
-fn picker_field(ui: &mut egui::Ui, d: &mut Dialog, r: egui::Rect, key: &str, value: f32, range: (f32, f32)) -> Option<f32> {
-    let id = egui::Id::new(("color_picker_field", key));
+/// A value field, named `name` (its caption): the text typed stays while it has the focus; a
+/// number that parses applies.
+fn picker_field(ui: &mut egui::Ui, d: &mut Dialog, r: egui::Rect, key: &str, name: &str, value: f32, range: (f32, f32)) -> Option<f32> {
+    let id = egui::Id::unique(("color_picker_field", key));
     let editing = ui.memory(|m| m.has_focus(id));
     let shown = format!("{}", value.round() as i64);
     let edit_key = format!("_edit_{key}");
     let mut text = if editing { d.fields.get(&edit_key).and_then(Value::as_str).map(str::to_string).unwrap_or(shown) } else { shown };
-    let resp = ui.put(
-        r,
-        egui::TextEdit::singleline(&mut text)
-            .id(id)
-            .font(egui::FontId::proportional(11.5))
-            .vertical_align(egui::Align::Center)
-            .margin(egui::Margin::symmetric(4, 2)),
-    );
+    let resp = ui
+        .put(
+            r,
+            egui::TextEdit::singleline(&mut text)
+                .id(id)
+                .font(egui::FontId::proportional(11.5))
+                .align(egui::Align2::LEFT_CENTER)
+                .margin(egui::Margin::symmetric(4, 2)),
+        )
+        .accessible_name(name.to_owned());
     let mut out = None;
     if resp.changed()
         && let Ok(v) = text.trim().parse::<f32>()
