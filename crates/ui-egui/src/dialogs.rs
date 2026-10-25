@@ -6560,7 +6560,13 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
         crate::rtl::label(ui, egui::RichText::new(tr("Styles in Table of Contents")).font(semibold(12.0)));
-        if ui.button(tr(if expanded { "Fewer Options" } else { "More Options" })).clicked() {
+        let toggle = ui.button(tr(if expanded { "Fewer Options" } else { "More Options" }));
+        // Enter on the focused toggle toggles it (egui activates a focused button with Enter):
+        // the footer drawn after it mustn't take that Enter for OK too.
+        if toggle.has_focus() {
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+        }
+        if toggle.clicked() {
             expanded = !expanded;
         }
     });
@@ -8397,6 +8403,27 @@ mod tests {
         visible_label(&labels, screen, "Between Entry and Number:");
         assert_eq!(toc_params(&app, app.ui.dialog.as_ref().unwrap()), before);
         assert_eq!(app.session.doc().unwrap().revision, revision);
+    }
+
+    /// Enter on the focused Fewer Options / More Options button toggles the options; it doesn't
+    /// also make the table of contents.
+    #[test]
+    fn enter_on_the_toc_options_toggle_only_toggles() {
+        use egui_kittest::{Harness, kittest::Queryable};
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.newSample", json!({})).unwrap();
+        open_toc(&mut app);
+        let revision = app.session.doc().unwrap().revision;
+        let mut h = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(|ui, app: &mut DesignApp| show(app, ui.ctx()), app);
+        h.run_steps(3);
+        h.get_by_label("Fewer Options").focus();
+        h.run_steps(2);
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+        let d = h.state().ui.dialog.as_ref().expect("the dialog stays open");
+        assert_eq!((d.id.as_str(), d.b("moreOptions")), (TOC, false), "the options are fewer");
+        assert_eq!(h.state().session.doc().unwrap().revision, revision, "no table of contents made");
+        assert!(h.query_by_label("More Options").is_some());
     }
 
     #[test]
