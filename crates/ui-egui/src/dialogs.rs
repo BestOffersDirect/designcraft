@@ -142,6 +142,15 @@ fn table_style_field(d: &Dialog) -> Option<String> {
     d.fields.get("tableStyle").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
+/// The dialog's `tableStyle` as the table commands take it: null for none, the style's name, or
+/// a value that is neither (set through `ui.dialog.set`) as it is, for the command to refuse.
+fn table_style_value(d: &Dialog) -> Value {
+    match d.fields.get("tableStyle") {
+        None | Some(Value::String(_)) => table_style_field(d).map_or(Value::Null, Value::String),
+        Some(v) => v.clone(),
+    }
+}
+
 /// Table › Insert Table, laid out as InDesign's: Table Dimensions (body rows and columns, then
 /// header and footer rows, each a number with a spinner, labels on the right edge of their
 /// column) and the Table Style to apply.
@@ -3162,7 +3171,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         "insertTable" => {
             // The table and its style in one step; a style that is gone leaves the document alone,
             // and the dialog stays open to be corrected.
-            let style = table_style_field(&d);
+            let style = table_style_value(&d);
             let r = app.run(
                 "table.insert",
                 json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
@@ -10072,6 +10081,12 @@ mod tests {
         assert_eq!(tables(&app), 0);
         let d = app.ui.dialog.as_ref().expect("the dialog stays open to be corrected");
         assert_eq!((d.id.as_str(), d.s("tableStyle")), ("insertTable", "Gone".to_string()));
+        // So does a style that isn't a name: the command refuses it, rather than making the table
+        // unstyled.
+        ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": 42}));
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+        assert_eq!(tables(&app), 0);
+        assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("insertTable"), "the dialog stays open");
     }
 
     #[test]
