@@ -6807,15 +6807,34 @@ fn seed_corner_options(app: &DesignApp, d: &mut Dialog) {
     }
     let first = corners[0];
     d.fields.entry("link").or_insert(json!(corners.iter().all(|c| *c == first)));
+    d.fields.insert("_seed".into(), json!(corner_fields(d)));
     d.fields.insert("_seeded".into(), json!(true));
+}
+
+/// Each corner's size and shape fields, in `CORNERS` order.
+fn corner_fields(d: &Dialog) -> Vec<(String, String)> {
+    CORNERS.iter().map(|(k, _)| (d.s(&format!("size{k}")), d.s(&format!("shape{k}")))).collect()
+}
+
+/// The corners edited since the dialog opened: changed from the first object's, or set by a
+/// linked edit (all four, even one that was already the value).
+fn edited_corners(d: &Dialog) -> [bool; 4] {
+    let touched: [bool; 4] = d.fields.get("_touched").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+    let seed: Vec<(String, String)> = d.fields.get("_seed").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+    let now = corner_fields(d);
+    std::array::from_fn(|i| touched[i] || seed.get(i) != now.get(i))
 }
 
 /// Linked corners: a corner changed since the dialog last looked (size or shape, typed or set
 /// over the control channel) is all four.
 fn link_corners(d: &mut Dialog) {
-    let now: Vec<(String, String)> = CORNERS.iter().map(|(k, _)| (d.s(&format!("size{k}")), d.s(&format!("shape{k}")))).collect();
+    let now = corner_fields(d);
     let seen: Vec<(String, String)> = d.fields.get("_corners").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_else(|| now.clone());
     let mut now = now;
+    let mut touched: [bool; 4] = d.fields.get("_touched").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
+    for (t, (a, b)) in touched.iter_mut().zip(now.iter().zip(&seen)) {
+        *t |= a != b;
+    }
     if d.b("link")
         && let Some(i) = now.iter().zip(&seen).position(|(a, b)| a != b)
         && let Some(changed) = now.get(i).cloned()
@@ -6825,20 +6844,28 @@ fn link_corners(d: &mut Dialog) {
             d.fields.insert(format!("shape{k}"), json!(changed.1));
         }
         now = vec![changed; CORNERS.len()];
+        touched = [true; 4];
     }
     d.fields.insert("_corners".into(), json!(now));
+    d.fields.insert("_touched".into(), json!(touched));
 }
 
-/// `object.cornerOptions`' params from the dialog. A size that does not parse is an error to show.
+/// `object.cornerOptions`' params from the dialog: the corners edited, the others null (each
+/// selected object keeps its own). A size that does not parse, or a shape the dialog doesn't
+/// offer, is an error to show.
 fn corner_options_params(d: &Dialog) -> Result<Value, String> {
     use designcraft_geom::corners::CornerShape;
+    let edited = edited_corners(d);
     let mut corners = Vec::with_capacity(CORNERS.len());
-    for (k, _) in &CORNERS {
+    for ((k, _), edited) in CORNERS.iter().zip(edited) {
         let key = format!("size{k}");
         let size =
             d.m(&key).filter(|v| v.is_finite() && *v >= 0.0).ok_or_else(|| format!("Enter a valid corner size, e.g. 12 or 3 mm: {}", d.s(&key)))?;
-        let shape: CornerShape = d.fields.get(&format!("shape{k}")).and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
-        corners.push(json!({"shape": shape, "size": size}));
+        let shape: CornerShape = match d.fields.get(&format!("shape{k}")) {
+            None => CornerShape::default(),
+            Some(v) => serde_json::from_value(v.clone()).map_err(|_| format!("Choose a corner shape: {v} isn't one"))?,
+        };
+        corners.push(if edited { json!({"shape": shape, "size": size}) } else { Value::Null });
     }
     Ok(json!({"corners": corners}))
 }
@@ -7427,12 +7454,61 @@ mod tests {
         dialog_frame(&mut app, &ctx, screen, vec![]);
         let d = app.ui.dialog.as_ref().unwrap();
         assert_eq!((d.s("shape1"), d.s("shape0"), d.b("link")), ("rounded".into(), "none".into(), false));
-        // A size that does not parse keeps the dialog open with the error.
+        // A size that does not parse keeps the dialog open with the error; so does a shape the
+        // dialog doesn't offer (rather than another shape taking its place).
         set(&mut app, "size0", json!("abc"));
+        assert!(confirm(&mut app).is_err());
+        assert!(app.ui.dialog.is_some());
+        set(&mut app, "size0", json!("0"));
+        set(&mut app, "shape0", json!("spiky"));
         assert!(confirm(&mut app).is_err());
         assert!(app.ui.dialog.is_some());
         cancel(&mut app);
         assert_eq!(corners(&app), c);
+    }
+
+    /// Several objects: the dialog shows the first one's corners, and OK sets only the corners
+    /// edited; the others keep each object's own. A linked edit sets all four.
+    #[test]
+    fn corner_options_keep_each_objects_untouched_corners() {
+        use designcraft_geom::corners::CornerShape;
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.new", json!({})).unwrap();
+        let a = app.run("frame.create", json!({"rect": [72, 72, 200, 200]})).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("frame.create", json!({"rect": [272, 72, 400, 200]})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.cornerOptions", json!({"ids": [b], "shape": "bevel", "size": 12})).unwrap();
+        app.run("selection.set", json!({"ids": [a, b]})).unwrap();
+        let corners = |app: &DesignApp, id: u64| app.session.doc().unwrap().doc.item(designcraft_doc::ItemId(id)).unwrap().corners.corners;
+        let set = |app: &mut DesignApp, k: &str, v: Value| {
+            app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+        };
+        let ctx = dialog_context("en");
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+        let b0 = corners(&app, b);
+        // Unlinked: only the top-right corner rounds, on both.
+        crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+        set(&mut app, "link", json!(false));
+        set(&mut app, "size1", json!("1p0"));
+        set(&mut app, "shape1", json!("rounded"));
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+        confirm(&mut app).unwrap();
+        let (ca, cb) = (corners(&app, a), corners(&app, b));
+        assert_eq!(ca.map(|c| c.shape), [CornerShape::None, CornerShape::Rounded, CornerShape::None, CornerShape::None]);
+        assert_eq!(cb.map(|c| c.shape), [CornerShape::Bevel, CornerShape::Rounded, CornerShape::Bevel, CornerShape::Bevel], "b keeps its others");
+        assert_eq!((cb[0], cb[2], cb[3]), (b0[0], b0[2], b0[3]));
+        assert_eq!(ca[1], cb[1]);
+        // Linked: a corner set to the first object's own value still sets all four, on both.
+        crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+        set(&mut app, "link", json!(true));
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+        set(&mut app, "size0", json!("0p6"));
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+        confirm(&mut app).unwrap();
+        let (ca, cb) = (corners(&app, a), corners(&app, b));
+        assert_eq!(ca, cb, "all four, on both");
+        assert!(ca.iter().all(|c| c.shape == CornerShape::None && (c.size - 6.0).abs() < 1e-6), "{ca:?}");
     }
 
     #[test]

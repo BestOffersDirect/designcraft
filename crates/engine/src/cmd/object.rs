@@ -607,7 +607,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Corner Options…",
             ["Object"],
             None,
-            "{shape: none|rounded|inverseRounded|inset|bevel|fancy, size, corners?: [{shape, size}] (4 entries in path order: top-left, top-right, bottom-right, bottom-left; replaces shape and size), ids?}",
+            "{shape: none|rounded|inverseRounded|inset|bevel|fancy, size, corners?: [{shape, size} | null] (4 entries in path order: top-left, top-right, bottom-right, bottom-left; replaces shape and size; null keeps that corner of each object), ids?}",
             has_selection,
             corner_options
         ),
@@ -2152,19 +2152,31 @@ fn corner_options(s: &mut Session, p: &Value) -> Result<Value> {
     use designcraft_geom::corners::{Corner, CornerOptions, CornerShape};
     let opts = match p.get("corners") {
         Some(v) => {
-            let corners: [Corner; 4] =
-                serde_json::from_value(v.clone()).map_err(|e| bad("object.cornerOptions", format!("corners: four {{shape, size}} entries ({e})")))?;
-            if corners.iter().any(|c| !c.size.is_finite() || c.size < 0.0) {
+            let corners: [Option<Corner>; 4] = serde_json::from_value(v.clone())
+                .map_err(|e| bad("object.cornerOptions", format!("corners: four {{shape, size}} or null entries ({e})")))?;
+            if corners.iter().flatten().any(|c| !c.size.is_finite() || c.size < 0.0) {
                 return Err(bad("object.cornerOptions", "corner sizes must be finite and not negative"));
             }
-            CornerOptions { corners }
+            corners
         }
         None => {
             let shape = p.get("shape").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or(CornerShape::Rounded);
-            CornerOptions::uniform(shape, f64_or(p, "size", 12.0))
+            CornerOptions::uniform(shape, f64_or(p, "size", 12.0)).corners.map(Some)
         }
     };
-    set_flag(s, p, move |i| i.corners = opts, false)
+    // A null corner keeps each object's own.
+    set_flag(
+        s,
+        p,
+        move |i| {
+            for (c, new) in i.corners.corners.iter_mut().zip(opts) {
+                if let Some(new) = new {
+                    *c = new;
+                }
+            }
+        },
+        false,
+    )
 }
 
 /// `object.matchAttributes`: the selected objects (or `ids`) take `from`'s appearance.
