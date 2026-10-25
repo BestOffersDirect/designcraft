@@ -130,7 +130,7 @@ impl Notes {
                 self.num = o.start_at;
             }
             self.numbers[k] = self.num;
-            self.num += 1;
+            self.num = self.num.saturating_add(1);
             sub.notes.insert(self.refs[k], o.label(self.numbers[k], false));
         }
         sub.note_position = o.ref_position;
@@ -180,6 +180,7 @@ impl Notes {
             running: opts.running.clone(),
             label: Some(label),
             xrefs: opts.xrefs.clone(),
+            placed: Vec::new(),
         };
         let cs = crate::compose(doc, &self.notes[k].text, std::slice::from_ref(&spec), &nopts);
         let lines = cs.frames.first().map(|ft| ft.lines.as_slice()).unwrap_or_default();
