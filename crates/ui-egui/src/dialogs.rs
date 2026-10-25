@@ -3392,7 +3392,7 @@ pub fn confirm(app: &mut DesignApp) -> Result<Value, String> {
         "convertTextToTable" | "convertTableToText" => {
             let r = if d.id == "convertTextToTable" {
                 let same = same_separators(&d);
-                let style = table_style_field(&d).filter(|s| s != designcraft_doc::BASIC_TABLE);
+                let style = table_style_value(&d);
                 app.run(
                     "table.convertFromText",
                     json!({"columnSeparator": d.s("columnSeparator"), "rowSeparator": d.s("rowSeparator"),
