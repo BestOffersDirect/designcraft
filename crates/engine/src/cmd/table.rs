@@ -440,7 +440,11 @@ fn in_cell(s: &Session) -> std::result::Result<(), String> {
     has_doc(s)?;
     // Footnote text is addressed as a cell too, but isn't in a table.
     let in_table = |c: CellAddr| c.footnote_id().is_none();
-    if s.active().is_some_and(|d| d.selection.text.is_some_and(|t| t.cell.is_some_and(in_table))) { Ok(()) } else { Err("not in a table cell".into()) }
+    if s.active().is_some_and(|d| d.selection.text.is_some_and(|t| t.cell.is_some_and(in_table))) {
+        Ok(())
+    } else {
+        Err("not in a table cell".into())
+    }
 }
 
 /// The table a command acts on and its target cell range.
