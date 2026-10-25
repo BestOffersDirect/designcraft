@@ -23,6 +23,7 @@ pub mod optical;
 mod outline;
 mod overlay;
 mod parabox;
+mod placed;
 mod ruby;
 pub mod shape;
 pub mod shatai;
@@ -50,6 +51,7 @@ use crate::notes::Notes;
 pub use crate::notes::{find_note, hit_note, hit_note_with, note_caret};
 pub use crate::outline::FrameOutline;
 use crate::parabox::ParaBox;
+pub use crate::placed::Placement;
 use crate::shape::{Glyph, StyleTable, SubstCtx};
 pub use crate::table::{BorderHit, PlacedCell, StrokeSeg, TableFrag, cell_caret, find_cell, hit_border, hit_cell, hit_cell_with};
 
@@ -627,6 +629,9 @@ pub struct ComposeOptions {
     pub label: Option<String>,
     /// Anchor pages for cross-references (needed when the story contains cross-references).
     pub xrefs: Option<Arc<xref::XrefIndex>>,
+    /// Where the story's anchored frames sit on their spreads; an anchored frame not listed is
+    /// composed where it is stored, on no page.
+    pub placed: Vec<(ItemId, Placement)>,
 }
 
 /// Nesting depth past which wrap obstacles inside groups are not collected.
@@ -659,21 +664,34 @@ fn wrap_obstacles(it: &Item, parent: Affine, inv: Affine, skip: ItemId, left_pag
 
 /// Build the frame specs of a story from the document (geometry, wrap, page names, grid).
 pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
+    frame_specs_placed(doc, sid, &[])
+}
+
+/// [`frame_specs`] with anchored frames where their host story placed them (`placed`).
+pub(crate) fn frame_specs_placed(doc: &Document, sid: StoryId, placed: &[(ItemId, Placement)]) -> Vec<FrameSpec> {
     let Some(st) = doc.story(sid) else { return vec![] };
     let mut out = Vec::with_capacity(st.frames.len());
     for &fid in &st.frames {
         let loc = doc.find(fid);
         let Some(item) = loc.as_ref().and_then(|l| doc.item_at(l)).or_else(|| doc.anchored_item(fid)) else { continue };
         let Some(tf) = item.text_frame() else { continue };
-        let parent = loc.as_ref().map(|l| doc.parent_xf(l)).unwrap_or(designcraft_geom::Affine::IDENTITY);
+        // An anchored frame takes its page, page side, page rect and grid from where it is placed.
+        let placement = if loc.is_none() { placed.iter().find(|(id, _)| *id == fid).map(|(_, p)| *p) } else { None };
+        let parent = match (&loc, placement) {
+            (Some(l), _) => doc.parent_xf(l),
+            (None, Some(p)) => p.xf,
+            (None, None) => Affine::IDENTITY,
+        };
         let xf = parent * item.xf;
         // Where the frame is on the spread (a group's transform included), to find its page.
         let center_x = parent.transform_rect_bbox(item.bounds()).center().x;
         let inv = xf.inverse();
         let mut exclusions = Vec::new();
-        let spread_ref = loc.as_ref().map(|l| l.spread);
+        let spread_ref = loc.as_ref().map(|l| l.spread).or(placement.map(|p| p.spread));
         let spread = spread_ref.and_then(|r| doc.spread(r));
+        // Page items wrap the text of frames on the spread, not of anchored frames.
         if !tf.options.ignore_wrap
+            && loc.is_some()
             && let Some(sp) = spread
         {
             let left = |x: f64| sp.page_at_x(x).and_then(|pi| sp.pages.get(pi)).is_some_and(|p| p.side == designcraft_doc::PageSide::Left);
@@ -713,9 +731,23 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
         let under = spread.and_then(|sp| sp.page_at_x(center_x).and_then(|pi| sp.pages.get(pi)));
         let page_rect = under.map(|pg| (inv.transform_rect_bbox(pg.bounds()), inv.transform_rect_bbox(pg.margin_rect())));
         let g = &doc.settings.baseline_grid;
-        let (start, inc) = tf.options.baseline_grid.map_or((under.map_or(g.start, |pg| g.origin(pg)), g.increment), |f| (f.start, f.increment));
         // Grid lines are at spread y = start + n·inc (page tops are y = 0); map into inner space (translation only).
         let ty = xf.translation().y;
+        let (start, inc) = match tf.options.baseline_grid {
+            None => (under.map_or(g.start, |pg| g.origin(pg)), g.increment),
+            Some(f) => {
+                use designcraft_doc::FrameGridRelative as R;
+                // The frame's own edges are in inner space; `ty` takes them to spread y as it takes
+                // the grid back, so a frame-relative grid keeps its place in a turned frame.
+                let from = match f.relative_to {
+                    R::TopOfPage => 0.0,
+                    R::TopMargin => under.map_or(0.0, |pg| pg.margins.top),
+                    R::TopOfFrame => ty + item.inner_bounds().y0,
+                    R::TopInset => ty + item.text_area().y0,
+                };
+                (from + f.start, f.increment)
+            }
+        };
         let grid = (inc > 0.0 && inc.is_finite() && start.is_finite()).then_some((start - ty, inc));
         // Type on a path: one line as long as the path (from the start offset).
         let (area, opts) = match &tf.options.path {
@@ -783,10 +815,23 @@ pub fn frame_specs(doc: &Document, sid: StoryId) -> Vec<FrameSpec> {
 
 /// Compose a story of `doc` through its frames, with the text wrap of page items and of anchored
 /// objects ([`wrap`]).
+/// Anchored frames are composed where their host story places them (unless `opts` places them).
 pub fn compose_story(doc: &Document, sid: StoryId, opts: &ComposeOptions) -> ComposedStory {
+    compose_story_at(doc, sid, opts, 0)
+}
+
+/// [`compose_story`] for a story `depth` hosts down from the story asked for.
+fn compose_story_at(doc: &Document, sid: StoryId, opts: &ComposeOptions, depth: usize) -> ComposedStory {
     let others: Vec<ComposedStory> =
         wrap::neighbours(doc, sid).into_iter().map(|o| wrap::compose_among(doc, o, &ComposeOptions::default(), &[])).collect();
-    wrap::compose_among(doc, sid, opts, &others.iter().collect::<Vec<_>>())
+    let others: Vec<&ComposedStory> = others.iter().collect();
+    if opts.placed.is_empty() && depth < placed::MAX_DEPTH {
+        let placed = placed::placements(doc, sid, &mut |host| Arc::new(compose_story_at(doc, host, &ComposeOptions::default(), depth + 1)));
+        if !placed.is_empty() {
+            return wrap::compose_among(doc, sid, &ComposeOptions { placed, ..opts.clone() }, &others);
+        }
+    }
+    wrap::compose_among(doc, sid, opts, &others)
 }
 
 const DEFAULT_TAB: f64 = 36.0;
@@ -1018,9 +1063,9 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
         };
         if !story.endnotes.is_empty() {
             // Endnote reference numbers continue through the document.
-            let first = doc.endnote_start(story.id) + story.text[..prange.start].matches(designcraft_doc::ENDNOTE_REF).count() as u32;
+            let first = doc.endnote_start(story.id).saturating_add(story.text[..prange.start].matches(designcraft_doc::ENDNOTE_REF).count() as u32);
             for (k, (i, _)) in story.text[prange.clone()].match_indices(designcraft_doc::ENDNOTE_REF).enumerate() {
-                sub.notes.insert(prange.start + i, doc.endnote_options.label(first + k as u32));
+                sub.notes.insert(prange.start + i, doc.endnote_options.label(first.saturating_add(k as u32)));
             }
         }
         if !story.objects.is_empty() {
@@ -1091,7 +1136,7 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
             let cols_here = &cols[cur.fi];
             let col = span_rect(cols_here, cols_here[cur.col.min(cols_here.len() - 1)], pp.span_columns);
             let col = SplitCfg::of(&pp).map_or(col, |c| c.sub_rect(col, 0));
-            let spacing = spacing_for(&pp, base_chars.size);
+            let spacing = spacing_for(&pp, base_chars.size, story);
             let mut lines: Vec<(std::ops::Range<usize>, String)> = Vec::new();
             for _ in 0..3 {
                 // The same drop cap, spacing, hyphenation and breaker as the layout below.
@@ -1247,7 +1292,7 @@ fn compose_with_db(doc: &Document, story: &Story, frames: &[FrameSpec], opts: &C
             hyphenation_points(&story.text, &glyphs, &pp, &hyph_exceptions, &foreign_ranges(doc, story, prange.clone(), &base_chars));
         suppress_hyphens(&mut hyph_after, &glyphs, no_hyph.get(pi).map_or(&[], Vec::as_slice));
         let base_size = base_chars.size;
-        let spacing = spacing_for(&pp, base_size);
+        let spacing = spacing_for(&pp, base_size, story);
         // An empty paragraph takes its height from its paragraph mark's character format.
         let mark_chars = if glyphs.is_empty() {
             std::borrow::Cow::Owned(doc.styles.resolve_char(&base_chars, story.char_format_of(prange.start)))
@@ -2258,8 +2303,22 @@ pub fn column_rule_rects(columns: &[Rect], lines: &[Line], opts: &TextFrameOptio
     out
 }
 
+/// Optical margin alignment for a paragraph of `story`: (on, the size the hang is set for).
+/// Ignore Optical Margin turns it off; the story's setting, when on, applies to every other
+/// paragraph; otherwise the paragraph's own switch hangs at each glyph's own size.
+fn optical_for(pp: &ParaProps, story: &Story) -> (bool, Option<f64>) {
+    if pp.ignore_optical_margin {
+        return (false, None);
+    }
+    match story.optical_margin.hang_size() {
+        Some(size) => (true, Some(size)),
+        None => (pp.optical_margin, None),
+    }
+}
+
 /// Breaker parameters from the paragraph's settings.
-fn spacing_for(pp: &ParaProps, base_size: f64) -> Spacing {
+fn spacing_for(pp: &ParaProps, base_size: f64, story: &Story) -> Spacing {
+    let (optical, optical_size) = optical_for(pp, story);
     Spacing {
         justify: pp.align.is_justified(),
         word_min: pp.word_space_min,
@@ -2277,7 +2336,8 @@ fn spacing_for(pp: &ParaProps, base_size: f64) -> Spacing {
         // The zone is the Single-line Composer's (unjustified text only), as in InDesign: the
         // Paragraph Composer weighs every break of the paragraph instead.
         hyph_zone: if pp.align.is_justified() || !pp.composer.single_line() { 0.0 } else { pp.hyph_zone },
-        optical: pp.optical_margin,
+        optical,
+        optical_size,
         korean_char_breaks: pp.korean_char_breaks,
         kinsoku_priority: match pp.kinsoku_type.as_str() {
             "KinsokuPushInFirst" => 1,
@@ -3359,9 +3419,20 @@ fn layout_line(
         let h = shape::hyphen_after(g);
         line.push(h);
     }
-    // Tabs: compute widths left to right.
     let measure = x1 - x0;
-    let mut x = 0.0;
+    // Optical margin alignment and hanging punctuation: the glyphs at the line's edges hang
+    // outside the measure. A tab at an edge hangs nothing.
+    let is_tab = |g: &Glyph| g.ch == '\t' || g.ch == story::RIGHT_INDENT_TAB;
+    let at_edge = |g: &&Glyph| is_tab(g) || (g.adv > 0.0 && !g.is_space());
+    let first = line.iter().find(at_edge);
+    let lastg = line.iter().rev().find(at_edge);
+    let hl = first.map_or(0.0, |g| breaker::hang_left(g, sp));
+    let optical_right = lastg.map_or(0.0, |g| breaker::hang_right(g, sp));
+    let cjk_right = lastg.map_or(0.0, |g| g.cjk_hang);
+    let regular_hang = pp.kinsoku_hang == designcraft_doc::cjk::KinsokuHang::Regular;
+    // Tabs: compute widths left to right. Tab stops stay where they are when the line hangs, so
+    // tabs are measured from the hung start, and a right indent tab reaches the hung end.
+    let mut x = -hl;
     let mut i = 0;
     let mut leaders: Vec<(usize, String)> = Vec::new();
     // The line's last tab and whether it is a left tab (only text after a left tab justifies).
@@ -3391,26 +3462,17 @@ fn layout_line(
                 leaders.push((i, t.leader.clone()));
             }
             let rest: f64 = line[i + 1..].iter().map(|g| g.adv).sum();
-            line[i].adv = (measure - x - rest).max(0.0);
+            let hr = if regular_hang { optical_right } else { optical_right.max(cjk_right) };
+            line[i].adv = (measure + hr - x - rest).max(0.0);
             last_tab = Some((i, false));
         }
         x += line[i].adv;
         i += 1;
     }
-    let has_tab = line.iter().any(|g| g.ch == '\t' || g.ch == story::RIGHT_INDENT_TAB);
-    // Optical margin alignment: the measure grows by the hang of the edge glyphs.
+    // The measure grows by the hang of the edge glyphs.
     let (mut x0, mut measure) = (x0, measure);
-    if (sp.optical || pp.kinsoku_hang != designcraft_doc::cjk::KinsokuHang::None) && !has_tab {
-        let first = line.iter().find(|g| g.adv > 0.0 && !g.is_space());
-        let lastg = line.iter().rev().find(|g| g.adv > 0.0 && !g.is_space());
-        let hl = if sp.optical { first.map_or(0.0, |g| breaker::hang(g.ch).0 * g.adv) } else { 0.0 };
-        let optical_right = if sp.optical { lastg.map_or(0.0, |g| breaker::hang(g.ch).1 * g.adv) } else { 0.0 };
-        let cjk_right = lastg.map_or(0.0, |g| g.cjk_hang);
-        let cjk_right = if pp.kinsoku_hang == designcraft_doc::cjk::KinsokuHang::Regular {
-            cjk_right.min((line.iter().map(|g| g.adv).sum::<f64>() - measure).max(0.0))
-        } else {
-            cjk_right
-        };
+    if sp.optical || pp.kinsoku_hang != designcraft_doc::cjk::KinsokuHang::None {
+        let cjk_right = if regular_hang { cjk_right.min((line.iter().map(|g| g.adv).sum::<f64>() - measure).max(0.0)) } else { cjk_right };
         let hr = optical_right.max(cjk_right);
         x0 -= hl;
         measure += hl + hr;
