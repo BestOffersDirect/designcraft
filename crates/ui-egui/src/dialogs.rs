@@ -7416,9 +7416,12 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     );
     if p != before {
         store_picked(d, &p);
-        if let Some(c) = exact_cmyk {
-            d.fields.insert("cmyk".into(), json!(c));
-        }
+    }
+    // Typed C/M/Y/K are kept as typed, even when the colour shown stays the same (at 100% K, a
+    // device conversion is black whatever C, M and Y are).
+    if let Some(c) = exact_cmyk {
+        d.fields.insert("cmyk".into(), json!(c));
+        d.fields.insert("edited".into(), json!(true));
     }
 }
 
@@ -11113,6 +11116,19 @@ mod tests {
             panic!("a CMYK swatch")
         };
         assert_eq!([c, m, y, k].map(|v| (v * 100.0).round()), [0.0, 50.0, 100.0, 0.0]);
+        // A C typed at 100% K is kept, whether or not the colour shown changes with it.
+        let rgb = h.state().app.ui.dialog.as_ref().unwrap().fields["rgb"].clone();
+        h.state_mut().app.ui.dialog.as_mut().unwrap().fields.insert("cmyk".into(), json!([0.0, 0.0, 0.0, 100.0]));
+        h.run_steps(2);
+        h.get_by_label("C").focus();
+        h.run_steps(1);
+        h.event(egui::Event::Text("50".into()));
+        h.run_steps(2);
+        let d = h.state().app.ui.dialog.as_ref().unwrap();
+        assert_eq!(d.fields["cmyk"], json!([50.0, 0.0, 0.0, 100.0]), "rgb {} (was {rgb})", d.fields["rgb"]);
+        assert!(d.b("edited"));
+        store_picked(h.state_mut().app.ui.dialog.as_mut().unwrap(), &Picked::from_rgb([124.0 / 255.0, 19.0 / 255.0, 21.0 / 255.0], 0.0));
+        h.run_steps(2);
         // Its own OK, at the top right, applies it.
         h.get_by_label("OK").click();
         h.run_steps(3);
