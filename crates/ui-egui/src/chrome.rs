@@ -31,7 +31,7 @@ const MAC_LIGHTS_LEFT: f32 = 10.0;
 pub const MAC_CONTENT_LEFT: f32 = MAC_LIGHTS_LEFT + 2.0 * MAC_LIGHT_PITCH + MAC_LIGHT + (MAC_APP_BAR - MAC_LIGHT) / 2.0;
 
 fn search_id() -> egui::Id {
-    egui::Id::new("app_bar_search")
+    egui::Id::unique("app_bar_search")
 }
 
 /// Whether the application bar's search field had the keyboard last frame. Escape takes egui's
@@ -94,7 +94,7 @@ fn search_field(app: &mut DesignApp, ui: &mut egui::Ui) {
                 .text_color(t.text)
                 .hint_text(hint)
                 .desired_width(field.width())
-                .vertical_align(egui::Align::Center)
+                .align(egui::Align2::LEFT_CENTER)
                 // Return runs the highlighted match instead of leaving the field.
                 .return_key(None),
         )
@@ -180,6 +180,7 @@ fn tools_slot_width(available: f32, tools_w: f32) -> f32 {
     (available - 1.0).max(tools_w)
 }
 
+/// Lay out the application bar, native/custom title handling, menu and tool scrolling, drag region, caption controls and search.
 pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let mac = app.integrated_titlebar;
@@ -204,7 +205,7 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
                     egui::pos2(full.min.x - f32::from(left), full.min.y),
                     egui::pos2(full.max.x + 10.0, full.min.y + MAC_APP_BAR),
                 );
-                crate::title_bar::empty_area(ui, band);
+                let _ = craft_window::title_bar::empty_area(ui, band);
             }
             let mut menus_end = full.min.x;
             let mut tools_start = full.max.x;
@@ -219,12 +220,12 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
                     egui::pos2(full.min.x - left as f32, full.min.y),
                     egui::pos2(full.max.x - caption_w, full.min.y + bar + APP_BAR_BAND),
                 );
-                let response = ui.interact(drag, egui::Id::new("window_title_drag"), Sense::click_and_drag());
+                let response = ui.interact(drag, egui::Id::unique("window_title_drag"), Sense::click_and_drag());
                 // Only from an empty part of the bar: the lower band, or the gap between the menus
                 // and the tools (as they were last frame). A menu title pressed and dragged doesn't
                 // move the window, as with native title bars.
-                let (gap0, gap1) =
-                    ui.data(|d| (d.get_temp::<f32>(egui::Id::new("app_bar_menus_end")), d.get_temp::<f32>(egui::Id::new("app_bar_tools_start"))));
+                let (gap0, gap1) = ui
+                    .data(|d| (d.get_temp::<f32>(egui::Id::unique("app_bar_menus_end")), d.get_temp::<f32>(egui::Id::unique("app_bar_tools_start"))));
                 let empty = |p: egui::Pos2| p.y >= full.min.y + bar || matches!((gap0, gap1), (Some(a), Some(b)) if p.x >= a && p.x <= b);
                 let from_empty = ui.input(|i| i.pointer.press_origin().or(i.pointer.interact_pos())).is_some_and(empty);
                 if response.double_clicked() && from_empty {
@@ -245,7 +246,7 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
             ui.scope_builder(egui::UiBuilder::new().max_rect(scrolled), |ui| {
                 // The right-hand controls' width, measured last frame: in a window too narrow for them
                 // and the menus they follow the menus, and the bar scrolls sideways.
-                let tools_w_id = ui.id().with("tools_width");
+                let tools_w_id = ui.scope_id().with("tools_width");
                 let tools_w: f32 = ui.data(|d| d.get_temp(tools_w_id)).unwrap_or(0.0);
                 crate::widgets::overflow_scrolling(ui);
                 // (Drag-scrolling is touch-only by default, so a mouse drag on the bar moves the window.)
@@ -264,7 +265,7 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
                         }
                         menus_end = ui.min_rect().max.x;
                         // Where the menus end on screen (moves as a narrow bar scrolls).
-                        ui.data_mut(|d| d.insert_temp(egui::Id::new("app_bar_menus_end"), menus_end));
+                        ui.data_mut(|d| d.insert_temp(egui::Id::unique("app_bar_menus_end"), menus_end));
                         let size = vec2(tools_slot_width(ui.available_width(), tools_w), ui.available_height());
                         let tools = ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.add_space(4.0);
@@ -331,7 +332,7 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 let _ = app.run("help.discord", json!({}));
                             }
                             tools_start = ui.min_rect().min.x;
-                            ui.data_mut(|d| d.insert_temp(egui::Id::new("app_bar_tools_start"), tools_start));
+                            ui.data_mut(|d| d.insert_temp(egui::Id::unique("app_bar_tools_start"), tools_start));
                             ui.min_rect().width()
                         });
                         if (tools.inner - tools_w).abs() > 0.5 {
@@ -373,8 +374,8 @@ fn caption_buttons(app: &mut DesignApp, ui: &mut egui::Ui) {
         [("window.close", "Close"), ("window.maximize", if maximized { "Restore" } else { "Maximize" }), ("window.minimize", "Minimize")]
     {
         let (rect, _) = ui.allocate_exact_size(vec2(CAPTION_BUTTON_W, APP_BAR), Sense::hover());
-        let response = ui.interact(rect, egui::Id::new(command), Sense::click());
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), label));
+        let response = ui.interact(rect, egui::Id::unique(command), Sense::click());
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label));
         let hovered = response.hovered();
         if hovered {
             ui.painter().rect_filled(rect, 0.0, if command == "window.close" { t.caption_close } else { t.hover });
@@ -430,7 +431,7 @@ pub(crate) fn resize_borders(app: &mut DesignApp, ui: &mut egui::Ui) {
         ("west", rect(r.left(), r.top() + corner, r.left() + edge, r.bottom() - corner), egui::CursorIcon::ResizeHorizontal),
         ("east", rect(r.right() - edge, r.top() + corner, r.right(), r.bottom() - corner), egui::CursorIcon::ResizeHorizontal),
     ] {
-        let response = ui.interact(region, egui::Id::new(("window_resize", name)), Sense::drag()).on_hover_cursor(cursor);
+        let response = ui.interact(region, egui::Id::unique(("window_resize", name)), Sense::drag()).on_hover_cursor(cursor);
         if response.drag_started_by(egui::PointerButton::Primary) {
             let _ = app.run("window.resize", json!({"edge": name}));
             app.flush_window_commands(ui.ctx());
@@ -579,11 +580,11 @@ const TRACKING: &[f64] = &[-100.0, -75.0, -50.0, -25.0, -10.0, -5.0, 0.0, 5.0, 1
 const PARA_MODE: &str = "ctl_text_para_mode";
 
 /// An icon and a field after it, as the Control panel lays its fields out.
-fn icon_field(ui: &mut egui::Ui, icon: &str, tip: &str, field: NumField) -> Option<f64> {
+pub(crate) fn icon_field(ui: &mut egui::Ui, icon: &str, tip: &str, field: NumField) -> Option<f64> {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(18.0, 18.0), Sense::hover());
     icons::paint(ui.painter(), r, icon, t.icon);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tip));
     let label = resp.id;
     resp.on_hover_text(tip);
     field.spinner().labelled_by(label).show(ui)
@@ -608,11 +609,15 @@ fn text_toggle(ui: &mut egui::Ui, text: &str, strike: bool, on: bool, tip: &str)
         ui.painter().rect_filled(r, 2.0, t.hover);
     }
     let col = if on { t.text_strong } else { t.icon };
-    ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(13.0), col);
+    if text == "small-caps" {
+        crate::icons::paint(ui.painter(), r, "small-caps", col);
+    } else {
+        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(13.0), col);
+    }
     if strike {
         ui.painter().line_segment([r.center() + vec2(-6.0, 0.5), r.center() + vec2(6.0, 0.5)], Stroke::new(1.2, col));
     }
-    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, tip));
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, tip));
     resp.on_hover_text(tip).clicked()
 }
 
@@ -628,7 +633,7 @@ fn control_text(app: &mut DesignApp, ui: &mut egui::Ui) {
     let attrs = panels::text_attrs(app);
     let chars = attrs.as_ref().map(|a| a["chars"].clone()).unwrap_or_default();
     let para = attrs.as_ref().map(|a| a["para"].clone()).unwrap_or_default();
-    let mode_id = egui::Id::new(PARA_MODE);
+    let mode_id = egui::Id::unique(PARA_MODE);
     let para_mode = ui.data(|d| d.get_temp::<bool>(mode_id)).unwrap_or(false);
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 3.0;
@@ -642,7 +647,7 @@ fn control_text(app: &mut DesignApp, ui: &mut egui::Ui) {
             }
             ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, text, semibold(15.0), if on { t.text_strong } else { t.text_dim });
             let tip = tr(tip);
-            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, &tip));
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, &tip));
             if resp.on_hover_text(&tip).clicked() {
                 ui.data_mut(|d| d.insert_temp(mode_id, para));
             }
@@ -656,6 +661,7 @@ fn control_text(app: &mut DesignApp, ui: &mut egui::Ui) {
     }
 }
 
+/// Draw the character-mode controls and issue their corresponding text commands.
 fn control_character(
     app: &mut DesignApp,
     ui: &mut egui::Ui,
@@ -720,7 +726,7 @@ fn control_character(
                 set = Some(json!({"underline": !ul}));
             }
         } else {
-            if text_toggle(ui, "Tᴛ", false, caps == "smallCaps", &tr("Small Caps")) {
+            if text_toggle(ui, "small-caps", false, caps == "smallCaps", &tr("Small Caps")) {
                 set = Some(json!({"capitalization": if caps == "smallCaps" { "normal" } else { "smallCaps" }}));
             }
             if text_toggle(ui, "T₁", false, pos == "subscript", &tr("Subscript")) {
@@ -1001,7 +1007,7 @@ pub(crate) fn swatch_field(ui: &mut egui::Ui, doc: &designcraft_doc::Document, c
     let (r, resp) = ui.allocate_exact_size(vec2(width, crate::widgets::FIELD_H), Sense::click());
     let resp = resp.on_hover_text(label);
     resp.widget_info(|| {
-        let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, label);
+        let mut info = egui::WidgetInfo::labeled(egui::Role::ComboBox, true, label);
         info.current_text_value = Some(cur.to_string());
         info
     });
@@ -1029,6 +1035,7 @@ const DOC_TAB_MAX_W: f32 = 260.0;
 /// Close button and padding around a tab's title.
 const DOC_TAB_PAD: f32 = 44.0;
 
+/// Draw bounded document tabs with active, dirty, preview and zoom state, plus activation and close actions.
 pub fn doc_tabs(app: &mut DesignApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 28.0), Sense::hover());
@@ -1055,8 +1062,8 @@ pub fn doc_tabs(app: &mut DesignApp, ui: &mut egui::Ui) {
         let elided = galley.elided;
         let w = (galley.size().x + zoom_label.size().x + DOC_TAB_PAD).max(if is_active { 210.0 } else { 150.0 }).min(max_w);
         let r = egui::Rect::from_min_size(egui::pos2(x, bar.min.y), vec2(w, 28.0));
-        let resp = ui.interact(r, ui.id().with(("doctab", i)), Sense::click());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, title));
+        let resp = ui.interact(r, ui.scope_id().with(("doctab", i)), Sense::click());
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, title));
         let resp = if elided {
             resp.on_hover_ui(|ui| {
                 let _ = crate::rtl::label(ui, title);
@@ -1066,8 +1073,8 @@ pub fn doc_tabs(app: &mut DesignApp, ui: &mut egui::Ui) {
         };
         ui.painter().rect_filled(r, 0.0, if is_active { t.panel } else { t.tab_strip });
         let cr = egui::Rect::from_center_size(egui::pos2(r.min.x + 18.0, r.center().y), vec2(14.0, 14.0));
-        let cresp = ui.interact(cr, ui.id().with(("docclose", i)), Sense::click());
-        cresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{close_label} {title}")));
+        let cresp = ui.interact(cr, ui.scope_id().with(("docclose", i)), Sense::click());
+        cresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{close_label} {title}")));
         ui.painter().text(
             cr.center(),
             egui::Align2::CENTER_CENTER,
@@ -1389,7 +1396,7 @@ pub(crate) fn recent_file_stat(ctx: &egui::Context, path: &str) -> RecentStat {
 }
 
 fn recent_file_stat_at(ctx: &egui::Context, path: &str, now: f64) -> RecentStat {
-    let key = egui::Id::new(("recent_stat", path));
+    let key = egui::Id::unique(("recent_stat", path));
     if let Some(st) = ctx.data(|d| d.get_temp::<RecentStat>(key))
         && (0.0..RECENT_STAT_MS).contains(&(now - st.checked))
     {
@@ -1404,7 +1411,7 @@ fn recent_file_stat_at(ctx: &egui::Context, path: &str, now: f64) -> RecentStat 
 /// The texture of a recent file's saved first-page picture, decoded once per file version.
 fn recent_preview_texture(ctx: &egui::Context, path: &str, modified: Option<std::time::SystemTime>) -> Option<egui::TextureHandle> {
     type Cached = (Option<std::time::SystemTime>, Option<egui::TextureHandle>);
-    let key = egui::Id::new(("recent_preview", path));
+    let key = egui::Id::unique(("recent_preview", path));
     if let Some((m, tex)) = ctx.data(|d| d.get_temp::<Cached>(key))
         && m == modified
     {
@@ -1539,7 +1546,7 @@ mod tests {
 
     /// The rect of an object Control panel group.
     fn group(h: &egui_kittest::Harness<'static, test_window::Window>, id: &str) -> egui::Rect {
-        h.ctx.read_response(egui::Id::new(("object_control", id))).unwrap().rect
+        h.ctx.read_response(egui::Id::unique(("object_control", id))).unwrap().rect
     }
 
     /// The rect of the node with this label, preferring the one in the Control bar's row: the
@@ -1685,12 +1692,21 @@ mod tests {
     fn long_document_names_keep_tabs_short_and_close_buttons_visible() {
         let latin = "Quarterly report with a very long file name ".repeat(6);
         let hebrew = "דוח רבעוני עם שם קובץ ארוך מאוד ".repeat(6);
-        let mut app = app();
-        for title in [latin.as_str(), hebrew.as_str(), "Short"] {
-            app.run("file.new", serde_json::json!({ "title": title })).unwrap();
+        // Use the bundled or pinned test face; optional-input builds without either skip
+        // the Hebrew tab explicitly instead of rendering tofu under the strict glyph policy.
+        let hebrew_ok = test_window::install_test_hebrew_face();
+        if !hebrew_ok {
+            eprintln!("skipped the Hebrew tab: set DESIGNCRAFT_TEST_HEBREW_FONT to the pinned NotoSansHebrew.ttf");
         }
+        let mut app = app();
+        app.run("file.new", serde_json::json!({ "title": latin })).unwrap();
+        if hebrew_ok {
+            app.run("file.new", serde_json::json!({ "title": hebrew })).unwrap();
+        }
+        app.run("file.new", serde_json::json!({ "title": "Short" })).unwrap();
         let h = test_window::open(app, vec2(1200.0, 600.0));
-        for title in [latin.as_str(), hebrew.as_str()] {
+        let titles = if hebrew_ok { vec![latin.as_str(), hebrew.as_str()] } else { vec![latin.as_str()] };
+        for title in titles {
             let tab = rect(&h, title);
             assert!(tab.width() <= super::DOC_TAB_MAX_W, "{title:?} tab is {} wide", tab.width());
             let close = rect(&h, &format!("Close {title}"));
@@ -2088,7 +2104,7 @@ mod tests {
         let mut movable_at = |at: egui::Pos2| {
             h.hover_at(at);
             h.run_steps(2);
-            crate::title_bar::window_movable(&h.ctx)
+            craft_window::title_bar::window_movable(&h.ctx)
         };
         for at in [pos2(bar.center().x, mid), pos2(bar.min.x + MAC_CONTENT_LEFT - 4.0, bar.min.y + 4.0), pos2(bar.center().x, 500.0)] {
             assert!(movable_at(at), "empty title bar or the page at {at:?}");
@@ -2205,7 +2221,7 @@ mod tests {
         }
 
         fn caption_center(&self, id: &str) -> egui::Pos2 {
-            self.ctx.read_response(egui::Id::new(id)).unwrap().rect.center()
+            self.ctx.read_response(egui::Id::unique(id)).unwrap().rect.center()
         }
     }
 
@@ -2229,7 +2245,7 @@ mod tests {
     #[test]
     fn title_area_drags_and_double_clicks_but_menus_do_not_drag() {
         let mut h = WindowHarness::new();
-        let title = h.ctx.read_response(egui::Id::new("window_title_drag")).unwrap().rect;
+        let title = h.ctx.read_response(egui::Id::unique("window_title_drag")).unwrap().rect;
         assert!(title.width() > 0.0, "there is a drag region between menus and tools");
         let p = title.center();
         let mut commands = h.press(p);
@@ -2279,8 +2295,8 @@ mod tests {
         h.size = vec2(640.0, 560.0);
         h.frame(vec![]);
         h.frame(vec![]);
-        let rect = |h: &WindowHarness, id: &str| h.ctx.read_response(egui::Id::new(id)).unwrap().rect;
-        let menus_end = |h: &WindowHarness| h.ctx.data(|d| d.get_temp::<f32>(egui::Id::new("app_bar_menus_end"))).unwrap();
+        let rect = |h: &WindowHarness, id: &str| h.ctx.read_response(egui::Id::unique(id)).unwrap().rect;
+        let menus_end = |h: &WindowHarness| h.ctx.data(|d| d.get_temp::<f32>(egui::Id::unique("app_bar_menus_end"))).unwrap();
         let (close, menus0) = (rect(&h, "window.close"), menus_end(&h));
         assert!(close.left() >= 0.0 && close.right() <= h.size.x, "{close:?}");
         let p = egui::pos2(200.0, 18.0);
@@ -2291,6 +2307,7 @@ mod tests {
                 delta: vec2(0.0, -3000.0),
                 phase: egui::TouchPhase::Move,
                 modifiers: egui::Modifiers::NONE,
+                source: egui::MouseWheelSource::Unknown,
             },
         ]);
         for _ in 0..10 {
@@ -2309,8 +2326,8 @@ mod tests {
         h.size = vec2(900.0, 560.0);
         h.frame(vec![]);
         h.frame(vec![]);
-        let drag = h.ctx.read_response(egui::Id::new("window_title_drag")).unwrap().rect;
-        let close = h.ctx.read_response(egui::Id::new("window.close")).unwrap().rect;
+        let drag = h.ctx.read_response(egui::Id::unique("window_title_drag")).unwrap().rect;
+        let close = h.ctx.read_response(egui::Id::unique("window.close")).unwrap().rect;
         assert!(drag.right() <= close.left() + 0.5, "{drag:?} {close:?}");
         let p = egui::pos2(450.0, APP_BAR + APP_BAR_BAND / 2.0);
         assert!(drag.contains(p), "{drag:?}");
@@ -2326,7 +2343,7 @@ mod tests {
         h.frame(vec![]);
         h.frame(vec![]);
         for id in ["window.minimize", "window.maximize", "window.close"] {
-            let rect = h.ctx.read_response(egui::Id::new(id)).unwrap().rect;
+            let rect = h.ctx.read_response(egui::Id::unique(id)).unwrap().rect;
             assert!(rect.left() >= 0.0 && rect.right() <= h.size.x, "{id}: {rect:?}");
             let p = rect.center();
             assert!(!h.click(p).is_empty(), "{id} remains clickable");

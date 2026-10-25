@@ -309,7 +309,7 @@ impl Exporter<'_> {
             if let Some(clip) = to_path(&c.clip.to_path(0.1)) {
                 s.push_clip_path(&clip, &krilla::paint::FillRule::NonZero);
                 s.push_transform(&tf(Affine::translate((c.clip.x0, c.clip.y0))));
-                self.graphic(s, g);
+                self.graphic(s, g, None);
                 s.pop();
                 s.pop();
             }
@@ -326,10 +326,16 @@ impl Exporter<'_> {
     fn tables(&mut self, s: &mut Surface, ft: &FrameText) {
         for t in &ft.tables {
             for c in &t.cells {
-                if let Some((sw, tint)) = &c.fill
-                    && let Some(col) = self.swatch_color(sw, *tint)
-                {
-                    self.fill_rect(s, c.rect, col);
+                if let Some((sw, tint)) = &c.fill {
+                    let fill = designcraft_doc::Fill { swatch: sw.clone(), tint: *tint, ..designcraft_doc::Fill::none() };
+                    if let Some(paint) = self.fill_paint(&fill, t.rect)
+                        && let Some(path) = to_path(&c.rect.to_path(0.1))
+                    {
+                        s.set_stroke(None);
+                        s.set_fill(Some(paint_fill(paint)));
+                        s.draw_path(&path);
+                        s.set_fill(None);
+                    }
                 }
             }
             for c in &t.cells {

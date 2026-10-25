@@ -318,7 +318,7 @@ pub fn show(ctx: &egui::Context, images: &mut Images, c: Cursor, hover: Pos2) ->
             system(c)
         }
         Mode::Painted => {
-            let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("tool-cursor"));
+            let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tool-cursor"));
             // Divide by the zoom factor so the glyph keeps its size in physical pixels.
             let scale = 1.0 / ctx.zoom_factor().max(0.01);
             let painter = ctx.layer_painter(layer);

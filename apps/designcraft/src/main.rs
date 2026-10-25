@@ -20,8 +20,6 @@ mod gpu;
 mod gpu_limits;
 mod logging;
 #[cfg(target_os = "macos")]
-mod mac_window;
-#[cfg(target_os = "macos")]
 mod native_menu;
 mod profile;
 
@@ -37,7 +35,7 @@ struct App {
     /// Documents and quit requests from Finder, the Dock and Open With.
     #[cfg(target_os = "macos")]
     apple_events: fmv_macos_events::Inbox,
-    /// The window's `movable` flag as last set; see `mac_window`.
+    /// The window's `movable` flag as last set; see `craft_window::title_bar`.
     #[cfg(target_os = "macos")]
     movable: Option<bool>,
     /// Frames begun so far.
@@ -51,39 +49,45 @@ struct App {
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.startup.enter();
-        if let Some(note) = self.startup.take_notice() {
-            self.app.status(note);
-        }
-        // The third call: two frames went through `ui`, so the first was presented and the driver
-        // survived it (a fault at the first present is what the fallback in `gpu` is for).
-        if self.frames == 2 {
-            self.startup.presented();
-        }
-        self.frames = self.frames.saturating_add(1);
-        if u64::from(self.frames) >= gpu::STARTUP_FRAMES
-            && let Some(device) = self.log_errors_after_startup.take()
-        {
-            gpu_limits::log_uncaptured_errors(&device);
-        }
-        #[cfg(target_os = "macos")]
-        {
-            if self.menu.is_none() && std::env::var_os("DESIGNCRAFT_NO_NATIVE_MENU").is_none() {
-                self.menu = Some(native_menu::NativeMenu::install(&mut self.app, ctx));
-            }
-            if let Some(m) = &mut self.menu {
-                m.poll(&mut self.app, ctx);
-            }
-            // Noted for a start again after a graphics failure, which reopens them (`gpu::restart`).
-            self.startup.opening(apple_events::poll(&self.apple_events, &mut self.app, ctx));
-        }
+        // Queue/deadline work only. A hidden `run_logic` tick also reports pass index zero, so
+        // startup counters and native-menu polling must not live here.
         self.app.logic(ctx);
         self.startup.leave();
     }
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
-        self.app.raw_input_hook(raw);
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        self.app.raw_input_hook(ctx, raw);
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.startup.enter();
+        // `App::ui` is the only signal that a real layout pass ran. A discarded multipass first
+        // pass reports index 0 once, so these once-per-frame counters/menu polls still run once.
+        if ui.ctx().current_pass_index() == 0 {
+            if let Some(note) = self.startup.take_notice() {
+                self.app.status(note);
+            }
+            // The third UI callback: two frames went through `ui`, so the first was presented and
+            // the driver survived it (a fault at the first present is what `gpu` falls back for).
+            if self.frames == 2 {
+                self.startup.presented();
+            }
+            self.frames = self.frames.saturating_add(1);
+            if u64::from(self.frames) >= gpu::STARTUP_FRAMES
+                && let Some(device) = self.log_errors_after_startup.take()
+            {
+                gpu_limits::log_uncaptured_errors(&device);
+            }
+            #[cfg(target_os = "macos")]
+            {
+                if self.menu.is_none() && std::env::var_os("DESIGNCRAFT_NO_NATIVE_MENU").is_none() {
+                    self.menu = Some(native_menu::NativeMenu::install(&mut self.app, ui.ctx()));
+                }
+                if let Some(m) = &mut self.menu {
+                    m.poll(&mut self.app, ui.ctx());
+                }
+                // Noted for a start again after a graphics failure, which reopens them (`gpu::restart`).
+                self.startup.opening(apple_events::poll(&self.apple_events, &mut self.app, ui.ctx()));
+            }
+        }
         self.app.ui(ui);
         self.startup.leave();
         #[cfg(target_os = "macos")]
@@ -91,7 +95,7 @@ impl eframe::App for App {
             discard_marked_text();
         }
         #[cfg(target_os = "macos")]
-        mac_window::sync_movable(ui.ctx(), &mut self.movable);
+        craft_window::title_bar::sync_movable(ui.ctx(), &mut self.movable);
     }
     fn on_exit(&mut self) {
         // A normal exit before the third frame is not a crash.
@@ -407,6 +411,9 @@ fn main() -> std::process::ExitCode {
             .with_fullsize_content_view(true)
             .with_titlebar_shown(false)
             .with_title_shown(false),
+        // DesignCraft's own FontDb supplies script-specific system fallbacks; egui's system-font
+        // provider would put its discovery ahead of that order and change line metrics.
+        system_font_fallback: false,
         ..Default::default()
     };
     options.viewport = options.viewport.with_app_id(APP_ID);
