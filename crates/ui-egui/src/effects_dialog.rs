@@ -116,9 +116,16 @@ fn is_on(fx: &Value, page: &str) -> bool {
 
 /// The `object.effects` params the dialog stands for.
 pub fn params(d: &Dialog) -> Value {
-    json!({"ids": d.fields.get("ids").cloned().unwrap_or(json!([])), "effects": d.fields.get("fx").cloned().unwrap_or(json!({})),
-        "opacity": d.fields.get("opacity").and_then(Value::as_f64).unwrap_or(1.0), "blend": d.fields.get("blend").and_then(Value::as_str).unwrap_or("Normal")})
+    let mut p = json!({"ids": d.fields.get("ids").cloned().unwrap_or(json!([])), "effects": d.fields.get("fx").cloned().unwrap_or(json!({})),
+        "opacity": d.fields.get("opacity").and_then(Value::as_f64).unwrap_or(1.0), "blend": d.fields.get("blend").and_then(Value::as_str).unwrap_or("Normal")});
+    if let Some(a) = d.fields.get(GLOBAL_LIGHT).and_then(Value::as_f64) {
+        p["globalLight"] = json!(a);
+    }
+    p
 }
+
+/// The global light angle as changed in the dialog (an Angle field with Use Global Light on).
+const GLOBAL_LIGHT: &str = "globalLight";
 
 /// Apply: the preview goes and the settings are made once, as one undo step.
 pub fn confirm(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
@@ -202,18 +209,28 @@ fn percent(ui: &mut egui::Ui, d: &mut Dialog, path: &[&str]) {
     }
 }
 
-fn angle(ui: &mut egui::Ui, d: &mut Dialog, path: &[&str], enabled: bool, global: f64) {
-    let mut v = if enabled { num(d, path) } else { global };
+/// The effect's own angle at `path`, or with Use Global Light (`own` false) the document's
+/// global light angle: editing it then changes that one, for every effect that uses it. The dial
+/// and the field both edit it.
+fn angle(ui: &mut egui::Ui, d: &mut Dialog, path: &[&str], own: bool, global: f64) -> egui::Response {
+    let mut v = if own { num(d, path) } else { global };
+    let put = |d: &mut Dialog, v: f64| {
+        if own {
+            set(d, path, json!(v));
+        } else {
+            d.fields.insert(GLOBAL_LIGHT.into(), json!(v));
+        }
+    };
     ui.horizontal(|ui| {
-        if let Some(a) = angle_dial(ui, v, enabled) {
+        if let Some(a) = angle_dial(ui, v, true) {
             v = a;
-            set(d, path, json!(v));
+            put(d, v);
         }
-        let r = ui.add_enabled(enabled, egui::DragValue::new(&mut v).range(-180.0..=180.0).suffix("°").max_decimals(1));
-        if r.changed() {
-            set(d, path, json!(v));
+        if ui.add(egui::DragValue::new(&mut v).range(-180.0..=180.0).suffix("°").max_decimals(1)).changed() {
+            put(d, v);
         }
-    });
+    })
+    .response
 }
 
 /// InDesign's angle dial: a circle with a radius pointing where the light comes from (0° to the
@@ -296,6 +313,7 @@ fn dial_angle(c: egui::Pos2, p: egui::Pos2) -> Option<f64> {
     let d = p - c;
     // Straight left is 180° (not −180°, which a negative zero would give).
     (d.length() > 2.0).then(|| f64::from((-d.y).atan2(d.x)).to_degrees().round()).map(|a| if a <= -180.0 { 180.0 } else { a })
+    r
 }
 
 fn flag(ui: &mut egui::Ui, d: &mut Dialog, path: &[&str], label: &str) {
@@ -361,7 +379,9 @@ fn page_ui(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, page: &str) {
     let lang = app.ui.language.clone();
     let tr = |s: &str| crate::i18n::tr(&lang, s).to_string();
     let unit = app.session.active().map_or(Unit::Points, |st| st.doc.settings.horizontal_units);
-    let global = app.session.active().map_or(120.0, |st| st.doc.settings.global_light);
+    // The global light angle as the dialog will set it (an edit in it shows at once).
+    let global =
+        d.fields.get(GLOBAL_LIGHT).and_then(Value::as_f64).unwrap_or_else(|| app.session.active().map_or(120.0, |st| st.doc.settings.global_light));
     let row = |ui: &mut egui::Ui, l: &str| crate::rtl::label(ui, tr(l));
     crate::rtl::label(ui, egui::RichText::new(tr(PAGES.iter().find(|p| p.0 == page).map_or("Transparency", |p| p.1))).font(semibold(14.0)));
     let grid = |id: &str| egui::Grid::new(("fx_grid", id.to_string())).num_columns(4).spacing([8.0, 6.0]);
@@ -743,6 +763,32 @@ mod tests {
             }
         }
         texts
+    }
+
+    /// With Use Global Light on, the Angle is the document's global light and stays editable:
+    /// a change there is applied to the document with the effects (it was greyed out).
+    #[test]
+    fn the_angle_with_global_light_sets_the_global_light() {
+        let (mut app, _) = app_with_frame();
+        let ctx = egui::Context::default();
+        crate::theme::install_fonts(&ctx, "en");
+        crate::menus::activate(&mut app, "object.dropShadow", &Value::Null);
+        let d = app.ui.dialog.as_mut().unwrap();
+        set(d, &["dropShadow", "globalLight"], json!(true));
+        frame(&mut app, &ctx);
+        // The field shows the global angle and is enabled: a DragValue that isn't disabled.
+        let global = app.session.doc().unwrap().doc.settings.global_light;
+        let mut d = app.ui.dialog.clone().unwrap();
+        let ui_ctx = egui::Context::default();
+        let mut enabled = false;
+        let mut out = ui_ctx.run_ui(egui::RawInput::default(), |ui| {
+            enabled = angle(ui, &mut d, &["dropShadow", "angle"], false, global).enabled();
+        });
+        out.textures_delta.clear();
+        assert!(enabled, "the Angle stays editable with Use Global Light");
+        d.fields.insert(GLOBAL_LIGHT.into(), json!(15.0));
+        confirm(&mut app, &d).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.settings.global_light, 15.0);
     }
 
     #[test]
