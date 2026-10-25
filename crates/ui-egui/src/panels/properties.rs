@@ -46,11 +46,11 @@ pub(crate) fn place<R>(ui: &mut Ui, r: Rect, f: impl FnOnce(&mut Ui) -> R) -> R 
 }
 
 fn temp_bool(ui: &Ui, key: &str, default: bool) -> bool {
-    ui.data(|d| d.get_temp::<bool>(egui::Id::new(key))).unwrap_or(default)
+    ui.data(|d| d.get_temp::<bool>(egui::Id::unique(key))).unwrap_or(default)
 }
 
 fn set_temp_bool(ui: &Ui, key: &str, v: bool) {
-    ui.data_mut(|d| d.insert_temp(egui::Id::new(key), v));
+    ui.data_mut(|d| d.insert_temp(egui::Id::unique(key), v));
 }
 
 /// Label of the current selection for the selection-type band.
@@ -402,7 +402,7 @@ fn document_sections(app: &mut DesignApp, ui: &mut Ui) {
         for (k, (icon, tip, v, x, y)) in fields.into_iter().enumerate() {
             let ir = sub(b, x, y + 2.0, 17.0, 17.0);
             icons::paint(ui.painter(), ir, icon, t.icon);
-            ui.interact(ir, ui.id().with(("micon", k)), Sense::hover()).on_hover_ui(|ui| {
+            ui.interact(ir, ui.scope_id().with(("micon", k)), Sense::hover()).on_hover_ui(|ui| {
                 crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, tip));
             });
             let nv = place(ui, sub(b, x + 20.0, y, 73.0, FIELD_H), |ui| {
@@ -545,7 +545,7 @@ pub(crate) fn ref_point_proxy(ui: &mut Ui, r: Rect, cur: u8) -> Option<u8> {
     for i in 0..9u8 {
         let c = pos2(r.min.x + pitch * (i % 3) as f32 + pitch / 2.0, r.min.y + pitch * (i / 3) as f32 + pitch / 2.0);
         let sq = Rect::from_center_size(c, vec2(6.0, 6.0));
-        let resp = ui.interact(sq.expand(1.5), ui.id().with(("refpt", i)), Sense::click());
+        let resp = ui.interact(sq.expand(1.5), ui.scope_id().with(("refpt", i)), Sense::click());
         if i == cur {
             ui.painter().rect_filled(sq.expand(0.5), 0.0, egui::Color32::WHITE);
         } else {
@@ -664,7 +664,7 @@ fn transform_angles(app: &mut DesignApp, ui: &mut Ui, rp: u8) {
             let x = if col == 0 { 40.0 } else { 120.0 };
             let ir = sub(b, x, yy + 2.0, 17.0, 17.0);
             icons::paint(ui.painter(), ir, icon, t.icon);
-            ui.interact(ir, ui.id().with(id), Sense::hover()).on_hover_text(crate::i18n::tr(&lang, tip));
+            ui.interact(ir, ui.scope_id().with(id), Sense::hover()).on_hover_text(crate::i18n::tr(&lang, tip));
             if let Some(v) = place(ui, sub(b, x + 19.0, yy, 54.0, FIELD_H), |ui| widgets::number(ui, id, tv_get(key), suffix, 54.0, 1)) {
                 set.insert(key.into(), json!(v));
             }
@@ -686,7 +686,7 @@ fn transform_angles(app: &mut DesignApp, ui: &mut Ui, rp: u8) {
         ] {
             let label = crate::i18n::tr(&lang, tip);
             let resp = icon_toggle(ui, icon, false, label);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
             if resp.clicked() {
                 let _ = app.run(cmd, params);
             }
@@ -814,12 +814,12 @@ fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     let chip = sub(b, 4.0, 2.0, 17.0, 17.0);
     widgets::paint_chip(ui.painter(), chip, fc, fg);
     ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
-    let resp = ui.interact(chip, ui.id().with("fillchip"), Sense::click()).on_hover_text(format!(
+    let resp = ui.interact(chip, ui.scope_id().with("fillchip"), Sense::click()).on_hover_text(format!(
         "{}: {}",
         crate::i18n::tr(&app.ui.language, "Fill"),
         i.fill
     ));
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Fill swatch"));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Fill swatch"));
     swatch_menu(app, &resp, &doc, &i.fill, false, i.is_text && i.count == 1, false);
     crate::rtl::paint(
         ui.painter(),
@@ -836,12 +836,12 @@ fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     let chip = sub(b, 4.0, 2.0, 17.0, 17.0);
     widgets::paint_stroke_chip(ui.painter(), chip, sc, egui::Color32::from_gray(20));
     ui.painter().rect_stroke(chip, 0.0, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
-    let resp = ui.interact(chip, ui.id().with("strokechip"), Sense::click()).on_hover_text(format!(
+    let resp = ui.interact(chip, ui.scope_id().with("strokechip"), Sense::click()).on_hover_text(format!(
         "{}: {}",
         crate::i18n::tr(&app.ui.language, "Stroke"),
         i.stroke
     ));
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Stroke swatch"));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Stroke swatch"));
     swatch_menu(app, &resp, &doc, &i.stroke, true, i.is_text && i.count == 1, false);
     if place(ui, sub(b, 34.0, 0.0, 56.0, FIELD_H), |ui| link_label(ui, crate::i18n::tr(&app.ui.language, "Stroke"), 56.0)).clicked() {
         show_panel(app, "stroke");
@@ -884,7 +884,7 @@ fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
         let _ = app.run("object.opacity", json!({"opacity": v / 100.0}));
     }
     let more = sub(b, 147.0, 0.0, 18.0, FIELD_H);
-    let mresp = ui.interact(more, ui.id().with("opmore"), Sense::click());
+    let mresp = ui.interact(more, ui.scope_id().with("opmore"), Sense::click());
     ui.painter().rect(more, 0.0, if mresp.hovered() { t.hover } else { t.input }, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
     icons::paint(ui.painter(), more.shrink(4.0), "chevron-right", t.icon);
     if mresp.clicked() {
@@ -916,7 +916,7 @@ fn swatch_menu(
 ) {
     let lang = app.ui.language.clone();
     let tr = |s: &'static str| crate::i18n::tr(&lang, s);
-    let to_text_id = egui::Id::new(("swatch_apply_to_text", stroke));
+    let to_text_id = egui::Id::unique(("swatch_apply_to_text", stroke));
     let to_text = text_only || text_frame && resp.ctx.data(|d| d.get_temp::<bool>(to_text_id)).unwrap_or(false);
     // What the popup shows and changes: the frame's fill or stroke, or its text's.
     let (key, tint_key) = if stroke { ("stroke", "strokeTint") } else { ("fill", "fillTint") };
@@ -1167,6 +1167,9 @@ fn text_style_section(app: &mut DesignApp, ui: &mut Ui) {
     let shown = crate::i18n::style_name(&app.ui.language, &cur);
     let label = if ov > 0 { format!("{shown}+") } else { shown.to_string() };
     let resp = widgets::dropdown_h(ui, "", fw, 34.0);
+    // The row paints its own swatch and name, so the dropdown itself has no text to name it.
+    let style_kind = crate::i18n::tr(&app.ui.language, if tab == 0 { "Paragraph Style" } else { "Character Style" }).to_owned();
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &style_kind));
     // "Ag" swatch + style name.
     let ag = Rect::from_min_size(resp.rect.min + vec2(6.0, 6.0), vec2(22.0, 22.0));
     ui.painter().rect_filled(ag, 1.0, egui::Color32::WHITE);
@@ -1254,7 +1257,7 @@ fn text_appearance_section(app: &mut DesignApp, ui: &mut Ui) {
         if k == 0 {
             ui.painter().text(chip.center(), egui::Align2::CENTER_CENTER, "T", crate::theme::semibold(12.0), tc);
         }
-        let resp = ui.interact(chip, ui.id().with(("tchip", k)), Sense::click()).on_hover_text(format!("{label}: {sw}"));
+        let resp = ui.interact(chip, ui.scope_id().with(("tchip", k)), Sense::click()).on_hover_text(format!("{label}: {sw}"));
         swatch_menu(app, &resp, &doc, &sw, k != 0, false, true);
         if k == 0 {
             crate::rtl::paint(
@@ -1296,6 +1299,9 @@ fn character_section(app: &mut DesignApp, ui: &mut Ui) {
     let fonts = super::fonts(app);
     let menu = super::font_menu(app);
     let resp = widgets::dropdown(ui, "", fw);
+    // A painted search icon and family name, as in the font menus: name the field itself.
+    let family_label = crate::i18n::tr(&app.ui.language, "Font Family:").to_owned();
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &family_label));
     let r = resp.rect;
     icons::paint(ui.painter(), Rect::from_min_size(r.min + vec2(3.0, 3.0), vec2(14.0, 14.0)), "search", t.icon);
     widgets::chevron_down(ui.painter(), r.min + vec2(22.0, 10.5), t.icon);
@@ -1371,8 +1377,8 @@ fn half_field_or_clear(ui: &mut Ui, b: Rect, right: bool, y: f32, half: f32, ico
     let x = if right { half + 10.0 } else { 0.0 };
     let ir = sub(b, x, y + 1.0, 19.0, 19.0);
     icons::paint(ui.painter(), ir, icon, t.icon);
-    let resp = ui.interact(ir, ui.id().with(("half_icon", icon)), Sense::hover());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, tip));
+    let resp = ui.interact(ir, ui.scope_id().with(("half_icon", icon)), Sense::hover());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tip));
     let label = resp.id;
     resp.on_hover_text(tip);
     place(ui, sub(b, x + 24.0, y, half - 24.0, FIELD_H), |ui| field.width(half - 24.0).labelled_by(label).show_or_clear(ui))
@@ -1438,7 +1444,7 @@ fn character_more(app: &mut DesignApp, ui: &mut Ui, c: &Value, fw: f32) {
     let resp = place(ui, sub(row, 0.0, 0.0, half, FIELD_H), |ui| widgets::dropdown(ui, crate::i18n::tr(&lang_ui, &lang), half)).on_hover_ui(|ui| {
         crate::rtl::label(ui, label.clone());
     });
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, &label));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &label));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(half);
         egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| language_menu(app, ui, &lang));
@@ -1453,7 +1459,7 @@ fn character_more(app: &mut DesignApp, ui: &mut Ui, c: &Value, fw: f32) {
     let (ul, st) = (c["underline"].as_bool().unwrap_or(false), c["strikethrough"].as_bool().unwrap_or(false));
     let buttons: [(&str, &str, bool, Value); 6] = [
         ("TT", "All Caps", caps == "allCaps", json!({"capitalization": if caps == "allCaps" { "normal" } else { "allCaps" }})),
-        ("Tᴛ", "Small Caps", caps == "smallCaps", json!({"capitalization": if caps == "smallCaps" { "normal" } else { "smallCaps" }})),
+        ("small-caps", "Small Caps", caps == "smallCaps", json!({"capitalization": if caps == "smallCaps" { "normal" } else { "smallCaps" }})),
         ("T¹", "Superscript", pos == "superscript", json!({"position": if pos == "superscript" { "normal" } else { "superscript" }})),
         ("T₁", "Subscript", pos == "subscript", json!({"position": if pos == "subscript" { "normal" } else { "subscript" }})),
         ("T̲", "Underline", ul, json!({"underline": !ul})),
@@ -1463,7 +1469,7 @@ fn character_more(app: &mut DesignApp, ui: &mut Ui, c: &Value, fw: f32) {
     let row = block(ui, 22.0);
     for (i, (text, tip, on, attrs)) in buttons.into_iter().enumerate() {
         let r = Rect::from_center_size(row.min + vec2(pitch * (i as f32 + 0.5), 11.0), vec2(26.0, 22.0));
-        let resp = ui.interact(r, ui.id().with(("case", i)), Sense::click());
+        let resp = ui.interact(r, ui.scope_id().with(("case", i)), Sense::click());
         let t = Tokens::get(ui.ctx());
         if on {
             ui.painter().rect_filled(r, 2.0, t.tool_active);
@@ -1471,13 +1477,17 @@ fn character_more(app: &mut DesignApp, ui: &mut Ui, c: &Value, fw: f32) {
             ui.painter().rect_filled(r, 2.0, t.hover);
         }
         let col = if on { t.text_strong } else { t.icon };
-        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(13.0), col);
+        if text == "small-caps" {
+            crate::icons::paint(ui.painter(), r, "small-caps", col);
+        } else {
+            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(13.0), col);
+        }
         // Strikethrough: the T struck through (a combining stroke doesn't draw in every font).
         if i == 5 {
             ui.painter().line_segment([r.center() + vec2(-6.0, 0.5), r.center() + vec2(6.0, 0.5)], Stroke::new(1.2, col));
         }
         let tip = tr(tip);
-        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, &tip));
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, on, &tip));
         if resp.on_hover_text(&tip).clicked() {
             let _ = app.run("type.char", json!({"attrs": attrs}));
         }
@@ -1709,7 +1719,7 @@ pub(crate) fn kerning_control(app: &mut DesignApp, ui: &mut egui::Ui, id: &str, 
     };
     let resp = widgets::dropdown(ui, crate::i18n::tr(&app.ui.language, &label), width);
     let name = crate::i18n::tr(&app.ui.language, "Kerning");
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, name));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, name));
     egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         for (text, v) in [("Metrics", json!({"kind": "metrics"})), ("Optical", json!({"kind": "optical"})), ("0", json!({"kind": "none"}))] {
             if ui.selectable_label(label == text, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, text))).clicked() {
@@ -1720,7 +1730,13 @@ pub(crate) fn kerning_control(app: &mut DesignApp, ui: &mut egui::Ui, id: &str, 
         ui.separator();
         // A manual value in 1/1000 em: after each selected character, or between the two at a caret.
         let field = format!("{id}_manual");
-        if let Some(v) = NumField::number(&field, Some(manual.unwrap_or(0.0)), "", 0).width(90.0).spinner().step(5.0).range(-1000.0, 10000.0).show(ui)
+        if let Some(v) = NumField::number(&field, Some(manual.unwrap_or(0.0)), "", 0)
+            .name("Manual Kerning")
+            .width(90.0)
+            .spinner()
+            .step(5.0)
+            .range(-1000.0, 10000.0)
+            .show(ui)
         {
             let _ = app.run("type.kernPair", json!({"kerning": {"kind": "manual", "value": v}}));
         }
@@ -1742,10 +1758,11 @@ pub fn character_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     let lang = c["language"].as_str().unwrap_or("English: USA").to_string();
     ui.horizontal(|ui| {
         caption(ui, crate::i18n::tr(&app.ui.language, "Language"));
-        egui::ComboBox::from_id_salt("char_language")
+        let combo = egui::ComboBox::from_id_salt("char_language")
             .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, &lang)))
             .width(170.0)
             .show_ui(ui, |ui| language_menu(app, ui, &lang));
+        let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Language"));
     });
     // Digits (World-Ready): how the figures 0-9 are drawn (Arabic 0123, Hindi ٠١٢٣, Farsi ۰۱۲۳).
     let digits = c["digits"].as_str().unwrap_or("default").to_string();
@@ -1755,13 +1772,14 @@ pub fn character_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
             .iter()
             .find(|o| o.0 == digits)
             .map_or_else(|| digit_label(&app.ui.language, DIGIT_OPTIONS[0]), |o| digit_label(&app.ui.language, *o));
-        egui::ComboBox::from_id_salt("char_digits").selected_text(crate::rtl::widget(ui, cur)).width(150.0).show_ui(ui, |ui| {
+        let combo = egui::ComboBox::from_id_salt("char_digits").selected_text(crate::rtl::widget(ui, cur)).width(150.0).show_ui(ui, |ui| {
             for o in DIGIT_OPTIONS {
                 if ui.selectable_label(o.0 == digits, crate::rtl::widget(ui, digit_label(&app.ui.language, o))).clicked() {
                     let _ = app.run("type.char", json!({"attrs": {"digits": o.0}}));
                 }
             }
         });
+        let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Digits"));
     });
     // Two columns: Size, Kerning and Baseline on the left, Leading and Tracking on the right. A
     // column's captions share the width of its widest one and each field takes the rest of the
@@ -1791,7 +1809,7 @@ pub fn character_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         }
     });
     ui.horizontal(|ui| {
-        caption(ui, crate::i18n::tr(&app.ui.language, "Color"));
+        caption(ui, crate::i18n::tr(&app.ui.language, "Color:"));
         super::swatch_picker(app, ui, "tfill", c["fill"].as_str().map(str::to_string), |app, n| {
             let _ = app.run("type.char", json!({"attrs": {"fill": n}}));
         });
@@ -1898,7 +1916,7 @@ pub fn character_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                 ui.end_row();
             });
             ui.horizontal(|ui| {
-                caption(ui, crate::i18n::tr(&app.ui.language, "Color"));
+                caption(ui, crate::i18n::tr(&app.ui.language, "Color:"));
                 let cur = c[format!("{key}Color")].as_str().filter(|s| !s.is_empty()).map(str::to_string);
                 super::swatch_picker(app, ui, &format!("{key}c"), cur.clone(), |app, n| {
                     let _ = app.run("type.char", json!({"attrs": {format!("{key}Color"): n}}));
@@ -2089,9 +2107,10 @@ fn paragraph_panel_menu(app: &mut DesignApp, ui: &mut Ui, p: &Value) {
     if item(ui, "Balance Ragged Lines", Some(balance), true) {
         attrs = Some(json!({"balanceRagged": !balance}));
     }
-    let optical = p["opticalMargin"].as_bool().unwrap_or(false);
-    if item(ui, "Optical Margin Alignment", Some(optical), true) {
-        attrs = Some(json!({"opticalMargin": !optical}));
+    // Story-wide Optical Margin Alignment is in the Story panel.
+    let ignore = p["ignoreOpticalMargin"].as_bool().unwrap_or(false);
+    if item(ui, "Ignore Optical Margin", Some(ignore), true) {
+        attrs = Some(json!({"ignoreOpticalMargin": !ignore}));
     }
     ui.separator();
     for (label, id) in [
@@ -2215,7 +2234,7 @@ pub fn stroke_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
             StrokeType::Style { name } => name.clone(),
             k => k.label().to_string(),
         };
-        egui::ComboBox::from_id_salt("stype")
+        let combo = egui::ComboBox::from_id_salt("stype")
             .selected_text(crate::rtl::widget(
                 ui,
                 if matches!(st.kind, StrokeType::Style { .. }) { &shown } else { crate::i18n::tr(&app.ui.language, &shown) },
@@ -2251,10 +2270,11 @@ pub fn stroke_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                     }
                 }
             });
+        let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Type"));
         ui.end_row();
         for (key, label, cur, flip) in [("start", "Start/End:", st.start, true), ("end", "", st.end, false)] {
             caption(ui, crate::i18n::tr(&app.ui.language, label));
-            egui::ComboBox::from_id_salt(key)
+            let combo = egui::ComboBox::from_id_salt(key)
                 .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, cur.label())))
                 .width(140.0)
                 .show_ui(ui, |ui| {
@@ -2267,6 +2287,9 @@ pub fn stroke_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                         });
                     }
                 });
+            // The second arrowhead reuses the shared caption, so it needs its own semantic name.
+            let name = crate::i18n::tr(&app.ui.language, if flip { "Start/End" } else { "End" }).to_owned();
+            let _ = crate::widgets::name_combo(combo, name);
             ui.end_row();
         }
         caption(ui, crate::i18n::tr(&app.ui.language, "Gap Color:"));
@@ -2371,7 +2394,7 @@ pub fn wrap_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     let u = units(app);
     let offsets = info.as_ref().map(|i| i.wrap_offsets);
     // Linked while the offsets are all the same, until the link is clicked.
-    let linked_id = egui::Id::new("wrap_offsets_linked");
+    let linked_id = egui::Id::unique("wrap_offsets_linked");
     let linked = ui.data(|d| d.get_temp::<bool>(linked_id)).unwrap_or_else(|| offsets.is_none_or(|o| o.iter().all(|v| (v - o[0]).abs() < 1e-9)));
     let mut set: Option<[f64; 4]> = None;
     ui.add_enabled_ui(mode != "none" && info.is_some(), |ui| {
@@ -2450,16 +2473,17 @@ fn wrap_combo(
     ui.horizontal(|ui| {
         caption(ui, crate::i18n::tr(&app.ui.language, caption_text));
         let shown = opts.iter().chain(shown_only).find(|o| o.0 == cur).map_or(cur, |o| o.1).to_string();
-        egui::ComboBox::from_id_salt(salt).selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, &shown))).width(170.0).show_ui(
-            ui,
-            |ui| {
+        let combo = egui::ComboBox::from_id_salt(salt)
+            .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, &shown)))
+            .width(170.0)
+            .show_ui(ui, |ui| {
                 for (k, l) in opts {
                     if ui.selectable_label(*k == cur, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, l))).clicked() {
                         let _ = app.run("object.textWrap", json!({ key: k }));
                     }
                 }
-            },
-        );
+            });
+        let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, caption_text));
     });
 }
 
@@ -2621,7 +2645,7 @@ pub fn links_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     let Some(st) = app.session.active() else { return };
     let t = Tokens::get(ui.ctx());
     // The list checks files on disk: refresh it at most twice a second.
-    let key = egui::Id::new("links_panel");
+    let key = egui::Id::unique("links_panel");
     let now = ui.input(|i| i.time);
     let rev = (st.uid, st.revision);
     let cached: Option<(f64, (u64, u64), Vec<Value>)> = ui.data(|d| d.get_temp(key));
@@ -2637,7 +2661,7 @@ pub fn links_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&app.ui.language, "No placed graphics.")).color(t.text_dim));
         return;
     }
-    let sel_key = egui::Id::new("links_panel_sel");
+    let sel_key = egui::Id::unique("links_panel_sel");
     let mut chosen: Option<u64> = ui.data(|d| d.get_temp(sel_key));
     // Leave room for Status and Page/PPI instead of widening the grid for long source paths.
     let name_width = (ui.available_width() - 160.0).max(50.0);
@@ -2863,7 +2887,7 @@ pub fn effects_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         B::Luminosity,
     ];
     ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("blend")
+        let combo = egui::ComboBox::from_id_salt("blend")
             .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, it.blend.label())))
             .width(130.0)
             .show_ui(ui, |ui| {
@@ -2873,6 +2897,7 @@ pub fn effects_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                     }
                 }
             });
+        let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Blending"));
         caption(ui, crate::i18n::tr(&app.ui.language, "Opacity"));
         if let Some(v) = number(ui, "eop", Some(it.opacity as f64 * 100.0), "%", 46.0, 0) {
             let _ = app.run("object.opacity", json!({"opacity": (v / 100.0).clamp(0.0, 1.0)}));
@@ -3053,7 +3078,8 @@ fn variable_font_axes(app: &mut DesignApp, ui: &mut egui::Ui, family: &str, styl
             ui.spacing_mut().slider_width = (ui.available_width() - PANEL_FIELD_W - ui.spacing().item_spacing.x * 2.0).max(40.0);
             let (step, decimals) = axis_step(*min, *max);
             // The field beside the slider takes typed values, so the slider's own is hidden.
-            let slider = ui.add(egui::Slider::new(&mut value.1, *min..=*max).step_by(f64::from(step)).show_value(false));
+            let slider =
+                ui.add(egui::Slider::new(&mut value.1, *min..=*max).step_by(f64::from(step)).show_value(false)).accessible_name((*name).to_owned());
             // Only the user's own change counts: the slider also reports one when it snaps a value
             // that is off its steps, which it would then do on every frame.
             let pressed = slider.is_pointer_button_down_on() || slider.dragged();
@@ -3207,6 +3233,7 @@ mod tests {
                 }),
             );
             doc.item_mut(id).unwrap().content = Content::Graphic(Graphic {
+                layer_options: None,
                 asset: aid,
                 size: (72.0, 72.0),
                 xf: designcraft_geom::Affine::IDENTITY,
@@ -3359,7 +3386,7 @@ mod tests {
         let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
                 // The panel's fonts are installed before its first frame.
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -3449,6 +3476,22 @@ mod tests {
         h.get_by_label("☰").click();
         h.run_steps(3);
         let _ = h.get_by_label("✓ Only Align First Line to Grid");
+    }
+
+    #[test]
+    fn paragraph_panel_menu_toggles_ignore_optical_margin() {
+        let mut h = panel_harness(text_app(), paragraph_panel);
+        h.run_steps(3);
+        h.get_by_label("☰").click();
+        h.run_steps(3);
+        h.get_by_label("   Ignore Optical Margin").click();
+        h.run_steps(3);
+        assert_eq!(text_attrs(h.state_mut()).unwrap()["para"]["ignoreOpticalMargin"], true);
+        h.get_by_label("☰").click();
+        h.run_steps(3);
+        h.get_by_label("✓ Ignore Optical Margin").click();
+        h.run_steps(3);
+        assert_eq!(text_attrs(h.state_mut()).unwrap()["para"]["ignoreOpticalMargin"], false);
     }
 
     #[test]
@@ -3548,7 +3591,7 @@ mod tests {
     fn panel_harness(app: DesignApp, panel: fn(&mut DesignApp, &mut egui::Ui)) -> Harness<'static, DesignApp> {
         Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
             move |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -3675,7 +3718,7 @@ mod tests {
         // The app commits a preview no panel held at the start of each frame (DesignApp::ui).
         let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -3717,8 +3760,8 @@ mod tests {
         // The caption and the control share the name: click the control.
         h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Kerning").click();
         h.run_steps(2);
-        // The menu's field is drawn after the panel's own fields.
-        let field = h.get_all_by_role(egui::accesskit::Role::TextInput).last().unwrap();
+        // Address the manual-value editor by semantics, not tree traversal order.
+        let field = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Manual Kerning");
         field.focus();
         field.type_text("-40");
         h.run_steps(1);
@@ -3736,7 +3779,7 @@ mod tests {
         h.run_steps(3);
         h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Kerning").click();
         h.run_steps(2);
-        let field = h.get_all_by_role(egui::accesskit::Role::TextInput).last().unwrap();
+        let field = h.get_by_role_and_label(egui::accesskit::Role::TextInput, "Manual Kerning");
         field.focus();
         field.type_text("-80");
         h.run_steps(1);
@@ -3758,7 +3801,7 @@ mod tests {
         assert_ne!(before, "[Paper]");
         let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -3789,7 +3832,7 @@ mod tests {
     fn panel(app: DesignApp) -> Harness<'static, DesignApp> {
         let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -4127,7 +4170,7 @@ fn selected_container(app: &DesignApp) -> Option<(designcraft_doc::Item, Vec<des
 fn flex_grid(ui: &mut Ui, r: Rect, f: Option<&designcraft_doc::FlexLayout>) -> Option<u8> {
     use designcraft_doc::{FlexAlign, FlexJustify};
     let t = Tokens::get(ui.ctx());
-    let resp = ui.interact(r, ui.id().with("flex_grid"), Sense::click());
+    let resp = ui.interact(r, ui.scope_id().with("flex_grid"), Sense::click());
     ui.painter().rect_stroke(r, 2.0, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
     let cell = r.width() / 3.0;
     let pos = |a: FlexAlign| match a {
@@ -4315,7 +4358,7 @@ fn flex_section(app: &mut DesignApp, ui: &mut Ui) {
         {
             let ir = sub(b, x, y + 2.0, 17.0, 17.0);
             icons::paint(ui.painter(), ir, icon, t.icon);
-            ui.interact(ir, ui.id().with(("flex_pad", k)), Sense::hover()).on_hover_ui(|ui| {
+            ui.interact(ir, ui.scope_id().with(("flex_pad", k)), Sense::hover()).on_hover_ui(|ui| {
                 crate::rtl::label(ui, tr(tip));
             });
             let value = f.as_ref().map(|_| pad[k]);
@@ -4356,7 +4399,7 @@ fn flex_section(app: &mut DesignApp, ui: &mut Ui) {
             let y = 2.0 * FIELD_H + 10.0;
             let ir = sub(b, x, y + 2.0, 17.0, 17.0);
             icons::paint(ui.painter(), ir, icon, if live { t.icon } else { t.text_dim });
-            ui.interact(ir, ui.id().with(("flex_gap", k)), Sense::hover()).on_hover_ui(|ui| {
+            ui.interact(ir, ui.scope_id().with(("flex_gap", k)), Sense::hover()).on_hover_ui(|ui| {
                 crate::rtl::label(ui, tr(tip));
             });
             let nv = place(ui, sub(b, x + 20.0, y, 76.0, FIELD_H), |ui| {

@@ -84,7 +84,10 @@ mod tests {
             assert!(command.contains(&"print-scaling=auto-fit"));
             assert!(!command.iter().any(|a| a.starts_with("sides=")));
         } else {
-            assert_eq!(command[0], "powershell");
+            assert_eq!(
+                command,
+                ["xps-print", "printer=Office", "copies=2", "collate=true", "duplex=(queue default)", "scaling=shrink-to-fit", "color=color"]
+            );
         }
         assert!(r["bytes"].as_u64().unwrap() > 500);
         assert!(s.execute("file.print", &json!({"pages": "9", "dryRun": true})).is_err());

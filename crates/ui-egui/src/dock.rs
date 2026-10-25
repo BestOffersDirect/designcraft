@@ -23,6 +23,7 @@ pub const ICON_PANELS: &[(&str, &str, &str)] = &[
     ("typography", "Typography", "panel-typography"),
     ("glyphs", "Glyphs", "panel-character"),
     ("paragraph", "Paragraph", "panel-paragraph"),
+    ("story", "Story", "panel-text-frame"),
     ("textWrap", "Text Wrap", "panel-wrap"),
     ("table", "Table", "panel-table"),
     ("align", "Align", "panel-align"),
@@ -90,11 +91,9 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                     }
                     ui.painter().galley(egui::pos2(r.min.x + 13.0, r.center().y - g.size().y / 2.0), g, Color32::WHITE);
                     ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0, t.border));
-                    let response = craft_ui::tabs::Tab::new(ui.id().with(("docktab", *id)), label, active).sense(Sense::click_and_drag()).show_at(
-                        ui,
-                        r,
-                        |_, _| {},
-                    );
+                    let response = craft_ui::tabs::Tab::new(ui.scope_id().with(("docktab", *id)), label, active)
+                        .sense(Sense::click_and_drag())
+                        .show_at(ui, r, |_, _| {});
                     if response.clicked() {
                         app.ui.dock_tab = id.to_string();
                     }
@@ -102,7 +101,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                     x += w;
                 }
                 let menu_r = egui::Rect::from_min_size(egui::pos2(strip.max.x - 24.0, strip.min.y + 4.0), vec2(18.0, 18.0));
-                let menu = ui.interact(menu_r, ui.id().with("dock-menu"), Sense::click());
+                let menu = ui.interact(menu_r, ui.scope_id().with("dock-menu"), Sense::click());
                 if menu.hovered() {
                     ui.painter().rect_filled(menu_r, 3.0, t.hover);
                 }
@@ -189,7 +188,7 @@ fn panel_entry(id: &str) -> Option<(&'static str, &'static str, &'static str)> {
 fn icon_clicked(app: &mut DesignApp, ui: &mut egui::Ui, id: &str, response: &egui::Response) {
     if response.clicked() {
         if app.ui.floating.iter().any(|(p, _)| p == id) {
-            ui.ctx().move_to_top(egui::LayerId::new(egui::Order::Middle, egui::Id::new(("floating_panel", id))));
+            ui.ctx().move_to_top(egui::LayerId::new(egui::Order::Middle, egui::Id::unique(("floating_panel", id))));
         } else {
             let open = app.ui.open_panel.as_deref() == Some(id);
             app.ui.open_panel = if open { None } else { Some(id.to_string()) };
@@ -216,10 +215,10 @@ pub fn flyout(app: &mut DesignApp, ctx: &egui::Context) {
     let t = Tokens::get(ctx);
     let label = crate::i18n::tr(&app.ui.language, panel_label(&id)).to_owned();
     let screen = ctx.content_rect();
-    let dock_w = if app.ui.dock_expanded { ctx.memory(|m| m.area_rect(egui::Id::new("dock")).map(|r| r.width())).unwrap_or(280.0) } else { 0.0 };
+    let dock_w = if app.ui.dock_expanded { ctx.memory(|m| m.area_rect(egui::Id::unique("dock")).map(|r| r.width())).unwrap_or(280.0) } else { 0.0 };
     let pos = egui::pos2(screen.max.x - icon_column_width(app) - dock_w - 262.0, 120.0);
     let mut open = true;
-    egui::Area::new(egui::Id::new("panel_flyout")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+    egui::Area::new(egui::Id::unique("panel_flyout")).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).fill(t.panel).inner_margin(egui::Margin::same(0)).show(ui, |ui| {
             ui.set_width(256.0);
             // A previous shorter flyout must not constrain the next panel's scroll viewport.
@@ -228,18 +227,18 @@ pub fn flyout(app: &mut DesignApp, ctx: &egui::Context) {
             ui.painter().rect_filled(strip, 0.0, t.panel_darker);
             crate::rtl::paint(ui.painter(), strip.min + vec2(10.0, 13.0), egui::Align2::LEFT_CENTER, &label, semibold(12.0), t.text_strong);
             let close = egui::Rect::from_min_size(egui::pos2(strip.max.x - 22.0, strip.min.y + 4.0), vec2(18.0, 18.0));
-            if ui.interact(close, ui.id().with("flyclose"), Sense::click()).clicked() {
+            if ui.interact(close, ui.scope_id().with("flyclose"), Sense::click()).clicked() {
                 open = false;
             }
             ui.painter().text(close.center(), egui::Align2::CENTER_CENTER, "×", egui::FontId::proportional(15.0), t.text_dim);
             // Float: the button beside the close box, or drag the header away from the dock.
             let float_r = egui::Rect::from_min_size(egui::pos2(strip.max.x - 44.0, strip.min.y + 4.0), vec2(18.0, 18.0));
-            let fr = ui.interact(float_r, ui.id().with("flyfloat"), Sense::click()).on_hover_ui(|ui| {
+            let fr = ui.interact(float_r, ui.scope_id().with("flyfloat"), Sense::click()).on_hover_ui(|ui| {
                 crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Float panel"));
             });
             float_glyph(ui.painter(), float_r, t.text_dim);
             let head = egui::Rect::from_min_max(strip.min, egui::pos2(float_r.min.x - 2.0, strip.max.y));
-            let hr = ui.interact(head, ui.id().with("flyhead"), Sense::drag());
+            let hr = ui.interact(head, ui.scope_id().with("flyhead"), Sense::drag());
             let torn = hr.drag_stopped() && hr.total_drag_delta().is_some_and(|d| d.length() > 24.0);
             if fr.clicked() || torn {
                 let at = if torn { ui.ctx().pointer_latest_pos().unwrap_or(pos) - vec2(20.0, 10.0) } else { pos - vec2(30.0, -30.0) };
@@ -285,6 +284,7 @@ pub fn panel_body(app: &mut DesignApp, ui: &mut egui::Ui, id: &str) {
         "typography" => panels::typography::show(app, ui),
         "glyphs" => panels::glyphs::show(app, ui),
         "paragraph" => panels::properties::paragraph_panel(app, ui),
+        "story" => panels::story::show(app, ui),
         "textWrap" => panels::properties::wrap_panel(app, ui),
         "align" => panels::properties::align_panel(app, ui),
         "pathfinder" => panels::properties::pathfinder_panel(app, ui),
@@ -359,7 +359,7 @@ pub fn floating(app: &mut DesignApp, ctx: &egui::Context) {
         let mut open = true;
         let mut dock = false;
         let mut w = egui::Window::new(label.clone())
-            .id(egui::Id::new(("floating_panel", &id)))
+            .id(egui::Id::unique(("floating_panel", &id)))
             .title_bar(false)
             .default_pos(egui::pos2(at[0], at[1]))
             .default_width(if id == "tabs" { 560.0 } else { 256.0 })
@@ -378,7 +378,7 @@ pub fn floating(app: &mut DesignApp, ctx: &egui::Context) {
             crate::rtl::paint(ui.painter(), strip.min + vec2(10.0, 12.0), egui::Align2::LEFT_CENTER, &label, semibold(12.0), t.text_strong);
             let close = egui::Rect::from_min_size(egui::pos2(strip.max.x - 22.0, strip.min.y + 3.0), vec2(18.0, 18.0));
             if ui
-                .interact(close, ui.id().with("fclose"), Sense::click())
+                .interact(close, ui.scope_id().with("fclose"), Sense::click())
                 .on_hover_ui(|ui| {
                     crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Close"));
                 })
@@ -390,7 +390,7 @@ pub fn floating(app: &mut DesignApp, ctx: &egui::Context) {
             let dock_r = egui::Rect::from_min_size(egui::pos2(strip.max.x - 44.0, strip.min.y + 3.0), vec2(18.0, 18.0));
             if docks
                 && ui
-                    .interact(dock_r, ui.id().with("fdock"), Sense::click())
+                    .interact(dock_r, ui.scope_id().with("fdock"), Sense::click())
                     .on_hover_ui(|ui| {
                         crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Dock panel"));
                     })
@@ -470,7 +470,7 @@ mod visual_regressions {
                     harness.run_steps(4);
                     let stem = format!("designcraft-dock-{}-{width}-{scale}x", brightness.id());
                     harness.render().unwrap().save(directory.join(format!("{stem}.png"))).unwrap();
-                    let panel = egui::containers::panel::PanelState::load(&harness.ctx, egui::Id::new("dock")).unwrap().outer_rect;
+                    let panel = egui::containers::panel::PanelState::load(&harness.ctx, harness.ui_id().with("dock")).unwrap().outer_rect;
                     let region = serde_json::json!({
                         "screen": [width, 640.0], "scale": scale,
                         "regions": {"dock-tabs": [panel.left(), panel.top(), panel.width(), 45.0]}
@@ -540,7 +540,8 @@ mod chevron_tests {
 
     /// The » / « chevron painted at the right end of a panel's 11 pt header.
     fn chevron(harness: &Harness<'_, DesignApp>, panel: &str) -> egui::Pos2 {
-        let r = egui::containers::panel::PanelState::load(&harness.ctx, egui::Id::new(panel)).expect("the panel is laid out").outer_rect;
+        // A panel is keyed by the parent Ui the app draws in (see `test_window::panel_rect`).
+        let r = egui::containers::panel::PanelState::load(&harness.ctx, harness.ui_id().with(panel)).expect("the panel is laid out").outer_rect;
         egui::pos2(r.max.x - 10.0, r.min.y + 5.0)
     }
 

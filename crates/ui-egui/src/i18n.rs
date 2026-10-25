@@ -157,6 +157,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Export PDF…", ["PDF exportieren …", "Exporter en PDF…", "Exportar PDF…", "PDF を書き出し…", "导出PDF…"]),
     ("Print…", ["Drucken …", "Imprimer…", "Imprimir…", "プリント…", "打印…"]),
     ("Document Setup…", ["Dokument einrichten …", "Format de document…", "Ajustar documento…", "ドキュメント設定…", "文档设置…"]),
+    ("File Info…", ["Dateiinformationen …", "Informations sur le fichier…", "Información de archivo…", "ファイル情報…", "文件信息…"]),
+    ("File Info", ["Dateiinformationen", "Informations sur le fichier", "Información de archivo", "ファイル情報", "文件信息"]),
     ("Package…", ["Verpacken …", "Assemblage…", "Empaquetar…", "パッケージ…", "打包…"]),
     // Edit.
     ("Undo", ["Rückgängig", "Annuler", "Deshacer", "取り消し", "还原"]),
@@ -200,6 +202,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Previous Page", ["Vorherige Seite", "Page précédente", "Página anterior", "前のページ", "上一页"]),
     ("Next Page", ["Nächste Seite", "Page suivante", "Página siguiente", "次のページ", "下一页"]),
     ("Last Page", ["Letzte Seite", "Dernière page", "Última página", "最後のページ", "最后一页"]),
+    ("Go Back", ["Zurück gehen", "Revenir", "Retroceder", "前に戻る", "后退"]),
+    ("Go Forward", ["Vorwärts gehen", "Avancer", "Avanzar", "次に進む", "前进"]),
     (
         "Close Tab Group",
         ["Registerkartengruppe schließen", "Fermer le groupe d'onglets", "Cerrar grupo de fichas", "タブグループを閉じる", "关闭选项卡组"],
@@ -1774,6 +1778,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
         "Convert to Form Field",
         ["Convert to Form Field", "Convertir en champ de formulaire", "Convert to Form Field", "Convert to Form Field", "转换为表单域"],
     ),
+    ("Convert to Note", ["Convert to Note", "Convertir en note", "Convert to Note", "Convert to Note", "转换为注释"]),
     ("Conveyor", ["Conveyor", "Convoyeur", "Conveyor", "Conveyor", "传送带"]),
     ("Copy Link(s) To…", ["Copy Link(s) To…", "Copier les liens vers…", "Copy Link(s) To…", "Copy Link(s) To…", "复制链接至…"]),
     ("Corner Options…", ["Corner Options…", "Options d'arrondi…", "Corner Options…", "Corner Options…", "角选项…"]),
@@ -2025,6 +2030,16 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ),
     ("Insert Pages…", ["Insert Pages…", "Insérer des pages…", "Insert Pages…", "Insert Pages…", "插入页面…"]),
     ("Insert Variable", ["Insert Variable", "Insérer une variable", "Insert Variable", "Insert Variable", "插入变量"]),
+    (
+        "Convert Variable to Text",
+        [
+            "Variable in Text konvertieren",
+            "Convertir la variable en texte",
+            "Convertir variable en texto",
+            "変数をテキストに変換",
+            "将变量转换为文本",
+        ],
+    ),
     ("Inspect Document", ["Inspect Document", "Inspecter le document", "Inspect Document", "Inspect Document", "检查文档"]),
     (
         "Interface Color Theme",
@@ -2084,6 +2099,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("New Table Style…", ["New Table Style…", "Nouveau style de tableau…", "New Table Style…", "New Table Style…", "新建表样式…"]),
     ("Next Cell", ["Next Cell", "Cellule suivante", "Next Cell", "Next Cell", "下一个单元格"]),
     ("Next Document", ["Next Document", "Document suivant", "Next Document", "Next Document", "下一个文档"]),
+    ("Next Note", ["Next Note", "Note suivante", "Next Note", "Next Note", "下一个注释"]),
     ("Next Object Above", ["Next Object Above", "Objet suivant au-dessus", "Next Object Above", "Next Object Above", "上方下一个对象"]),
     ("Next Object Below", ["Next Object Below", "Objet suivant en dessous", "Next Object Below", "Next Object Below", "下方下一个对象"]),
     (
@@ -2162,6 +2178,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Preflight Document", ["Preflight Document", "Contrôle en amont du document", "Preflight Document", "Preflight Document", "预检文档"]),
     ("Previous Cell", ["Previous Cell", "Cellule précédente", "Previous Cell", "Previous Cell", "上一个单元格"]),
     ("Previous Document", ["Previous Document", "Document précédent", "Previous Document", "Previous Document", "上一个文档"]),
+    ("Previous Note", ["Previous Note", "Note précédente", "Previous Note", "Previous Note", "上一个注释"]),
     (
         "Previous Object in Group",
         ["Previous Object in Group", "Objet précédent du groupe", "Previous Object in Group", "Previous Object in Group", "组中的上一个对象"],
@@ -2293,6 +2310,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
         "Split Cell Vertically",
         ["Split Cell Vertically", "Scinder la cellule verticalement", "Split Cell Vertically", "Split Cell Vertically", "垂直拆分单元格"],
     ),
+    ("Split Note", ["Split Note", "Scinder la note", "Split Note", "Split Note", "拆分注释"]),
     ("Split Path", ["Split Path", "Fractionner le tracé", "Split Path", "Split Path", "拆分路径"]),
     ("Step and Repeat…", ["Step and Repeat…", "Exécuter et répéter…", "Step and Repeat…", "Step and Repeat…", "步进和重复…"]),
     ("Stroke Styles", ["Stroke Styles", "Styles de contour", "Stroke Styles", "Stroke Styles", "描边样式"]),
@@ -4112,6 +4130,7 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Records per page", ["Datensätze pro Seite", "Enregistrements par page", "Registros por página", "ページあたりのレコード", "每页记录数"]),
     ("Single record", ["Einzelner Datensatz", "Un seul enregistrement", "Un solo registro", "単一レコード", "单条记录"]),
     ("Multiple records", ["Mehrere Datensätze", "Plusieurs enregistrements", "Varios registros", "複数レコード", "多条记录"]),
+    ("Arrangement", ["Anordnung", "Disposition", "Disposición", "配置", "排列"]),
     ("Rows first", ["Zeilen zuerst", "Lignes d'abord", "Filas primero", "行を優先", "先行后列"]),
     ("Columns first", ["Spalten zuerst", "Colonnes d'abord", "Columnas primero", "列を優先", "先列后行"]),
     ("Column spacing", ["Spaltenabstand", "Espacement des colonnes", "Espacio entre columnas", "列の間隔", "列间距"]),
@@ -4844,6 +4863,22 @@ mod tests {
         }
     }
 
+    /// The Data Merge arrangement combo takes its accessible name from `tr(lang, "Arrangement")`.
+    /// A row in only the shared table leaves the languages whose lookup returns directly with the
+    /// English name.
+    #[test]
+    fn arrangement_accessible_name_is_localized_in_every_interface_language() {
+        for (code, name) in LANGUAGES {
+            let label = tr(code, "Arrangement");
+            if code.is_empty() {
+                assert_eq!(label, "Arrangement", "{name}");
+            } else {
+                assert_ne!(label, "Arrangement", "{name} still announces the English accessible name");
+                assert!(!label.trim().is_empty(), "{name}");
+            }
+        }
+    }
+
     #[test]
     fn context_captions_come_from_their_context_or_the_plain_translation() {
         for (lang, table) in CONTEXT_TABLES {
@@ -5061,6 +5096,7 @@ mod tests {
             "{label}: {name} (double-click: Color Picker)",
             "All",
             "Align To",
+            "Arrangement",
             "Auto Rename",
             "Character Style",
             "Company",

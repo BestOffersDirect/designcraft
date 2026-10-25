@@ -25,10 +25,10 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
             swatch_row(app, ui, &doc, sw, 0.0, fill_cur.as_deref());
         }
         for g in &doc.color_groups {
-            let open_id = egui::Id::new(("color_group_open", &g.name));
+            let open_id = egui::Id::unique(("color_group_open", &g.name));
             let mut open: bool = ui.data(|d| d.get_temp(open_id)).unwrap_or(true);
             let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &g.name));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &g.name));
             if resp.hovered() {
                 ui.painter().rect_filled(row, 0.0, t.hover);
             }
@@ -78,7 +78,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
     }
     ui.add_space(6.0);
     // InDesign's bottom row: New Color Group, New Swatch, Delete Swatch (the one last clicked).
-    let picked: Option<String> = ui.data(|d| d.get_temp(egui::Id::new(PICKED))).filter(|n: &String| doc.swatch(n).is_some_and(|w| !w.locked));
+    let picked: Option<String> = ui.data(|d| d.get_temp(egui::Id::unique(PICKED))).filter(|n: &String| doc.swatch(n).is_some_and(|w| !w.locked));
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let del = ui
@@ -88,7 +88,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                 && let Some(name) = &picked
                 && app.run("swatch.delete", json!({"name": name})).is_ok()
             {
-                ui.data_mut(|d| d.remove::<String>(egui::Id::new(PICKED)));
+                ui.data_mut(|d| d.remove::<String>(egui::Id::unique(PICKED)));
             }
             // The selection's fill or stroke (whichever is in front) becomes a swatch; with nothing
             // selected, a new colour.
@@ -167,7 +167,7 @@ fn header(app: &mut DesignApp, ui: &mut egui::Ui, doc: &designcraft_doc::Documen
     ui.horizontal(|ui| {
         let (r, resp) = ui.allocate_exact_size(vec2(27.0, 27.0), Sense::click());
         let tip = crate::i18n::tr(&app.ui.language, if stroke_front { "Stroke" } else { "Fill" });
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
         let fill_r = egui::Rect::from_min_size(r.min + vec2(1.0, 2.0), vec2(16.0, 16.0));
         let stroke_r = egui::Rect::from_min_size(r.min + vec2(10.0, 10.0), vec2(16.0, 16.0));
         let paint = |stroke: bool| {
@@ -230,7 +230,7 @@ fn set_tint(app: &mut DesignApp, percent: f64) -> Result<serde_json::Value, Stri
 fn folder_button(ui: &mut egui::Ui, tip: &str) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(20.0, 20.0), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
     if resp.hovered() {
         ui.painter().rect_filled(r, 3.0, t.hover);
     }
@@ -256,14 +256,14 @@ fn swatch_row(
     let t = Tokens::get(ui.ctx());
     // Rows can be dragged onto the Gradient panel's ramp.
     let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click_and_drag());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &sw.name));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &sw.name));
     resp.dnd_set_drag_payload(SwatchDrag(sw.name.clone()));
     if resp.dragged()
         && let Some(p) = ui.ctx().pointer_interact_pos()
     {
         // The swatch's chip follows the pointer.
         let (c, g) = crate::widgets::swatch_colors(doc, &sw.name, 1.0);
-        let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("swatch_drag")));
+        let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("swatch_drag")));
         let chip = egui::Rect::from_min_size(p + vec2(8.0, 8.0), vec2(16.0, 16.0));
         crate::widgets::paint_chip(&painter, chip, c, g);
         painter.rect_stroke(chip, 0.0, egui::Stroke::new(1.0, t.field_border), egui::StrokeKind::Outside);
@@ -296,7 +296,7 @@ fn swatch_row(
     }
     ui.painter().text(row.right_center() - vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, kind, egui::FontId::proportional(10.5), t.text_dim);
     if resp.clicked() && !resp.double_clicked() {
-        ui.data_mut(|d| d.insert_temp(egui::Id::new(PICKED), sw.name.clone()));
+        ui.data_mut(|d| d.insert_temp(egui::Id::unique(PICKED), sw.name.clone()));
         let _ = super::apply_swatch(app, app.ui.stroke_front, &sw.name, None);
     }
     // Double-click: Swatch Options (the first click has applied the swatch).
@@ -359,7 +359,7 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     };
     let text = super::colors_affect_text(app);
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
-    let mode_id = egui::Id::new("color_panel_mode");
+    let mode_id = egui::Id::unique("color_panel_mode");
     let mut stroke = app.ui.stroke_front;
     let default_mode = if doc.settings.intent == designcraft_doc::Intent::Print { ColorMode::Cmyk } else { ColorMode::Rgb };
     let mut mode: ColorMode = ui.data(|d| d.get_temp(mode_id)).unwrap_or(default_mode);
@@ -391,7 +391,7 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         }
         ui.label(egui::RichText::new(&name).size(11.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            egui::ComboBox::from_id_salt("color_mode")
+            let combo = egui::ComboBox::from_id_salt("color_mode")
                 .width(64.0)
                 .selected_text(match mode {
                     ColorMode::Cmyk => "CMYK",
@@ -403,6 +403,7 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                     ui.selectable_value(&mut mode, ColorMode::Cmyk, "CMYK");
                     ui.selectable_value(&mut mode, ColorMode::Rgb, "RGB");
                 });
+            let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Color Mode"));
         });
     });
     app.ui.stroke_front = stroke;
@@ -427,7 +428,11 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
             // tint is read back from the document every frame) and applies it, clamped, on Enter
             // or when it loses focus.
             ui.spacing_mut().slider_width = (ui.available_width() - 60.0).max(60.0);
-            if ui.add(egui::Slider::new(&mut tint, 0.0..=100.0).integer().show_value(false)).drag_stopped() {
+            // The painted "T" caption is not a text node next to the slider, so name it here.
+            let slider = ui
+                .add(egui::Slider::new(&mut tint, 0.0..=100.0).integer().show_value(false))
+                .accessible_name(crate::i18n::tr(&app.ui.language, "Tint"));
+            if slider.drag_stopped() {
                 commit = Some(tint);
             }
             if let Some(v) =
@@ -530,9 +535,11 @@ fn channel(ui: &mut egui::Ui, label: &str, v: &mut f32, scale: f32, suffix: &str
         changed |= resp.drag_stopped() || resp.clicked();
         // The value is applied when typing ends or a drag stops; until then the field's number
         // lives here, because `v` is read back from the document every frame.
-        let pending_id = ui.id().with(("channel", label));
+        let pending_id = ui.scope_id().with(("channel", label));
         let mut num = ui.data(|d| d.get_temp::<f32>(pending_id)).unwrap_or((*v * scale).round());
-        let field = ui.add(egui::DragValue::new(&mut num).range(0.0..=scale).suffix(suffix).update_while_editing(false));
+        // The channel name is a painted label beside a bare spinner: name the spinner too.
+        let field =
+            ui.add(egui::DragValue::new(&mut num).range(0.0..=scale).suffix(suffix).update_while_editing(false)).accessible_name(label.to_owned());
         if field.dragged() {
             ui.data_mut(|d| d.insert_temp(pending_id, num));
         } else {
@@ -681,8 +688,8 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     let is_gradient = cur.is_some();
     let g = cur.unwrap_or_default();
     let radial = g.kind == designcraft_color::GradientKind::Radial;
-    let sel_id = egui::Id::new("grad_sel");
-    let drag_id = egui::Id::new("grad_drag");
+    let sel_id = egui::Id::unique("grad_sel");
+    let drag_id = egui::Id::unique("grad_drag");
     let mut sel: RampSel = ui.data(|d| d.get_temp(sel_id)).unwrap_or(RampSel::Stop(0));
     let last = g.stops.len().saturating_sub(1);
     sel = match sel {
@@ -703,7 +710,7 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                 if resp.dragged()
                     && let Some(p) = ui.ctx().pointer_interact_pos()
                 {
-                    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("gradient_drag")));
+                    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("gradient_drag")));
                     thumbnail(&painter, egui::Rect::from_min_size(p + vec2(8.0, 8.0), vec2(18.0, 18.0)), &g, t.field_border);
                 }
             }
@@ -717,13 +724,18 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     crate::widgets::caption_w(ui, crate::i18n::tr(&lang, "Type:"), 52.0);
                     let shown = if is_gradient { crate::i18n::tr(&lang, g.kind.label()) } else { "" };
-                    egui::ComboBox::from_id_salt("grad_type").selected_text(crate::rtl::widget(ui, shown)).width(104.0).show_ui(ui, |ui| {
-                        for (k, v) in [("Linear", "linear"), ("Radial", "radial")] {
-                            if ui.selectable_label(is_gradient && g.kind.label() == k, crate::rtl::widget(ui, crate::i18n::tr(&lang, k))).clicked() {
-                                send = Some(json!({"kind": v}));
+                    let combo =
+                        egui::ComboBox::from_id_salt("grad_type").selected_text(crate::rtl::widget(ui, shown)).width(104.0).show_ui(ui, |ui| {
+                            for (k, v) in [("Linear", "linear"), ("Radial", "radial")] {
+                                if ui
+                                    .selectable_label(is_gradient && g.kind.label() == k, crate::rtl::widget(ui, crate::i18n::tr(&lang, k)))
+                                    .clicked()
+                                {
+                                    send = Some(json!({"kind": v}));
+                                }
                             }
-                        }
-                    });
+                        });
+                    let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&lang, "Type"));
                 });
                 ui.horizontal(|ui| {
                     crate::widgets::caption_w(ui, crate::i18n::tr(&lang, "Location:"), 52.0);
@@ -1025,7 +1037,7 @@ mod gradient_panel_tests {
         let app = app_with_frame();
         let mut h = Harness::builder().with_size(vec2(280.0, 200.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -1166,7 +1178,7 @@ mod swatches_header_tests {
     fn harness(app: DesignApp) -> Harness<'static, DesignApp> {
         Harness::builder().with_size(vec2(300.0, 520.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
