@@ -150,12 +150,36 @@ pub(crate) fn stylesheet_with(doc: &Document, generics: &BTreeMap<String, String
         if let Some(sz) = c.size {
             let _ = write!(rule, "font-size: {:.3}em; ", sz / base);
         }
+        attrs_decor_css(c, &mut rule);
         let (tag, class) = export_mapping(st, &cs.name, true, &cc);
         if let Some(selector) = class_selector(tag, &class) {
             let _ = writeln!(css, "{selector} {{ {rule}}}");
         }
     }
     css
+}
+
+/// Tracking, capitalization and line decorations of a style or override, as CSS declarations.
+fn attrs_decor_css(c: &CharAttrs, out: &mut String) {
+    if let Some(t) = c.tracking
+        && t != 0.0
+    {
+        let _ = write!(out, "letter-spacing: {:.3}em; ", t / 1000.0);
+    }
+    match c.capitalization {
+        Some(designcraft_doc::Capitalization::AllCaps) => out.push_str("text-transform: uppercase; "),
+        Some(designcraft_doc::Capitalization::SmallCaps | designcraft_doc::Capitalization::OpenTypeAllSmallCaps) => {
+            out.push_str("font-variant: small-caps; ")
+        }
+        _ => {}
+    }
+    // One declaration: a later `text-decoration` would replace the earlier one.
+    match (c.underline == Some(true), c.strikethrough == Some(true)) {
+        (true, true) => out.push_str("text-decoration: underline line-through; "),
+        (true, false) => out.push_str("text-decoration: underline; "),
+        (false, true) => out.push_str("text-decoration: line-through; "),
+        (false, false) => {}
+    }
 }
 
 pub(crate) fn override_css(doc: &Document, o: &CharAttrs) -> String {
@@ -174,12 +198,7 @@ pub(crate) fn override_css(doc: &Document, o: &CharAttrs) -> String {
     {
         let _ = write!(s, "color: {h}; ");
     }
-    if o.underline == Some(true) {
-        s.push_str("text-decoration: underline; ");
-    }
-    if o.capitalization == Some(designcraft_doc::Capitalization::AllCaps) {
-        s.push_str("text-transform: uppercase; ");
-    }
+    attrs_decor_css(o, &mut s);
     s.trim_end().to_string()
 }
 

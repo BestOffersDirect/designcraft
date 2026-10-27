@@ -922,3 +922,26 @@ fn char_css_joins_underline_and_strikethrough_in_one_declaration() {
     assert!(css(false, true).contains("text-decoration: line-through;"));
     assert!(!css(false, false).contains("text-decoration"));
 }
+
+#[test]
+fn character_styles_keep_decorations_caps_and_tracking() {
+    let mut d = Document::new(&NewDocument::default());
+    d.styles_mut().character.push(designcraft_doc::CharacterStyle {
+        name: "Under".into(),
+        based_on: None,
+        chars: CharAttrs {
+            underline: Some(true),
+            strikethrough: Some(true),
+            capitalization: Some(designcraft_doc::Capitalization::AllCaps),
+            tracking: Some(100.0),
+            ..Default::default()
+        },
+        shortcut: String::new(),
+    });
+    let css = css::stylesheet(&d);
+    assert!(css.contains("text-decoration: underline line-through;"), "{css}");
+    assert!(css.contains("text-transform: uppercase;"), "{css}");
+    assert!(css.contains("letter-spacing: 0.100em;"), "{css}");
+    let o = CharAttrs { strikethrough: Some(true), ..Default::default() };
+    assert_eq!(css::override_css(&d, &o), "text-decoration: line-through;");
+}
