@@ -327,6 +327,34 @@ impl<'a> Ex<'a> {
         segs
     }
 
+    /// A cross-reference source's text: `generated`, or the text typed over it, its page numbers
+    /// as InDesign's live cross-reference page number.
+    fn xref_content(&mut self, c: &mut El, x: &designcraft_doc::CrossRef, generated: String) {
+        let Some(t) = &x.text else {
+            let mut content = El::new("Content");
+            content.children.push(Node::Text(generated));
+            c.push(content);
+            return;
+        };
+        let page = x.page.clone().unwrap_or_else(|| "?".into());
+        for (n, part) in t.split(designcraft_doc::xref::PAGE_NUM_BLOCK).enumerate() {
+            if n > 0 {
+                c.push(
+                    El::new("TextVariableInstance")
+                        .attr("Self", self.fresh())
+                        .attr("Name", "<?AID 001b?>TV XRefPageNumber")
+                        .attr("ResultText", &page)
+                        .attr("AssociatedTextVariable", "dTextVariablen<?AID 001b?>TV XRefPageNumber"),
+                );
+            }
+            if !part.is_empty() {
+                let mut content = El::new("Content");
+                content.children.push(Node::Text(part.to_string()));
+                c.push(content);
+            }
+        }
+    }
+
     fn story_para(&mut self, s: &Story, pi: usize, r: std::ops::Range<usize>, last: bool) -> El {
         let pf = s.paras.get(pi).cloned().unwrap_or_default();
         let mut psr = self.psr_el(&pf);
@@ -424,34 +452,7 @@ impl<'a> Ex<'a> {
                             designcraft_doc::xref::expand(self.d.xref_format(&x.format).map_or("<fullPara />", |ff| ff.definition.as_str()), &v)
                         });
                         let mut c = self.csr_el(&f);
-                        match &x.text {
-                            // Edited text as typed, its page numbers as InDesign's live
-                            // cross-reference page number.
-                            Some(t) => {
-                                let page = x.page.clone().unwrap_or_else(|| "?".into());
-                                for (n, part) in t.split(designcraft_doc::xref::PAGE_NUM_BLOCK).enumerate() {
-                                    if n > 0 {
-                                        c.push(
-                                            El::new("TextVariableInstance")
-                                                .attr("Self", self.fresh())
-                                                .attr("Name", "<?AID 001b?>TV XRefPageNumber")
-                                                .attr("ResultText", &page)
-                                                .attr("AssociatedTextVariable", "dTextVariablen<?AID 001b?>TV XRefPageNumber"),
-                                        );
-                                    }
-                                    if !part.is_empty() {
-                                        let mut content = El::new("Content");
-                                        content.children.push(Node::Text(part.to_string()));
-                                        c.push(content);
-                                    }
-                                }
-                            }
-                            None => {
-                                let mut content = El::new("Content");
-                                content.children.push(Node::Text(text));
-                                c.push(content);
-                            }
-                        }
+                        self.xref_content(&mut c, x, text);
                         let mut src = El::new("CrossReferenceSource")
                             .attr("Self", &me)
                             .attr("AppliedFormat", fmt)
