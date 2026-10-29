@@ -13,8 +13,9 @@ fn reserve_command_text(st: &mut designcraft_doc::Story, additional: usize) -> R
 
 pub(super) fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let text = crate::cmd::text_param(p, "text");
-    // Tab in a table cell moves to the next cell (Shift-Tab: `table.prevCell`).
-    if text == "\t" && s.doc()?.selection.text.is_some_and(|t| t.cell.is_some()) {
+    // Tab in a table cell moves to the next cell (Shift-Tab: `table.prevCell`). Footnote text is
+    // addressed as a cell too: a Tab there is typed.
+    if text == "\t" && s.doc()?.selection.text.is_some_and(|t| t.cell.is_some_and(|c| c.footnote_id().is_none())) {
         return crate::cmd::table::step_cell(s, true);
     }
     // Typing with one cell selected replaces its text, as InDesign.

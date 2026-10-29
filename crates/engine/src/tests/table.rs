@@ -140,6 +140,10 @@ fn the_cell_commands_refuse_footnote_text() {
         assert!(s.execute(cmd, &json!({})).is_err(), "{cmd}");
     }
     assert_eq!(s.doc().unwrap().selection, before);
+    // A Tab there is typed into the footnote, not taken for the next cell.
+    s.execute("text.insert", &json!({"text": "\t"})).unwrap();
+    let notes = s.execute("footnote.list", &json!({})).unwrap();
+    assert!(notes[0]["text"].as_str().is_some_and(|t| t.contains('\t')), "{notes}");
 }
 
 /// Esc in a table toggles between the text and the cell (InDesign's Esc): the caret in a cell
