@@ -128,9 +128,7 @@ pub(super) fn text_appearance_section(app: &mut DesignApp, ui: &mut Ui) {
             ui.painter().text(chip.center(), egui::Align2::CENTER_CENTER, "T", crate::theme::semibold(12.0), tc);
         }
         let resp = ui.interact(chip, ui.scope_id().with(("tchip", k)), Sense::click()).on_hover_text(format!("{label}: {sw}"));
-        resp.widget_info(|| {
-            egui::WidgetInfo::labeled(egui::Role::Button, true, if k == 0 { "Text fill swatch" } else { "Text stroke swatch" })
-        });
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, if k == 0 { "Text fill swatch" } else { "Text stroke swatch" }));
         swatch_menu(app, &resp, &doc, &sw, k != 0, false, true);
         if resp.double_clicked() {
             open_color_picker(app, &doc, &sw, k != 0, true);
