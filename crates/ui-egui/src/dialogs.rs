@@ -6930,7 +6930,7 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         // 200 pt, reserved: a desired width alone is squeezed by the grid to a few characters.
         // Narrower when the dialog is, so the style selector beside it stays in view.
         let w = 200.0_f32.min(title_room.max(80.0));
-        if ui.add_sized([w, ui.spacing().interact_size.y], egui::TextEdit::singleline(&mut title).horizontal_align(egui::Align::Min)).changed() {
+        if ui.add_sized([w, ui.spacing().interact_size.y], egui::TextEdit::singleline(&mut title).align(egui::Align2::LEFT_TOP)).changed() {
             d.fields.insert("title".into(), json!(title));
         }
         crate::rtl::label(ui, tr("Style:"));
