@@ -203,16 +203,18 @@ fn the_page_box_names_the_parent_in_view_and_lists_the_parents() {
     h.get_by(|n| n.role() == Role::ComboBox && n.label().as_deref() == Some("Page")).click();
     h.run_steps(3);
     for name in ["1", "2", "3", "4", "A-Parent"] {
-        assert!(h.query_by_label(name).is_some(), "{name} is listed");
+        // The canvas or a panel may show the name too: the menu lists it.
+        assert!(h.query_all_by_label(name).next().is_some(), "{name} is listed");
     }
-    h.get_by_label("B-Cover").click();
+    // The menu, drawn last, holds the last match.
+    h.get_all_by_label("B-Cover").last().unwrap().click();
     h.run_steps(6);
     assert_eq!(shown(&h), "B-Cover");
     assert_eq!(crate::canvas::current_parent_page(&h.state().app).map(|(i, _)| i), Some(1));
     // A page: the parents are left.
     h.get_by(|n| n.role() == Role::ComboBox && n.label().as_deref() == Some("Page")).click();
     h.run_steps(3);
-    h.get_by_label("3").click();
+    h.get_all_by_label("3").last().unwrap().click();
     h.run_steps(6);
     assert!(!h.state().app.session.active().unwrap().editing_parents);
     assert_eq!(crate::canvas::current_page(&h.state().app), Some(2));
