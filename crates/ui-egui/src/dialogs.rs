@@ -2474,7 +2474,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                         );
                                     }
                                 });
-                                text_field(ui, &mut d, "find", 260.0);
+                                text_field_named(ui, &mut d, "find", 260.0, crate::i18n::tr(&app.ui.language, "Find what:"));
                                 ui.end_row();
                                 ui.horizontal(|ui| {
                                     crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Change to:"));
@@ -2489,9 +2489,9 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                         );
                                     }
                                 });
-                                text_field(ui, &mut d, "change", 260.0);
+                                text_field_named(ui, &mut d, "change", 260.0, crate::i18n::tr(&app.ui.language, "Change to:"));
                                 ui.end_row();
-                                crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Search:"));
+                                let scope_name = crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Search:"));
                                 let cur = d.s("scope");
                                 // InDesign's names for the scopes.
                                 let scope_name = |v: &str| match v {
@@ -2511,7 +2511,9 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                                 app.session.reset_find_scope();
                                             }
                                         }
-                                    });
+                                    })
+                                    .response
+                                    .labelled_by(scope_name.id);
                                 ui.end_row();
                             });
                             ui.horizontal(|ui| {
