@@ -286,7 +286,6 @@ impl Story {
         v
     }
 
-    /// Index of the paragraph containing byte `pos`.
     /// The paragraphs `r` touches (at least the one at `r.start`), as (index, byte range without
     /// its return), found from `r` itself rather than by listing every paragraph of the story.
     pub fn paras_touching(&self, r: std::ops::Range<usize>) -> Vec<(usize, std::ops::Range<usize>)> {
@@ -305,6 +304,7 @@ impl Story {
         }
     }
 
+    /// Index of the paragraph containing byte `pos`.
     pub fn para_at(&self, pos: usize) -> usize {
         self.text[..floor_char_boundary(&self.text, pos)].bytes().filter(|b| *b == b'\n').count()
     }
