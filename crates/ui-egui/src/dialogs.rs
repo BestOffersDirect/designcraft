@@ -226,7 +226,7 @@ fn convert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         label(ui, "Table Style", true);
         let names: Vec<String> = app.session.active().map(|st| st.doc.styles.table.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
         let cur = table_style_field(d).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
-        egui::ComboBox::from_id_salt("convert_table_style").selected_text(&cur).width(170.0).show_ui(ui, |ui| {
+        craft_ui::ComboBox::from_id_salt("convert_table_style").selected_text(&cur).width(170.0).show_ui(ui, |ui| {
             for n in &names {
                 if ui.selectable_label(*n == cur, n).clicked() {
                     d.fields.insert("tableStyle".into(), json!(n));
@@ -286,7 +286,7 @@ fn insert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let cur = table_style_field(d).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
     ui.horizontal(|ui| {
         crate::rtl::label(ui, format!("{}:", crate::i18n::tr(lang, "Table Style")));
-        egui::ComboBox::from_id_salt("ins_table_style").selected_text(&cur).width(160.0).show_ui(ui, |ui| {
+        craft_ui::ComboBox::from_id_salt("ins_table_style").selected_text(&cur).width(160.0).show_ui(ui, |ui| {
             for n in &names {
                 if ui.selectable_label(*n == cur, n).clicked() {
                     d.fields.insert("tableStyle".into(), json!(n));
