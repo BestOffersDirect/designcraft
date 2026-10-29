@@ -131,7 +131,7 @@ pub fn status_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
                 ui.painter().text(fr.right_center() - vec2(5.0, 0.0), egui::Align2::RIGHT_CENTER, "▾", small.clone(), t.text);
                 let label = crate::i18n::tr(&app.ui.language, "Page");
                 fresp.widget_info(|| {
-                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, label);
+                    let mut info = egui::WidgetInfo::labeled(egui::Role::ComboBox, true, label);
                     info.current_text_value = Some(name.clone());
                     info
                 });
