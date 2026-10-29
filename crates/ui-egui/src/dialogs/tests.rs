@@ -3551,8 +3551,7 @@ fn preferences_interface_sets_the_color_theme_and_tools_panel() {
         app,
     );
     h.run_steps(3);
-    let swatch =
-        |h: &Harness<'_, DesignApp>, name: &str| h.get_by(|n| n.role() == Role::RadioButton && n.label().as_deref() == Some(name)).click();
+    let swatch = |h: &Harness<'_, DesignApp>, name: &str| h.get_by(|n| n.role() == Role::RadioButton && n.label().as_deref() == Some(name)).click();
     for l in ["Appearance", "Color Theme:", "Panels", "Tools Panel:"] {
         assert!(h.query_by_label(l).is_some(), "{l}");
     }
