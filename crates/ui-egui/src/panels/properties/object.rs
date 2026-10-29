@@ -106,7 +106,7 @@ fn anchor_transform_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     }
     let mut set = serde_json::Map::new();
     // A single point has no size: as InDesign, W and H show its object's, greyed out.
-    let single = super::selected_anchor_points(app).len() == 1;
+    let single = crate::panels::selected_anchor_points(app).len() == 1;
     let (w, h) = if single { i.object_size } else { (r.width(), r.height()) };
     for (row, (lx, vx, kx, lw, vw, kw)) in [("X:", x, "x", "W:", w, "width"), ("Y:", y, "y", "H:", h, "height")].into_iter().enumerate() {
         let yy = row as f32 * 25.0;
@@ -133,8 +133,8 @@ fn anchor_transform_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
 /// in the page coordinates the fields show, from the reference point): one `path.moveAnchors`
 /// step, each point by its own movement. A width or height of a single point (0) can't scale.
 pub(crate) fn transform_anchors(app: &mut DesignApp, set: &Value) -> Result<Value, String> {
-    let points = super::selected_anchor_points(app);
-    let Some(i) = super::sel_info(app) else { return Ok(Value::Null) };
+    let points = crate::panels::selected_anchor_points(app);
+    let Some(i) = crate::panels::sel_info(app) else { return Ok(Value::Null) };
     if points.is_empty() {
         return Ok(Value::Null);
     }
