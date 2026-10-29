@@ -3551,8 +3551,7 @@ fn paragraph_border_sides_and_corners_link_as_indesigns() {
     use egui_kittest::kittest::Queryable;
     let (app, _) = ruled_paragraph();
     let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
-    h.state_mut().app.ui.dialog =
-        Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "border", "p.borderOn": true})));
+    h.state_mut().app.ui.dialog = Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "border", "p.borderOn": true})));
     h.run_steps(4);
     let field = |h: &egui_kittest::Harness<'static, crate::test_window::Window>, key: &str| {
         h.state().app.ui.dialog.as_ref().and_then(|d| d.fields.get(&format!("p.{key}")).cloned()).unwrap_or_default()
