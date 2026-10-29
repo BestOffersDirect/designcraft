@@ -363,6 +363,11 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
             draw_loaded_thumbnail(app, &painter, p, &t);
         }
     }
+    // A second viewport has no panels, dialogs or Quick Apply after its canvas: observe here,
+    // once, as the end of its pass. The root viewport observes at the end of `DesignApp::ui`.
+    if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+        ime_observe(app, ui.ctx());
+    }
 }
 
 /// Longest side of the loaded place cursor's thumbnail, in points.
@@ -414,12 +419,6 @@ fn loaded_thumb_texture(ctx: &egui::Context, doc: &Document, asset: designcraft_
     let t = ctx.load_texture("loaded_thumb", crate::widgets::fit_texture(ci, max), egui::TextureOptions::LINEAR);
     ctx.data_mut(|d| d.insert_temp(key, t.clone()));
     Some(t)
-    }
-    // A second viewport has no panels, dialogs or Quick Apply after its canvas: observe here,
-    // once, as the end of its pass. The root viewport observes at the end of `DesignApp::ui`.
-    if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
-        ime_observe(app, ui.ctx());
-    }
 }
 
 /// Presses in a row on the canvas: the last press's count, and where and when it was released

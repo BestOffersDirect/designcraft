@@ -107,7 +107,6 @@ fn snap_gutter(app: &DesignApp, g: &ColumnDrag, want: f64, shift: bool, zoom: f6
         unit: app.ui.units,
         stroke_in_front: false,
         loaded: None,
-        loaded: None,
     };
     let rect = DRect::new(want, m.y0, want + width, m.y1);
     let s = designcraft_tools::snap::snap(
