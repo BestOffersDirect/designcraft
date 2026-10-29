@@ -3075,7 +3075,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                 style_options_preview(app, &mut d);
             }
             // A multi-line field with focus (set by the dialog this frame) takes Enter as a new line.
-            let multiline = ui.ctx().data_mut(|m| m.remove_temp::<bool>(egui::Id::new(MULTILINE_FOCUS))).unwrap_or(false);
+            let multiline = ui.ctx().data_mut(|m| m.remove_temp::<bool>(egui::Id::unique(MULTILINE_FOCUS))).unwrap_or(false);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add(

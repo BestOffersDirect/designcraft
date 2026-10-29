@@ -335,7 +335,7 @@ pub fn show_instructions(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
             // Enter there makes a new line: the footer mustn't take it for Continue.
             if lines > 1 && resp.has_focus() {
-                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new(crate::dialogs::MULTILINE_FOCUS), true));
+                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(crate::dialogs::MULTILINE_FOCUS), true));
             }
             ui.end_row();
         }
@@ -420,7 +420,7 @@ mod tests {
     fn harness(app: DesignApp) -> Harness<'static, DesignApp> {
         Harness::builder().with_size(egui::vec2(1100.0, 760.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let key = egui::Id::new("package_test_fonts");
+                let key = egui::Id::unique("package_test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(key, true));
