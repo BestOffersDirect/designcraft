@@ -786,15 +786,15 @@ fn apply_to_text_colours_a_text_frames_text_not_the_frame() {
     assert_eq!(doc.item(designcraft_doc::ids::ItemId(id)).unwrap().fill.swatch, "[None]", "the frame isn't");
 }
 
-    /// The Align To button shows the target picked in its menu.
-    #[test]
-    fn the_align_to_button_shows_its_target() {
-        assert_eq!(align_to_icon("selection"), "align-to");
-        assert_eq!(align_to_icon("keyObject"), "align-to-key");
-        assert_eq!(align_to_icon("margins"), "align-to-margins");
-        assert_eq!(align_to_icon("page"), "align-to-page");
-        assert_eq!(align_to_icon("spread"), "align-to-spread");
-    }
+/// The Align To button shows the target picked in its menu.
+#[test]
+fn the_align_to_button_shows_its_target() {
+    assert_eq!(align_to_icon("selection"), "align-to");
+    assert_eq!(align_to_icon("keyObject"), "align-to-key");
+    assert_eq!(align_to_icon("margins"), "align-to-margins");
+    assert_eq!(align_to_icon("page"), "align-to-page");
+    assert_eq!(align_to_icon("spread"), "align-to-spread");
+}
 
 #[test]
 fn transform_flips_and_rotates_from_properties() {
