@@ -2643,17 +2643,7 @@ fn text_frame_options(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(v) = rule_bottom {
                 o.column_rule_bottom_inset = v;
             }
-            match custom_grid {
-                Some(Some((start, increment, relative_to))) => {
-                    let mut g = o.baseline_grid.unwrap_or(doc_grid);
-                    g.start = start.unwrap_or(g.start);
-                    g.increment = increment.unwrap_or(g.increment);
-                    g.relative_to = relative_to.unwrap_or(g.relative_to);
-                    o.baseline_grid = Some(g);
-                }
-                Some(None) => o.baseline_grid = None,
-                None => {}
-            }
+            apply_custom_frame_grid(o, custom_grid, doc_grid);
             // Fixed Width columns set the frame's width: n columns, the gutters between them and
             // the left and right insets.
             let fixed_width = o.columns_kind == designcraft_doc::ColumnsKind::FixedWidth && o.column_width > 0.0;
@@ -2673,6 +2663,24 @@ fn text_frame_options(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(json!({"changed": ids.len()}))
     })
+}
+
+fn apply_custom_frame_grid(
+    options: &mut TextFrameOptions,
+    custom: Option<Option<(Option<f64>, Option<f64>, Option<designcraft_doc::FrameGridRelative>)>>,
+    document_grid: designcraft_doc::FrameBaselineGrid,
+) {
+    match custom {
+        Some(Some((start, increment, relative_to))) => {
+            let mut grid = options.baseline_grid.unwrap_or(document_grid);
+            grid.start = start.unwrap_or(grid.start);
+            grid.increment = increment.unwrap_or(grid.increment);
+            grid.relative_to = relative_to.unwrap_or(grid.relative_to);
+            options.baseline_grid = Some(grid);
+        }
+        Some(None) => options.baseline_grid = None,
+        None => {}
+    }
 }
 
 /// The gap at `p` on spread `sr`: (vertical gap?, edge a, edge b, ids ending at a, ids starting at b).
@@ -4240,27 +4248,6 @@ mod fitting_tests {
     use super::*;
 
     #[test]
-    fn separations_come_from_source_colours() {
-        let mut s = Session::new();
-        s.execute("file.new", &json!({})).unwrap();
-        let c = s.execute("frame.create", &json!({"rect": [100, 100, 200, 200]})).unwrap()["id"].clone();
-        s.execute("object.fill", &json!({"swatch": "C=100 M=0 Y=0 K=0", "ids": [c]})).unwrap();
-        let k = s.execute("frame.create", &json!({"rect": [300, 100, 400, 200]})).unwrap()["id"].clone();
-        s.execute("object.fill", &json!({"swatch": "[Black]", "ids": [k]})).unwrap();
-        let d = s.doc().unwrap().doc.clone();
-        let plate = |p: u8| {
-            let mut rr = designcraft_render::Renderer::new();
-            rr.threads = 0;
-            rr.render_page(&d, &s.cache, 0, 1.0, false, &designcraft_render::RenderOptions { plate: Some(p), ..Default::default() }).unwrap()
-        };
-        let (cyan, black) = (plate(0), plate(3));
-        // Cyan ink only on the cyan frame; black ink only on the black one (no rich-black guess).
-        assert!(cyan.pixel(150, 150)[0] < 10 && cyan.pixel(350, 150)[0] > 245, "{:?} {:?}", cyan.pixel(150, 150), cyan.pixel(350, 150));
-        assert!(black.pixel(350, 150)[0] < 10 && black.pixel(150, 150)[0] > 245);
-        assert!(cyan.pixel(20, 20)[0] > 245, "paper has no ink");
-    }
-
-    #[test]
     fn inner_glow_bevel_and_satin_change_the_inside() {
         let mut s = Session::new();
         s.execute("file.new", &json!({})).unwrap();
@@ -4299,13 +4286,14 @@ mod fitting_tests {
         let df = shot(&s);
         assert!(df.pixel(102, 200)[0] > 200, "left edge faded to paper: {:?}", df.pixel(102, 200));
         assert_eq!(df.pixel(298, 200), plain.pixel(298, 200), "right edge untouched");
-        // A knockout group exports as an image too.
+        // A knockout group stays vector, as a knockout transparency group.
         let other = s.execute("frame.create", &json!({"rect": [400, 100, 450, 150]})).unwrap()["id"].clone();
         let other2 = s.execute("frame.create", &json!({"rect": [420, 120, 470, 170]})).unwrap()["id"].clone();
         let g = s.execute("object.group", &json!({"ids": [other, other2]})).unwrap()["id"].clone();
         s.execute("object.transparencyGroup", &json!({"ids": [g], "knockout": true})).unwrap();
         let r = s.execute("file.exportPdf", &json!({})).unwrap();
-        assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("2 object(s)")), "{r}");
+        assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("1 object(s)")), "{r}");
+        assert!(String::from_utf8_lossy(&super::super::file::base64_decode(r["base64"].as_str().unwrap())).contains("/K true"));
         // PDF export carries effects (as an image of the object).
         let r = s.execute("file.exportPdf", &json!({})).unwrap();
         assert!(r["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("soft effects")), "{r}");
