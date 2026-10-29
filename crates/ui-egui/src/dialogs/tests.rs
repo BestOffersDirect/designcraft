@@ -3540,7 +3540,7 @@ fn preferences_interface_sets_the_color_theme_and_tools_panel() {
     open(&mut app);
     let mut h = Harness::builder().with_size(egui::vec2(1100.0, 760.0)).build_ui_state(
         |ui, app: &mut DesignApp| {
-            let key = egui::Id::new("prefs_interface_test_fonts");
+            let key = egui::Id::unique("prefs_interface_test_fonts");
             if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                 crate::theme::install_fonts(ui.ctx(), "");
                 ui.data_mut(|d| d.insert_temp(key, true));

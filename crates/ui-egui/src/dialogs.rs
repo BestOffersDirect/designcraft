@@ -1988,7 +1988,7 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
                                 ui.painter().rect_stroke(r.shrink(1.0), 2.0, egui::Stroke::new(2.0, ring), egui::StrokeKind::Inside);
                             }
                             let name = crate::i18n::tr(&lang, b.label()).to_string();
-                            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, on, &name));
+                            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, &name));
                             if resp.on_hover_text(&name).clicked() && !on {
                                 d.fields.insert("brightness".into(), json!(b.id()));
                                 d.fields.insert("applyBrightness".into(), json!(b.id()));
