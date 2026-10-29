@@ -2592,9 +2592,7 @@ fn text_frame_options(s: &mut Session, p: &Value) -> Result<Value> {
             if let Some(v) = reference {
                 o.auto_size_ref = v;
             }
-            if let Some(v) = spacing_limit {
-                o.vj_paragraph_spacing_limit = v;
-            }
+            o.vj_paragraph_spacing_limit = spacing_limit.unwrap_or(o.vj_paragraph_spacing_limit);
             if let Some(v) = p.get("useMinimumHeight").and_then(Value::as_bool) {
                 o.auto_size_use_min_height = v;
             }
