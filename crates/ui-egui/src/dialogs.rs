@@ -4616,7 +4616,7 @@ fn swatch_menu_with(
         Some(label) if current == designcraft_doc::TEXT_COLOR => label,
         _ => current,
     };
-    egui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
+    craft_ui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
         if let Some(label) = text_color
             && ui.selectable_label(current == designcraft_doc::TEXT_COLOR, label).clicked()
         {
@@ -6476,7 +6476,7 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
                 designcraft_doc::StrokeType::Style { name } => name.clone(),
                 k => crate::i18n::tr(lang, k.label()).to_string(),
             };
-            egui::ComboBox::from_id_salt(("rule_type", which)).selected_text(crate::rtl::widget(ui, shown)).width(130.0).show_ui(ui, |ui| {
+            craft_ui::ComboBox::from_id_salt(("rule_type", which)).selected_text(crate::rtl::widget(ui, shown)).width(130.0).show_ui(ui, |ui| {
                 for k in rule_types().into_iter().chain(custom.into_iter().map(|name| designcraft_doc::StrokeType::Style { name })) {
                     let label = match &k {
                         designcraft_doc::StrokeType::Style { name } => name.clone(),
