@@ -143,7 +143,7 @@ pub(super) fn guide_spot(app: &DesignApp, xf: &Xf, g: &GuideDrag) -> Option<Guid
         snap: app.ui.snap_view(),
         unit: app.ui.units,
         stroke_in_front: false,
-            loaded: None,
+        loaded: None,
     };
     let s = designcraft_tools::snap::snap(
         &cx,
