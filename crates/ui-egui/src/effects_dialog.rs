@@ -360,23 +360,7 @@ fn page_ui(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, page: &str) {
             let key = page;
             heading(ui, &tr("Blending"));
             grid("b").show(ui, |ui| {
-                // Inner Glow: its blend mode (Screen, as InDesign starts it).
-                if key == "innerGlow" {
-                    row(ui, "Mode:");
-                    let cur = d.fields.get("fx").and_then(|f| f["innerGlow"]["mode"].as_str()).unwrap_or("Screen").to_string();
-                    let label = |m: &designcraft_color::BlendMode| {
-                        serde_json::to_value(m).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
-                    };
-                    let shown = designcraft_color::BlendMode::ALL.iter().find(|m| label(m) == cur).map_or("Screen", |m| m.label());
-                    craft_ui::ComboBox::from_id_salt("fx_glow_mode").selected_text(tr(shown)).width(150.0).show_ui(ui, |ui| {
-                        for m in designcraft_color::BlendMode::ALL {
-                            if ui.selectable_label(label(&m) == cur, tr(m.label())).clicked() {
-                                set(d, &["innerGlow", "mode"], json!(label(&m)));
-                            }
-                        }
-                    });
-                    ui.end_row();
-                }
+                mode_row(ui, d, key, &tr);
                 row(ui, "Color:");
                 swatch(app, ui, d, &[key, "color"]);
                 row(ui, "Opacity:");
@@ -576,7 +560,7 @@ fn mode_row(ui: &mut egui::Ui, d: &mut Dialog, key: &str, tr: &dyn Fn(&str) -> S
     let name = |m: &designcraft_color::BlendMode| serde_json::to_value(m).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
     let shown = designcraft_color::BlendMode::ALL.iter().find(|m| name(m) == cur).map_or(fallback, |m| m.label());
     let mut picked = None;
-    egui::ComboBox::from_id_salt(("fx_mode", key.to_string())).selected_text(tr(shown)).width(150.0).show_ui(ui, |ui| {
+    craft_ui::ComboBox::from_id_salt(("fx_mode", key.to_string())).selected_text(tr(shown)).width(150.0).show_ui(ui, |ui| {
         for m in designcraft_color::BlendMode::ALL {
             if ui.selectable_label(name(&m) == cur, tr(m.label())).clicked() {
                 picked = Some(name(&m));
