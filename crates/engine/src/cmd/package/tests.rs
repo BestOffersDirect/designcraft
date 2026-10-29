@@ -169,7 +169,7 @@ fn package_writes_document_links_and_report() {
     assert!(out.join("Links").join("logo.svg").exists());
     let report = std::fs::read_to_string(out.join("Instructions.txt")).unwrap();
     assert!(report.contains("Print on matte.") && report.contains("logo.svg"), "{report}");
-        assert!(report.find("Print on matte.") < report.find("Package report:"), "the instructions come first: {report}");
+    assert!(report.find("Print on matte.") < report.find("Package report:"), "the instructions come first: {report}");
     assert!(report.contains("Preflight:"), "{report}");
     // The packaged document links to its Links folder.
     let doc_file = files.iter().find(|f| f.ends_with(".designcraft")).unwrap();
