@@ -427,7 +427,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
     // ---- Document spreads.
     let cur = crate::canvas::current_page(app).unwrap_or(0);
     let cur_spread = doc.page_loc(cur).map(|l| l.0);
-    let followed_id = egui::Id::new("pages_panel_followed");
+    let followed_id = egui::Id::unique("pages_panel_followed");
     let dragging = egui::DragAndDrop::has_any_payload(ui.ctx());
     let tallest = doc.spreads.iter().flat_map(|sp| sp.pages.iter().map(|p| p.height)).fold(doc.settings.page_height, f64::max).max(1.0);
     let th = opts.page_size.page_h();
@@ -535,7 +535,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                     ui.painter().galley(c - g.size() / 2.0, g, ink);
                     let lr = ui.interact(br, ui.scope_id().with(("spread_label", si)), Sense::click());
                     // A click goes to the spread, so assistive technology hears a button.
-                    lr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+                    lr.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
                     if lr.clicked() {
                         if editing_parents {
                             let _ = app.run("layout.parents.edit", json!({"on": false}));
@@ -841,7 +841,7 @@ mod spread_label_tests {
         app.canvas_rect = Some(egui::Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(1000.0, 800.0)));
         let mut h = Harness::builder().with_size(vec2(260.0, 900.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let key = egui::Id::new("test_fonts");
+                let key = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(key, true));
