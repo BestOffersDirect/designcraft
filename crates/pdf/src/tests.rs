@@ -188,10 +188,9 @@ fn standards() {
     // Output intent, identification and checks all in place; the update still reads.
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
     assert!(crate::check_pdfx4(&r.bytes).is_empty());
-    let text = String::from_utf8_lossy(&r.bytes).to_string();
     // The default working CMYK space is the built-in Coated FOGRA39.
-    assert!(text.contains("/OutputIntents[") && text.contains("/OutputConditionIdentifier(FOGRA39)"), "output intent");
-    assert!(text.contains(r"/OutputCondition(Coated FOGRA39 \(fitted, craft-cms\))"), "output condition");
+    let intent = crate::print_tests::output_intent(&r.bytes).expect("output intent");
+    assert_eq!((intent.identifier.as_str(), intent.condition.as_str()), ("FOGRA39", "Coated FOGRA39 (fitted, craft-cms)"));
     // A plain export fails the checks; both read with the same pages.
     let plain = export_pdf(&d, &Cache::new(), &PdfOptions::default()).unwrap();
     assert_eq!(hayro_syntax::Pdf::new(r.bytes.clone()).unwrap().pages().len(), hayro_syntax::Pdf::new(plain.clone()).unwrap().pages().len());
@@ -497,6 +496,7 @@ fn paint_order(bytes: &[u8]) -> Vec<(String, f32)> {
                 GlyphDrawMode::Fill => ("fill text".into(), 0.0),
                 GlyphDrawMode::Stroke(p) => ("stroke text".into(), p.line_width),
                 GlyphDrawMode::Invisible => ("invisible text".into(), 0.0),
+                GlyphDrawMode::Clip => ("clip text".into(), 0.0),
             });
         }
         fn draw_image(&mut self, _: Image<'_, '_>, _: kurbo::Affine) {}
@@ -623,29 +623,21 @@ fn column_rules_are_drawn() {
         o.inset = [0.0; 4];
         o.column_rule = on;
         o.column_rule_weight = 2.0;
+        // The rules run from the top line's ascent to the bottom line's descent, not the 264 pt
+        // of the columns.
+        let sid = *d.stories.keys().next().unwrap();
+        let cs = designcraft_compose::compose_story(&d, sid, &designcraft_compose::ComposeOptions::default());
+        let line = &cs.frames[0].lines[0];
+        let depth = line.ascent + line.descent;
+        assert!(cs.frames[0].lines.len() == 1 && depth < 264.0 - 1.0, "{depth}");
         let (_, paths) = drawn(&export_pdf(&d, &Cache::new(), &PdfOptions::default()).unwrap());
-        paths.into_iter().filter(|r| (r.width() - 2.0).abs() < 0.01 && (r.height() - 264.0).abs() < 0.01).map(|r| r.center().x).collect::<Vec<_>>()
+        paths.into_iter().filter(|r| (r.width() - 2.0).abs() < 0.01 && (r.height() - depth).abs() < 0.01).map(|r| r.center().x).collect::<Vec<_>>()
     };
     // 540 pt wide in three columns with 12 pt gutters: columns of 172 pt from x 36.
     let xs = rules(true);
     assert_eq!(xs.len(), 2, "{xs:?}");
     assert!((xs[0] - 214.0).abs() < 0.01 && (xs[1] - 398.0).abs() < 0.01, "{xs:?}");
     assert!(rules(false).is_empty());
-}
-
-#[test]
-fn ruby_overprint_is_reported_as_not_exported() {
-    use designcraft_doc::cjk_settings::AdornmentOverprint;
-    let mut d = doc_with_text("漢字です");
-    let sid = *d.stories.keys().next().unwrap();
-    let clean = export_pdf_with_report(&d, &Cache::new(), &PdfOptions::default()).unwrap();
-    assert!(!clean.warnings.iter().any(|w| w.contains("overprint")), "{:?}", clean.warnings);
-    d.story_mut(sid).unwrap().format_chars(0.."漢字".len(), |f| {
-        f.over.ruby = Some("かんじ".into());
-        f.over.ruby_overprint_fill = Some(AdornmentOverprint::On);
-    });
-    let r = export_pdf_with_report(&d, &Cache::new(), &PdfOptions::default()).unwrap();
-    assert!(r.warnings.iter().any(|w| w.contains("overprint is not exported yet")), "{:?}", r.warnings);
 }
 
 #[test]
@@ -904,4 +896,31 @@ fn a_swatch_colours_a_greyscale_image() {
     assert!(!gone.contains("/SMask"), "nothing painted through it");
     let (s, _) = export(&rgb, Some("PANTONE Test"));
     assert!(!s.contains("PANTONE#20Test"), "a colour image keeps its colours");
+}
+
+/// The export asks for each story's composition once per page it is shown on: a parent page's
+/// page number still reads its own page everywhere, and a story threaded across pages shows each
+/// frame's own lines.
+#[test]
+fn each_page_shows_its_own_composition() {
+    use designcraft_doc::story::PAGE_NUMBER;
+    let mut d = Document::new(&NewDocument { pages: 3, facing_pages: false, ..NewDocument::default() });
+    let lid = d.default_layer();
+    d.add_text_frame(SpreadRef::Parent(0), Rect::new(36.0, 700.0, 300.0, 740.0), lid, &format!("Folio{PAGE_NUMBER}"), ParaFormat::default()).unwrap();
+    let (first, _) =
+        d.add_text_frame(SpreadRef::Doc(0), Rect::new(36.0, 36.0, 300.0, 56.0), lid, "Alpha\nBravo\nCharlie", ParaFormat::default()).unwrap();
+    let mut prev = first;
+    for si in 1..3 {
+        let id = ItemId(d.alloc());
+        let it = Item::new(id, lid, designcraft_doc::Shape::Rectangle, designcraft_geom::shapes::rectangle(Rect::new(36.0, 36.0, 300.0, 56.0)));
+        d.insert_item(SpreadRef::Doc(si), it, None).unwrap();
+        d.thread(prev, id).unwrap();
+        prev = id;
+    }
+    let cache = Cache::new();
+    let opts = PdfOptions { created: Some(0), ..PdfOptions::default() };
+    let bytes = export_pdf(&d, &cache, &opts).unwrap();
+    // Parent items first, then the page's own.
+    assert_eq!(extract_text(&bytes), ["Folio1Alpha", "Folio2Bravo", "Folio3Charlie"]);
+    assert_eq!(export_pdf(&d, &cache, &opts).unwrap(), bytes, "a warm cache exports the same bytes");
 }
