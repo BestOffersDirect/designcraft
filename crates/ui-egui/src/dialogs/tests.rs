@@ -3253,9 +3253,9 @@ fn new_character_style_opens_its_options_and_creates_the_style() {
     ctl(&mut app, "ui.dialog.set", json!({"field": "c.size", "value": 9}));
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     let st = char_style(&app, "Character Style 1").unwrap();
-        // The selected text's own Italic (its Emphasis style) comes along, as InDesign's New
-        // Character Style takes it.
-        assert_eq!((st.based_on, st.chars), (None, CharAttrs { size: Some(9.0), font_style: Some("Italic".into()), ..Default::default() }));
+    // The selected text's own Italic (its Emphasis style) comes along, as InDesign's New
+    // Character Style takes it.
+    assert_eq!((st.based_on, st.chars), (None, CharAttrs { size: Some(9.0), font_style: Some("Italic".into()), ..Default::default() }));
     crate::menus::activate(&mut app, "style.character.create", &Value::Null);
     assert_eq!(app.ui.dialog.as_ref().unwrap().s("rename"), "Character Style 2");
 }
@@ -3271,8 +3271,8 @@ fn new_paragraph_style_opens_its_options_and_creates_the_style() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     let st = app.session.active().unwrap().doc.styles.para("Paragraph Style 1").cloned().unwrap();
     assert_eq!(st.based_on.as_deref(), Some(designcraft_doc::BASIC_PARAGRAPH));
-        // The selected text's own Italic comes along, as InDesign's New Paragraph Style takes it.
-        assert_eq!(st.chars, CharAttrs { size: Some(20.0), font_style: Some("Italic".into()), ..Default::default() });
+    // The selected text's own Italic comes along, as InDesign's New Paragraph Style takes it.
+    assert_eq!(st.chars, CharAttrs { size: Some(20.0), font_style: Some("Italic".into()), ..Default::default() });
 }
 
 #[test]
