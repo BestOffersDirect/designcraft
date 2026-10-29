@@ -484,7 +484,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 Stroke::NONE,
                             ));
                             let marker =
-                                ui.interact(egui::Rect::from_center_size(c, vec2(12.0, 8.0)), ui.id().with(("section", abs)), Sense::click());
+                                ui.interact(egui::Rect::from_center_size(c, vec2(12.0, 8.0)), ui.scope_id().with(("section", abs)), Sense::click());
                             let label = format!(
                                 "{}: {}",
                                 crate::i18n::tr(&app.ui.language, "Numbering & Section Options…").trim_end_matches('…'),
@@ -551,7 +551,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                         ui.painter().rect_filled(br, 0.0, BADGE);
                     }
                     ui.painter().galley(c - g.size() / 2.0, g, Color32::WHITE);
-                    let lr = ui.interact(br, ui.id().with(("spread_label", si)), Sense::click());
+                    let lr = ui.interact(br, ui.scope_id().with(("spread_label", si)), Sense::click());
                     lr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, &label));
                     if lr.clicked() {
                         if editing_parents {
