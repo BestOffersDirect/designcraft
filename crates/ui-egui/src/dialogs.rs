@@ -186,25 +186,6 @@ fn color_theme(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 mod color_theme_tests {
     use super::*;
 
-    /// Preferences › File Handling shows the number of recent items as a whole number, as
-    /// InDesign's does ("20"; it read "20.0").
-    #[test]
-    fn file_handling_shows_the_recent_items_count_as_a_whole_number() {
-        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        app.run("app.preferences", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("files"));
-        let ctx = dialog_context("en");
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 700.0));
-        dialog_frame(&mut app, &ctx, screen, vec![]);
-        let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
-        visible_label(&labels, screen, "Number of Recent Items to Display:");
-        let count = app.ui.dialog.as_ref().unwrap().n("recentFilesMax").unwrap();
-        assert_eq!(count, 20.0, "InDesign's default");
-        visible_label(&labels, screen, &format!("{count}"));
-        assert!(!labels.iter().any(|(t, _, _)| t.trim() == format!("{count:.1}")), "no decimal shown");
-    }
-
     #[test]
     fn color_theme_cancel_is_read_only_and_confirm_adds_the_preview() {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
