@@ -3521,3 +3521,93 @@ fn character_style_options_set_the_digits() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
+
+/// Insert Table: the dimensions as typed, and the Table Style chosen is applied to the new
+/// table; [Basic Table] (the default) leaves it unstyled.
+#[test]
+fn insert_table_applies_its_dimensions_and_table_style() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("style.table.create", json!({"name": "Grid"})).unwrap();
+    for (style, expected) in [("Grid", "Grid"), (designcraft_doc::BASIC_TABLE, "")] {
+        app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+        assert_eq!(app.run("app.insertTableDialog", json!({})).unwrap(), Value::Null);
+        for (field, value) in [("bodyRows", json!(5)), ("columns", json!(3)), ("headerRows", json!(1)), ("tableStyle", json!(style))] {
+            ctl(&mut app, "ui.dialog.set", json!({"field": field, "value": value}));
+        }
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+        let t = app.run("table.get", json!({})).unwrap();
+        let len = |k: &str| t[k].as_array().map_or(0, Vec::len);
+        assert_eq!((len("rows"), len("columns"), t["headerRows"].as_u64()), (6, 3, Some(1)), "{t}");
+        assert_eq!(t["style"].as_str().unwrap_or(""), expected, "{t}");
+        // One Insert Table, one undo.
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.run("table.get", json!({})).is_err(), "the table is gone");
+    }
+    // A null style is no style: the table is made, unstyled.
+    app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+    app.run("app.insertTableDialog", json!({})).unwrap();
+    ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": null}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+    assert_eq!(app.run("table.get", json!({})).unwrap()["style"].as_str().unwrap_or(""), "");
+    app.run("edit.undo", json!({})).unwrap();
+    // A style that no longer exists changes nothing.
+    let tables = |app: &DesignApp| app.session.active().unwrap().doc.stories.values().map(|s| s.tables.len()).sum::<usize>();
+    app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+    app.run("app.insertTableDialog", json!({})).unwrap();
+    ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": "Gone"}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+    assert_eq!(tables(&app), 0);
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open to be corrected");
+    assert_eq!((d.id.as_str(), d.s("tableStyle")), ("insertTable", "Gone".to_string()));
+    // So does a style that isn't a name: the command refuses it, rather than making the table
+    // unstyled.
+    ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": 42}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+    assert_eq!(tables(&app), 0);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("insertTable"), "the dialog stays open");
+}
+
+/// Convert Text to Table: available with text selected (not with a caret alone); its
+/// separators and Number of Columns shape the table. Convert Table to Text takes it back with
+/// the separators chosen there.
+#[test]
+fn convert_dialogs_use_their_separators() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let text = "Name:\nAddress:\nCity:\nState:";
+    let sid = app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text", "text": text})).unwrap()["story"].clone();
+    app.run("text.select", json!({"story": sid, "anchor": 0, "focus": 0})).unwrap();
+    assert!(!crate::menus::menu_enabled(&app, "app.convertTextToTableDialog"), "a caret alone");
+    assert!(!crate::menus::menu_enabled(&app, "app.convertTableToTextDialog"), "no table");
+    app.run("text.select", json!({"story": sid, "anchor": 0, "focus": text.len()})).unwrap();
+    assert!(crate::menus::menu_enabled(&app, "app.convertTextToTableDialog"));
+    app.run("app.convertTextToTableDialog", json!({})).unwrap();
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("convertTextToTable"));
+    // "comma" and a typed "," are the same separator, so Number of Columns applies; a count of
+    // 0 is refused, not taken as 1, and the dialog stays open.
+    ctl(&mut app, "ui.dialog.set", json!({"field": "columnSeparator", "value": "comma"}));
+    ctl(&mut app, "ui.dialog.set", json!({"field": "rowSeparator", "value": ","}));
+    assert!(same_separators(app.ui.dialog.as_ref().unwrap()));
+    ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": 0}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("convertTextToTable"));
+    // An emptied separator: the command refuses it and the dialog stays open, as typed.
+    ctl(&mut app, "ui.dialog.set", json!({"field": "rowSeparator", "value": ""}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| (d.id.as_str(), d.s("rowSeparator"))), Some(("convertTextToTable", String::new())));
+    for (field, value) in [("columnSeparator", json!("paragraph")), ("rowSeparator", json!("paragraph")), ("columns", json!(2))] {
+        ctl(&mut app, "ui.dialog.set", json!({"field": field, "value": value}));
+    }
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+    let t = app.run("table.get", json!({})).unwrap();
+    let len = |k: &str| t[k].as_array().map_or(0, Vec::len);
+    assert_eq!((len("rows"), len("columns")), (2, 2), "{t}");
+    assert!(crate::menus::menu_enabled(&app, "app.convertTableToTextDialog"));
+    app.run("app.convertTableToTextDialog", json!({})).unwrap();
+    ctl(&mut app, "ui.dialog.set", json!({"field": "columnSeparator", "value": ", "}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+    let story = app.session.active().unwrap().doc.story(designcraft_doc::StoryId(sid.as_u64().unwrap())).unwrap().text.clone();
+    // (The empty paragraph after a table that ends its story stays after the text.)
+    assert_eq!(story.trim_end(), "Name:, Address:\nCity:, State:");
+}
