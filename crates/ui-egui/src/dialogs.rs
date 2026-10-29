@@ -7244,7 +7244,7 @@ fn corner_options_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog)
             let key = format!("shape{k}");
             let shape: CornerShape = d.fields.get(&key).and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default();
             let resp = crate::panels::properties::corner_shape_button(ui, shape, 46.0);
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, format!("{} {}", tr(tip), tr(shape.label()))));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, format!("{} {}", tr(tip), tr(shape.label()))));
             egui::Popup::menu(&resp).show(|ui| {
                 ui.set_min_width(150.0);
                 for s in CornerShape::ALL {
@@ -7271,7 +7271,7 @@ fn corner_options_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog)
                 crate::icons::button(ui, if linked { "link" } else { "link-broken" }, 20.0, linked, &tip)
             })
             .inner;
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &tip));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &tip));
         if resp.clicked() {
             d.fields.insert("link".into(), json!(!linked));
         }
