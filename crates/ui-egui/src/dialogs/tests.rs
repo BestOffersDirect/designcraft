@@ -3521,3 +3521,92 @@ fn character_style_options_set_the_digits() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
+
+/// Paragraph Rules › Color offers Text Color above the swatches, so a rule set to a swatch can
+/// go back to it; Gap Color lists only swatches.
+#[test]
+fn the_rule_colour_menu_offers_text_color() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let doc = app.session.doc().unwrap().doc.clone();
+    let menu = |ctx: &egui::Context, text: Option<&str>, click: Option<egui::Pos2>| {
+        let mut picked = None;
+        let mut labels = Vec::new();
+        let mut events = Vec::new();
+        if let Some(pos) = click {
+            events.push(egui::Event::PointerMoved(pos));
+            events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
+            events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
+        }
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 600.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            picked = swatch_menu_with(ui, &doc, "m", "[Black]", 130.0, text);
+        });
+        out.textures_delta.clear();
+        for s in out.shapes {
+            if let egui::Shape::Text(t) = s.shape {
+                labels.push((t.galley.job.text.clone(), t.visual_bounding_rect().center()));
+            }
+        }
+        (picked, labels)
+    };
+    for text in [Some("Text Color"), None] {
+        let ctx = egui::Context::default();
+        let (_, labels) = menu(&ctx, text, None);
+        let combo = labels.iter().find(|(t, _)| t == "[Black]").unwrap().1;
+        menu(&ctx, text, Some(combo));
+        let (_, labels) = menu(&ctx, text, None);
+        let item = labels.iter().find(|(t, _)| t == "Text Color").map(|l| l.1);
+        assert_eq!(item.is_some(), text.is_some(), "{labels:?}");
+        if let Some(pos) = item {
+            let (picked, _) = menu(&ctx, text, Some(pos));
+            assert_eq!(picked.as_deref(), Some(designcraft_doc::TEXT_COLOR));
+        }
+    }
+}
+
+/// The course's chapter 20: a paragraph style's rule below becomes wavy, 3 pt, with a gap
+/// colour, from Paragraph Rules › Type and Gap Color.
+#[test]
+fn paragraph_style_rules_take_a_type_and_a_gap_colour() {
+    let (mut app, _) = ruled_paragraph();
+    let ctx = egui::Context::default();
+    app.ui.dialog = Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "rules", "rule": "ruleBelow"})));
+    draw(&mut app, &ctx);
+    if let Some(d) = app.ui.dialog.as_mut() {
+        d.fields.insert("p.ruleBelow.type".into(), json!({"kind": "wavy"}));
+        d.fields.insert("p.ruleBelow.weight".into(), json!(3.0));
+        d.fields.insert("p.ruleBelow.gapColor".into(), json!("[Paper]"));
+    }
+    draw(&mut app, &ctx);
+    confirm(&mut app).unwrap();
+    let r = app.session.doc().unwrap().doc.styles.resolve_para_style("Ruled Child").0.rule_below;
+    assert_eq!((r.kind, r.weight, r.gap_color.as_str()), (designcraft_doc::StrokeType::Wavy, 3.0, "[Paper]"));
+}
+
+/// A rule's Gap Tint shows 100% at its default (the rule's JSON leaves a full gap tint out).
+#[test]
+fn a_rules_default_gap_tint_shows_100() {
+    use egui_kittest::kittest::Queryable;
+    let (mut app, _) = ruled_paragraph();
+    app.run(
+        "style.paragraph.edit",
+        json!({"name": "Ruled Child", "para": {"ruleBelow": {"type": {"kind": "dashed", "pattern": [4.0, 2.0]}, "gapColor": "[Paper]"}}}),
+    )
+    .unwrap();
+    let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
+    h.state_mut().app.ui.dialog =
+        Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "rules", "rule": "ruleBelow"})));
+    h.run_steps(4);
+    let label = h.get_by_label("Gap Tint:").rect();
+    let field = h
+        .get_all_by(|n| n.role() == egui::accesskit::Role::TextInput)
+        .filter(|n| n.rect().center().x > label.max.x && (n.rect().center().y - label.center().y).abs() < 8.0)
+        .min_by(|a, b| a.rect().min.x.total_cmp(&b.rect().min.x))
+        .and_then(|n| n.value());
+    assert_eq!(field.as_deref(), Some("100%"));
+}
