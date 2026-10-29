@@ -7,6 +7,7 @@
 use serde_json::{Value, json};
 
 use crate::DesignApp;
+use crate::app::file_dialogs::Bound;
 use crate::dialogs::Dialog;
 use crate::theme::semibold;
 
@@ -317,7 +318,7 @@ pub fn confirm(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
         app.ui.dialog = Some(Dialog::new(INSTRUCTIONS, json!({"idml": idml, "pdf": pdf, "doc": d.fields.get("doc")})));
         return Ok(Value::Null);
     }
-    package_to_folder(app, idml, pdf, None)
+    package_to_folder(app, idml, pdf, None, d.clone())
 }
 
 /// The Printing Instructions dialog, as InDesign's: who to contact and what to do.
@@ -369,28 +370,32 @@ fn instructions_text(d: &Dialog) -> String {
 pub fn confirm_instructions(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
     same_document(app, d)?;
     let text = instructions_text(d);
-    package_to_folder(app, d.b("idml"), d.fields.get("pdf").cloned().unwrap_or(json!(false)), Some(text).filter(|t| !t.is_empty()))
+    package_to_folder(app, d.b("idml"), d.fields.get("pdf").cloned().unwrap_or(json!(false)), Some(text).filter(|t| !t.is_empty()), d.clone())
 }
 
-/// Ask for the folder to create ("<title> Folder") and package the document into it. `pdf`:
+/// Ask for the folder to create ("<title> Folder") and package the document into it once it is
+/// chosen (Cancel packages nothing). Packaging that fails reopens `asking`, the dialog that asked,
+/// with its options. `pdf`:
 /// false, true or the PDF's `file.exportPdf` options.
-pub fn package_to_folder(app: &mut DesignApp, idml: bool, pdf: Value, instructions: Option<String>) -> Result<Value, String> {
+pub fn package_to_folder(app: &mut DesignApp, idml: bool, pdf: Value, instructions: Option<String>, asking: Dialog) -> Result<Value, String> {
     let name = app.session.active().map(|d| format!("{} Folder", d.doc.title)).unwrap_or_default();
-    // Beside the document, or where the last file was saved (main's `pick_save`, #1653).
-    let Some(dir) = app.pick_save(&name) else { return Ok(Value::Null) };
-    let mut p = json!({"dir": dir, "idml": idml, "pdf": pdf});
-    if let Some(t) = instructions {
-        p["instructions"] = json!(t);
-    }
-    let r = app.run("file.package", p);
-    if let Ok(v) = &r {
-        app.status(
-            crate::i18n::tr(&app.ui.language, "Packaged {count} files into {dir}")
-                .replace("{count}", &v["files"].as_array().map_or(0, |f| f.len()).to_string())
-                .replace("{dir}", v["dir"].as_str().unwrap_or("")),
-        );
-    }
-    r
+    app.ask_save(&name, Bound::Document, move |app, dir| {
+        let mut p = json!({"dir": dir, "idml": idml, "pdf": pdf});
+        if let Some(t) = instructions {
+            p["instructions"] = json!(t);
+        }
+        let r = app.run("file.package", p);
+        match &r {
+            Ok(v) => app.status(
+                crate::i18n::tr(&app.ui.language, "Packaged {count} files into {dir}")
+                    .replace("{count}", &v["files"].as_array().map_or(0, |f| f.len()).to_string())
+                    .replace("{dir}", v["dir"].as_str().unwrap_or("")),
+            ),
+            Err(_) if app.ui.dialog.is_none() => app.ui.dialog = Some(asking),
+            Err(_) => {}
+        }
+        r
+    })
 }
 
 #[cfg(test)]
@@ -444,7 +449,7 @@ mod tests {
         let mut app = app_with_missing_link(&dir);
         let out = dir.join("Packed Folder");
         let picked = out.to_string_lossy().to_string();
-        app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+        app.answer_dialogs(crate::app::file_dialogs::testing::answer_with(Some(picked.clone())));
         crate::menus::activate(&mut app, "app.packageDialog", &Value::Null);
         assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some(ID));
         let mut h = harness(app);
@@ -469,6 +474,7 @@ mod tests {
         h.run_steps(2);
         h.get_by_label("Package…").click();
         h.run_steps(3);
+        h.state_mut().settle_dialogs();
         assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.id.as_str()), Some(INSTRUCTIONS));
         for (key, value) in [("contact", "Dave"), ("email", "dave@example.com"), ("instructions", "Call me if anything is wrong.")] {
             h.state_mut().ui.dialog.as_mut().unwrap().fields.insert(key.into(), json!(value));
@@ -476,6 +482,7 @@ mod tests {
         h.run_steps(2);
         h.get_by_label("Continue").click();
         h.run_steps(3);
+        h.state_mut().settle_dialogs();
         assert!(h.state().ui.dialog.is_none());
         let report = std::fs::read_to_string(out.join("Instructions.txt")).unwrap();
         assert!(
@@ -495,7 +502,7 @@ mod tests {
         let mut app = app_with_missing_link(&dir);
         let out = dir.join("Packed Folder");
         let picked = out.to_string_lossy().to_string();
-        app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+        app.answer_dialogs(crate::app::file_dialogs::testing::answer_with(Some(picked.clone())));
         open(&mut app).unwrap();
         let mut h = harness(app);
         h.run_steps(3);
@@ -510,6 +517,7 @@ mod tests {
         h.run_steps(2);
         h.get_by_label("Package…").click();
         h.run_steps(3);
+        h.state_mut().settle_dialogs();
         assert!(h.state().ui.dialog.is_none());
         assert!(out.join("Packed.pdf").exists() && !out.join("Packed.idml").exists());
         let pdf = std::fs::read(out.join("Packed.pdf")).unwrap();
@@ -526,11 +534,13 @@ mod tests {
         let blocker = dir.join("blocker");
         std::fs::write(&blocker, b"a file, not a folder").unwrap();
         let picked = blocker.join("Packed Folder").to_string_lossy().to_string();
-        app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+        app.answer_dialogs(crate::app::file_dialogs::testing::answer_with(Some(picked.clone())));
         open(&mut app).unwrap();
         app.ui.dialog.as_mut().unwrap().fields.insert("pdf".into(), json!(true));
-        assert!(crate::dialogs::confirm(&mut app).is_err());
-        let d = app.ui.dialog.as_ref().expect("the dialog stays open");
+        crate::dialogs::confirm(&mut app).unwrap();
+        // The folder is chosen on a later frame; packaging into it fails then.
+        app.settle_dialogs();
+        let d = app.ui.dialog.as_ref().expect("the dialog opens again");
         assert_eq!((d.id.as_str(), d.b("pdf")), (ID, true), "with its options");
         assert!(!app.ui.status.is_empty());
         app.run("file.close", json!({})).unwrap();
@@ -557,7 +567,7 @@ mod tests {
         let mut app = app_with_missing_link(&dir);
         let out = dir.join("Packed Folder");
         let picked = out.to_string_lossy().to_string();
-        app.services.pick_save = Some(Box::new(move |_| Some(picked.clone())));
+        app.answer_dialogs(crate::app::file_dialogs::testing::answer_with(Some(picked.clone())));
         open(&mut app).unwrap();
         let d = app.ui.dialog.take().unwrap();
         app.run("file.new", json!({"title": "Other"})).unwrap();
