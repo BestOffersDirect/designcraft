@@ -710,59 +710,59 @@ fn several_shapes_show_pathfinder_and_intersect_combines_them() {
     assert!((r.x0 - 200.0).abs() < 0.5 && (r.y1 - 200.0).abs() < 0.5 && (r.x1 - 300.0).abs() < 0.5, "{r:?}");
 }
 
-    /// The arrow beside Opacity opens a slider, as in InDesign: a drag shows the opacity live and
-    /// is one undo step; the Opacity link still opens the Effects panel.
-    #[test]
-    fn the_opacity_arrow_opens_a_slider_and_a_drag_is_one_undo_step() {
-        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.new", json!({})).unwrap();
-        let id = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
-        app.run("selection.set", json!({"ids": [id]})).unwrap();
-        let opacity = |app: &DesignApp| app.session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().opacity;
-        let steps = undo_steps(&app);
-        let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
-            |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
-                if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
-                    crate::theme::install_fonts(ui.ctx(), "");
-                    ui.data_mut(|d| d.insert_temp(id, true));
-                    return;
-                }
-                app.settle_live_preview();
-                show(app, ui);
-            },
-            app,
-        );
-        h.run_steps(3);
-        assert!(h.query_by_role(egui::accesskit::Role::Slider).is_none());
-        h.get_by(|n| n.role() == egui::accesskit::Role::Button && n.label().as_deref() == Some("Opacity")).click();
-        h.run_steps(3);
-        assert!(
-            h.query_by(|n| n.role() == egui::accesskit::Role::Slider && n.label().as_deref() == Some("Opacity")).is_some(),
-            "assistive technology names the slider"
-        );
-        let track = h.get_by_role(egui::accesskit::Role::Slider).rect();
-        let y = track.center().y;
-        h.hover_at(egui::pos2(track.right() - 1.0, y));
+/// The arrow beside Opacity opens a slider, as in InDesign: a drag shows the opacity live and
+/// is one undo step; the Opacity link still opens the Effects panel.
+#[test]
+fn the_opacity_arrow_opens_a_slider_and_a_drag_is_one_undo_step() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+    app.run("selection.set", json!({"ids": [id]})).unwrap();
+    let opacity = |app: &DesignApp| app.session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().opacity;
+    let steps = undo_steps(&app);
+    let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let id = egui::Id::new("test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(id, true));
+                return;
+            }
+            app.settle_live_preview();
+            show(app, ui);
+        },
+        app,
+    );
+    h.run_steps(3);
+    assert!(h.query_by_role(egui::accesskit::Role::Slider).is_none());
+    h.get_by(|n| n.role() == egui::accesskit::Role::Button && n.label().as_deref() == Some("Opacity")).click();
+    h.run_steps(3);
+    assert!(
+        h.query_by(|n| n.role() == egui::accesskit::Role::Slider && n.label().as_deref() == Some("Opacity")).is_some(),
+        "assistive technology names the slider"
+    );
+    let track = h.get_by_role(egui::accesskit::Role::Slider).rect();
+    let y = track.center().y;
+    h.hover_at(egui::pos2(track.right() - 1.0, y));
+    h.run_steps(1);
+    h.drag_at(egui::pos2(track.right() - 1.0, y));
+    h.run_steps(1);
+    for k in 1..=5 {
+        h.hover_at(egui::pos2(track.right() - track.width() * 0.05 * k as f32, y));
         h.run_steps(1);
-        h.drag_at(egui::pos2(track.right() - 1.0, y));
-        h.run_steps(1);
-        for k in 1..=5 {
-            h.hover_at(egui::pos2(track.right() - track.width() * 0.05 * k as f32, y));
-            h.run_steps(1);
-            assert_eq!(undo_steps(h.state()), steps, "no undo step while dragging");
-        }
-        let previewed = opacity(h.state());
-        assert!(previewed < 0.9 && previewed > 0.5, "the drag shows the opacity live: {previewed}");
-        // Let go further along than the last move: the release frame changes the value too.
-        h.drop_at(egui::pos2(track.right() - track.width() * 0.3, y));
-        h.run_steps(3);
-        assert_eq!(undo_steps(h.state()), steps + 1, "the whole drag is one undo step");
-        assert!(opacity(h.state()) < previewed, "the release position is applied: {previewed} → {}", opacity(h.state()));
-        assert_ne!(h.state().ui.open_panel.as_deref(), Some("effects"), "the arrow doesn't open Effects");
-        h.state_mut().run("edit.undo", json!({})).unwrap();
-        assert_eq!(opacity(h.state()), 1.0);
+        assert_eq!(undo_steps(h.state()), steps, "no undo step while dragging");
     }
+    let previewed = opacity(h.state());
+    assert!(previewed < 0.9 && previewed > 0.5, "the drag shows the opacity live: {previewed}");
+    // Let go further along than the last move: the release frame changes the value too.
+    h.drop_at(egui::pos2(track.right() - track.width() * 0.3, y));
+    h.run_steps(3);
+    assert_eq!(undo_steps(h.state()), steps + 1, "the whole drag is one undo step");
+    assert!(opacity(h.state()) < previewed, "the release position is applied: {previewed} → {}", opacity(h.state()));
+    assert_ne!(h.state().ui.open_panel.as_deref(), Some("effects"), "the arrow doesn't open Effects");
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert_eq!(opacity(h.state()), 1.0);
+}
 
 const CYAN: &str = "C=100 M=0 Y=0 K=0";
 
