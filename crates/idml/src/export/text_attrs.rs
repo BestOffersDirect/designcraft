@@ -542,7 +542,7 @@ impl<'a> Ex<'a> {
             props.push(p("ParagraphBorderGapColor", "object", self.sw(c)));
         }
         n!(a, el, border_gap_tint, "ParagraphBorderGapTint", pct);
-        b!(border_gap_overprint, "ParagraphBorderGapOverprint");
+        b!(a, el, border_gap_overprint, "ParagraphBorderGapOverprint");
         if let Some(w) = a.shading_width {
             el.set("ParagraphShadingWidth", names::box_width_out(w));
         }
