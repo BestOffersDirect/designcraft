@@ -44,8 +44,8 @@ use input::{press_count, release_clicks};
 #[cfg(test)]
 use page_decor::{MAX_BASELINES, baseline_grid_lines};
 use page_decor::{dashed, draw_flattener_preview, draw_guides, shown_area};
-pub use render::{DisplayKey, color_at};
 use render::render_texture;
+pub use render::{DisplayKey, color_at};
 #[cfg(test)]
 use render::{c32, invalidate_on_display_change, screen_options};
 pub(crate) use rulers::fmt_tick;
