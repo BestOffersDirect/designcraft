@@ -1,10 +1,9 @@
-use super::{Affine, CanvasLayout, Color32, DRect, DesignApp, Point, Rect, Xf};
+use super::{Affine, CanvasLayout, Color32, DRect, DesignApp, Point, Pos2, Rect, ScreenMode, Xf};
 
 pub(super) fn c32(c: [u8; 3]) -> Color32 {
     Color32::from_rgb(c[0], c[1], c[2])
 }
 
-/// Render options for the canvas texture.
 /// The colour the canvas shows at screen point `pos` (the Color Picker's eyedropper): one device
 /// pixel rendered as the page is, over its paper. None off the pages.
 pub fn color_at(app: &mut DesignApp, ctx: &egui::Context, pos: Pos2) -> Option<[u8; 3]> {
@@ -36,6 +35,7 @@ pub fn color_at(app: &mut DesignApp, ctx: &egui::Context, pos: Pos2) -> Option<[
     Some([over(r, paper[0]), over(g, paper[1]), over(b, paper[2])])
 }
 
+/// Render options for the canvas texture.
 pub(super) fn screen_options(app: &DesignApp, layout: &CanvasLayout, preview: bool, ppp: f64) -> designcraft_render::RenderOptions {
     designcraft_render::RenderOptions {
         printing_only: preview,
