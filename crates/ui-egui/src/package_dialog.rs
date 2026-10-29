@@ -278,9 +278,9 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                     ui.add_enabled_ui(d.b("pdf"), |ui| {
                         ui.horizontal(|ui| {
                             ui.add_space(24.0);
-                            crate::rtl::label(ui, tr("PDF Preset:"));
+                            let name = crate::rtl::label(ui, tr("PDF Preset:"));
                             let cur = d.s("pdfPreset");
-                            egui::ComboBox::from_id_salt("package_pdf_preset").selected_text(crate::rtl::widget(ui, tr(&cur))).width(180.0).show_ui(
+                            craft_ui::ComboBox::from_id_salt("package_pdf_preset").selected_text(crate::rtl::widget(ui, tr(&cur))).width(180.0).show_ui(
                                 ui,
                                 |ui| {
                                     for p in crate::dialogs::pdf_presets() {
@@ -289,7 +289,9 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                                         }
                                     }
                                 },
-                            );
+                            )
+                            .response
+                            .labelled_by(name.id);
                         });
                     });
                 }
