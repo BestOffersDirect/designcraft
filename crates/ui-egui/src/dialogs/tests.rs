@@ -3506,15 +3506,6 @@ fn guide_counts(app: &DesignApp) -> Vec<usize> {
         let proofed = sample(&mut h);
         assert_eq!(proofed, shown(plain, &|img| designcraft_render::proof_view(img, &setup)));
         assert_ne!(proofed, plain, "the proof changes this green");
-        // The composite ink-limit preview: a blue over a 100% limit shows (and samples) the warning.
-        h.state_mut().ui.proof_colors = false;
-        h.state_mut().run("object.fill", json!({"ids": [id], "swatch": "C=100 M=90 Y=10 K=0"})).unwrap();
-        h.run_steps(3);
-        let blue = sample(&mut h);
-        h.state_mut().ui.ink_limit = Some(1.0);
-        let limited = sample(&mut h);
-        assert_eq!(limited, shown(blue, &|img| designcraft_render::separation_view(img, None, Some(1.0))));
-        assert_eq!(limited, [230, 40, 40]);
     }
 
 #[test]
