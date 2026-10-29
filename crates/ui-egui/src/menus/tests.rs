@@ -6,80 +6,80 @@ fn menu_ids(title: &str) -> Vec<&'static str> {
     items.iter().filter_map(|e| e.split_once(':').map(|(_, rest)| rest.split('|').next().unwrap_or(rest))).collect()
 }
 
-    /// The Object menu's top level in InDesign's order and groups (as InDesign 2023 shows it in
-    /// Learn Skills Daily's course), with Paths holding Join, Open and Close Path, Convert Shape
-    /// only shapes, and a Convert Point submenu.
-    #[test]
-    fn the_object_menu_is_in_indesigns_order() {
-        let items = MENUS.iter().find(|(t, _)| *t == "Object").map(|(_, items)| *items).unwrap();
-        // The top-level entries: submenus by name, separators as "-", items by command id.
-        let mut top = Vec::new();
-        let mut depth = 0;
-        for e in items {
-            match *e {
-                "<" => depth -= 1,
-                e if e.starts_with('>') => {
-                    if depth == 0 {
-                        top.push(e.trim_start_matches('>'));
-                    }
-                    depth += 1;
+/// The Object menu's top level in InDesign's order and groups (as InDesign 2023 shows it in
+/// Learn Skills Daily's course), with Paths holding Join, Open and Close Path, Convert Shape
+/// only shapes, and a Convert Point submenu.
+#[test]
+fn the_object_menu_is_in_indesigns_order() {
+    let items = MENUS.iter().find(|(t, _)| *t == "Object").map(|(_, items)| *items).unwrap();
+    // The top-level entries: submenus by name, separators as "-", items by command id.
+    let mut top = Vec::new();
+    let mut depth = 0;
+    for e in items {
+        match *e {
+            "<" => depth -= 1,
+            e if e.starts_with('>') => {
+                if depth == 0 {
+                    top.push(e.trim_start_matches('>'));
                 }
-                e if depth == 0 => top.push(e.split_once(':').map_or(e, |(_, r)| r.split('|').next().unwrap_or(r))),
-                _ => {}
+                depth += 1;
             }
+            e if depth == 0 => top.push(e.split_once(':').map_or(e, |(_, r)| r.split('|').next().unwrap_or(r))),
+            _ => {}
         }
-        assert_eq!(
-            top,
-            [
-                "Transform",
-                "Transform Again",
-                "Arrange",
-                "Select",
-                "-",
-                "object.group",
-                "object.ungroup",
-                "object.lock",
-                "object.unlockAll",
-                "object.hide",
-                "object.showAll",
-                "-",
-                "app.qrCode",
-                "-",
-                "object.textFrameOptions",
-                "object.primaryTextFrame",
-                "Anchored Object",
-                "-",
-                "Fitting",
-                "Content",
-                "-",
-                "Effects",
-                "object.cornerOptions",
-                "-",
-                "app.layerOptions",
-                "object.exportOptions",
-                "Captions",
-                "Clipping Path",
-                "-",
-                "Flex Layout",
-                "-",
-                "Paths",
-                "Pathfinder",
-                "Convert Shape",
-                "Convert Point",
-            ]
-        );
-        let ids = menu_ids("Object");
-        for id in ["path.join", "path.reverse", "path.convertPoints"] {
-            assert!(ids.contains(&id), "{id}");
-        }
-        let sub = |name: &str| {
-            let i = items.iter().position(|e| *e == format!(">{name}")).unwrap();
-            items[i + 1..].iter().take_while(|e| **e != "<").copied().collect::<Vec<_>>()
-        };
-        assert!(sub("Paths").iter().any(|e| e.contains("|Open Path|")) && sub("Paths").iter().any(|e| e.contains("|Close Path|")));
-        assert!(!sub("Convert Shape").iter().any(|e| e.contains("openPath") || e.contains("closedPath")), "shapes only");
-        assert_eq!(sub("Convert Point").len(), 4);
     }
+    assert_eq!(
+        top,
+        [
+            "Transform",
+            "Transform Again",
+            "Arrange",
+            "Select",
+            "-",
+            "object.group",
+            "object.ungroup",
+            "object.lock",
+            "object.unlockAll",
+            "object.hide",
+            "object.showAll",
+            "-",
+            "app.qrCode",
+            "-",
+            "object.textFrameOptions",
+            "object.primaryTextFrame",
+            "Anchored Object",
+            "-",
+            "Fitting",
+            "Content",
+            "-",
+            "Effects",
+            "object.cornerOptions",
+            "-",
+            "app.layerOptions",
+            "object.exportOptions",
+            "Captions",
+            "Clipping Path",
+            "-",
+            "Flex Layout",
+            "-",
+            "Paths",
+            "Pathfinder",
+            "Convert Shape",
+            "Convert Point",
+        ]
+    );
+    let ids = menu_ids("Object");
+    for id in ["path.join", "path.reverse", "path.convertPoints"] {
+        assert!(ids.contains(&id), "{id}");
+    }
+    let sub = |name: &str| {
+        let i = items.iter().position(|e| *e == format!(">{name}")).unwrap();
+        items[i + 1..].iter().take_while(|e| **e != "<").copied().collect::<Vec<_>>()
+    };
+    assert!(sub("Paths").iter().any(|e| e.contains("|Open Path|")) && sub("Paths").iter().any(|e| e.contains("|Close Path|")));
+    assert!(!sub("Convert Shape").iter().any(|e| e.contains("openPath") || e.contains("closedPath")), "shapes only");
+    assert_eq!(sub("Convert Point").len(), 4);
+}
 
 #[test]
 fn view_items_are_in_the_view_menu_as_in_indesign() {
