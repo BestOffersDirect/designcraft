@@ -95,7 +95,7 @@ fn the_color_panel_edits_the_gradient_stop_selected_in_the_gradient_panel() {
     app.run("object.gradient", json!({})).unwrap();
     let mut h = harness(app);
     h.run_steps(2);
-    h.ctx.data_mut(|d| d.insert_temp(egui::Id::new(GRAD_SEL), RampSel::Stop(1)));
+    h.ctx.data_mut(|d| d.insert_temp(egui::Id::unique(GRAD_SEL), RampSel::Stop(1)));
     h.run_steps(3);
     assert!(h.query_by_label("R=0 G=0 B=0").is_some(), "the black stop's values");
     // C: the topmost field.

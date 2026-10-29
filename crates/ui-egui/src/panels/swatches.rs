@@ -581,7 +581,7 @@ fn cmyk_ramp(k: usize, x: f32) -> egui::Color32 {
 fn gradient_stop(app: &mut DesignApp, ui: &mut egui::Ui, g: &designcraft_color::Gradient, target: &str, mode: ColorMode) {
     use designcraft_color::Color;
     let t = Tokens::get(ui.ctx());
-    let sel: RampSel = ui.data(|d| d.get_temp(egui::Id::new(GRAD_SEL))).unwrap_or(RampSel::Stop(0));
+    let sel: RampSel = ui.data(|d| d.get_temp(egui::Id::unique(GRAD_SEL))).unwrap_or(RampSel::Stop(0));
     let i = match sel {
         RampSel::Stop(i) | RampSel::Mid(i) => i,
     }
