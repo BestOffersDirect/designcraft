@@ -378,8 +378,8 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
 
 /// The Color Picker for a Fill or Stroke chip (a double-click on it, as in InDesign), with the
 /// chip's colour: the objects', or with `text` the selected text's.
-fn open_color_picker(app: &mut DesignApp, doc: &designcraft_doc::Document, swatch: &str, stroke: bool, text: bool) {
-    let mut fields = super::swatches::picker_fields(doc.resolve_color(swatch, 1.0), stroke);
+pub(super) fn open_color_picker(app: &mut DesignApp, doc: &designcraft_doc::Document, swatch: &str, stroke: bool, text: bool) {
+    let mut fields = crate::panels::swatches::picker_fields(doc.resolve_color(swatch, 1.0), stroke);
     fields["text"] = json!(text);
     app.ui.dialog = Some(crate::dialogs::Dialog::new("colorPicker", fields));
 }
