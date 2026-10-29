@@ -3269,8 +3269,8 @@ fn new_paragraph_style_opens_its_options_and_creates_the_style() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     let st = app.session.active().unwrap().doc.styles.para("Paragraph Style 1").cloned().unwrap();
     assert_eq!(st.based_on.as_deref(), Some(designcraft_doc::BASIC_PARAGRAPH));
-        // The selected text's own Italic comes along, as InDesign's New Paragraph Style takes it.
-        assert_eq!(st.chars, CharAttrs { size: Some(20.0), font_style: Some("Italic".into()), ..Default::default() });
+    // The selected text's own Italic comes along, as InDesign's New Paragraph Style takes it.
+    assert_eq!(st.chars, CharAttrs { size: Some(20.0), font_style: Some("Italic".into()), ..Default::default() });
 }
 
 #[test]
