@@ -403,8 +403,6 @@ fn continue_numbering(p: Option<&Value>, para: &mut ParaAttrs) {
     }
 }
 
-pub(super) fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
-    let base = str_param(p, "name").unwrap_or("Paragraph Style 1").to_string();
 /// The style `p[key]` names: none when absent or null; anything but a name is refused.
 fn style_name_param(cmd: &str, p: &Value, key: &str) -> Result<Option<String>> {
     match p.get(key) {
@@ -414,7 +412,7 @@ fn style_name_param(cmd: &str, p: &Value, key: &str) -> Result<Option<String>> {
     }
 }
 
-fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
+pub(super) fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
     let base = str_param(p, "name").unwrap_or("Paragraph Style 1").to_string();
     let based_on = style_name_param("style.paragraph.create", p, "basedOn")?;
     let next = style_name_param("style.paragraph.create", p, "nextStyle")?;
