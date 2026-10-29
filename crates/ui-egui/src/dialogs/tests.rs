@@ -3604,10 +3604,7 @@ fn a_change_format_goes_with_change_all() {
     let mut d = Dialog::new("findChange", json!({"find": "cook"}));
     d.fields.insert(CHANGE_FORMAT.into(), json!({"charStyle": "eggs", "paraStyle": "Method", "chars": {"underline": true}}));
     let p = find_change_params(&d);
-    assert_eq!(
-        (p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()),
-        (json!("eggs"), json!("Method"), json!({"underline": true}))
-    );
+    assert_eq!((p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()), (json!("eggs"), json!("Method"), json!({"underline": true})));
     assert_eq!(format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
     assert!(find_change_params(&Dialog::new("findChange", json!({"find": "cook"}))).get("attrs").is_none());
     // A Find Format goes with every search.
