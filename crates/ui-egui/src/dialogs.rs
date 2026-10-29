@@ -7225,16 +7225,12 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     use picker_layout as at;
     let lang = app.ui.language.clone();
     let tr = |s: &str| crate::i18n::tr(&lang, s).to_string();
-    if !d.fields.contains_key("old") {
-        let old = d.s("hex");
-        d.fields.insert("old".into(), json!(old));
-    }
+    let old = d.s("hex");
+    d.fields.entry("old").or_insert_with(|| json!(old));
     let comp = PickComp::from_key(&d.s("component"));
     let mut p = picked_of(d);
     let before = p;
-    if !d.fields.contains_key("rgb") {
-        d.fields.insert("rgb".into(), json!(p.rgb.map(|x| x * 255.0)));
-    }
+    d.fields.entry("rgb").or_insert_with(|| json!(p.rgb.map(|x| x * 255.0)));
     if !d.fields.contains_key("cmyk") {
         d.fields.insert(
             "cmyk".into(),
