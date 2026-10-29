@@ -510,7 +510,7 @@ fn presets(app: &mut DesignApp, ui: &mut Ui, d: &mut Dialog) -> bool {
                     let rect = Rect::from_min_size(pos2(x, resp.rect.top() + 4.0), vec2(22.0, 22.0));
                     let button = ui.interact(rect, ui.scope_id().with(("delete-preset", &c.key)), Sense::click());
                     let label = format!("{}: {}", crate::i18n::tr(&lang, "Delete Preset"), c.label);
-                    button.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label.as_str()));
+                    button.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str()));
                     if button.hovered() {
                         ui.painter().rect_filled(rect, 2.0, t.hover);
                     }
