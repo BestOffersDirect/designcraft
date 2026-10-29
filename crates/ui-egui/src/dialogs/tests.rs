@@ -3521,3 +3521,116 @@ fn character_style_options_set_the_digits() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
+
+#[test]
+fn corner_options_dialog_sets_each_corner_with_preview_and_one_undo_step() {
+    use designcraft_geom::corners::CornerShape;
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [72, 72, 360, 360]})).unwrap()["id"].as_u64().unwrap();
+    app.run("selection.set", json!({"ids": [id]})).unwrap();
+    let corners = |app: &DesignApp| app.session.doc().unwrap().doc.item(designcraft_doc::ItemId(id)).unwrap().corners.corners;
+    let undo = |app: &DesignApp| app.session.doc().unwrap().history.undo.len();
+    let set = |app: &mut DesignApp, k: &str, v: Value| {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    };
+    let u0 = undo(&app);
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    // Object › Corner Options… opens InDesign's dialog, not a form of the command's params.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some(CORNER_OPTIONS));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    for expected in ["Corner Options", "Corner Size and Shape:", "Preview", "OK", "Cancel"] {
+        visible_label(&labels, screen, expected);
+    }
+    assert!(!labels.iter().any(|(t, _, _)| t.trim() == "Ids"), "no raw command fields");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.s("size1"), d.s("shape1"), d.b("link")), ("0p0".into(), "none".into(), true), "seeded from the frame, linked");
+    // Linked: a corner changed is all four.
+    set(&mut app, "size0", json!("1p0"));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().s("size2"), "1p0");
+    // Unlinked, only the top-right corner rounds, as in the tutorial.
+    set(&mut app, "link", json!(false));
+    for k in 0..4 {
+        set(&mut app, &format!("size{k}"), json!("0"));
+    }
+    set(&mut app, "size1", json!("3 cm"));
+    set(&mut app, "shape1", json!("rounded"));
+    set(&mut app, "preview", json!(true));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert_eq!(corners(&app)[1].shape, CornerShape::Rounded, "Preview shows it");
+    assert_eq!(undo(&app), u0, "without an undo step");
+    set(&mut app, "preview", json!(false));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert_eq!(corners(&app)[1].shape, CornerShape::None, "Preview off puts it back");
+    set(&mut app, "preview", json!(true));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    confirm(&mut app).unwrap();
+    let c = corners(&app);
+    assert_eq!(c.map(|c| c.shape), [CornerShape::None, CornerShape::Rounded, CornerShape::None, CornerShape::None]);
+    assert!((c[1].size - 3.0 / 2.54 * 72.0).abs() < 1e-6, "{}", c[1].size);
+    assert_eq!(undo(&app), u0 + 1, "one undo step");
+    // Reopened, it shows the frame's corners, no longer linked.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.s("shape1"), d.s("shape0"), d.b("link")), ("rounded".into(), "none".into(), false));
+    // A size that does not parse keeps the dialog open with the error; so does a shape the
+    // dialog doesn't offer (rather than another shape taking its place).
+    set(&mut app, "size0", json!("abc"));
+    assert!(confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    set(&mut app, "size0", json!("0"));
+    set(&mut app, "shape0", json!("spiky"));
+    assert!(confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    cancel(&mut app);
+    assert_eq!(corners(&app), c);
+}
+
+/// Several objects: the dialog shows the first one's corners, and OK sets only the corners
+/// edited; the others keep each object's own. A linked edit sets all four.
+#[test]
+fn corner_options_keep_each_objects_untouched_corners() {
+    use designcraft_geom::corners::CornerShape;
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let a = app.run("frame.create", json!({"rect": [72, 72, 200, 200]})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("frame.create", json!({"rect": [272, 72, 400, 200]})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.cornerOptions", json!({"ids": [b], "shape": "bevel", "size": 12})).unwrap();
+    app.run("selection.set", json!({"ids": [a, b]})).unwrap();
+    let corners = |app: &DesignApp, id: u64| app.session.doc().unwrap().doc.item(designcraft_doc::ItemId(id)).unwrap().corners.corners;
+    let set = |app: &mut DesignApp, k: &str, v: Value| {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    };
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    let b0 = corners(&app, b);
+    // Unlinked: only the top-right corner rounds, on both.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    set(&mut app, "link", json!(false));
+    set(&mut app, "size1", json!("1p0"));
+    set(&mut app, "shape1", json!("rounded"));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    confirm(&mut app).unwrap();
+    let (ca, cb) = (corners(&app, a), corners(&app, b));
+    assert_eq!(ca.map(|c| c.shape), [CornerShape::None, CornerShape::Rounded, CornerShape::None, CornerShape::None]);
+    assert_eq!(cb.map(|c| c.shape), [CornerShape::Bevel, CornerShape::Rounded, CornerShape::Bevel, CornerShape::Bevel], "b keeps its others");
+    assert_eq!((cb[0], cb[2], cb[3]), (b0[0], b0[2], b0[3]));
+    assert_eq!(ca[1], cb[1]);
+    // Linked: a corner set to the first object's own value still sets all four, on both.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    set(&mut app, "link", json!(true));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    set(&mut app, "size0", json!("0p6"));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    confirm(&mut app).unwrap();
+    let (ca, cb) = (corners(&app, a), corners(&app, b));
+    assert_eq!(ca, cb, "all four, on both");
+    assert!(ca.iter().all(|c| c.shape == CornerShape::None && (c.size - 6.0).abs() < 1e-6), "{ca:?}");
+}
