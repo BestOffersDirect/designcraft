@@ -541,7 +541,7 @@ fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     // The link's state belongs to the selection: another selection starts linked again when its
     // four offsets are the same.
     let selected: Vec<u64> = app.session.active().map(|st| st.selection.items.iter().map(|i| i.0).collect()).unwrap_or_default();
-    let link_id = egui::Id::new(("prop_wrap_linked", selected));
+    let link_id = egui::Id::unique(("prop_wrap_linked", selected));
     ui.add_enabled_ui(enabled, |ui| {
         // Linked while the four are the same, until the link is clicked.
         let same = offsets.iter().all(|v| (v - offsets[0]).abs() < 1e-9);
