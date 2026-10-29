@@ -94,7 +94,7 @@ pub(super) fn transform_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
 /// Properties › Transform for points selected with Direct Selection: X/Y/W/H of the points'
 /// bounds (from the reference point); X and Y move the points, W and H spread or gather them
 /// about the reference point. No angles: those turn objects.
-fn anchor_transform_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
+pub(super) fn anchor_transform_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     let u = units(app);
     let rp = app.ui.ref_point;
     let b = block(ui, 2.0 * FIELD_H + 4.0);

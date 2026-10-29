@@ -32,7 +32,7 @@ pub(crate) use links::run_update_links;
 pub use links::{info_panel, links_panel, preflight_panel, update_links};
 use object::{align_row, appearance_section, guide_section, quick_actions_object, transform_section, wrap_section};
 pub(crate) use object::{corner_type_dropdown, ref_point_proxy, stroke_type_dropdown};
-use object_panels::pathfinder_row;
+use object_panels::{anchor_point_sections, pathfinder_row};
 pub use object_panels::{align_panel, attributes_panel, effects_panel, pathfinder_panel, stroke_panel, wrap_panel};
 pub(crate) use text::{LANGUAGES, kerning_control, language_menu};
 use text::{

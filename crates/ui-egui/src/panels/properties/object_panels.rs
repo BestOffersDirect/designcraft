@@ -1,6 +1,7 @@
+use super::object::{anchor_transform_section, appearance_section};
 use super::{
-    Arrowhead, Cap, DesignApp, Join, Sense, Stroke, StrokeAlign, StrokeType, Tokens, Ui, Value, caption, divider, icon_toggle, icons, json, measure,
-    number, pos2, sel_info, text_attrs, units, vec2, widgets,
+    Arrowhead, Cap, DesignApp, Join, SelInfo, Sense, Stroke, StrokeAlign, StrokeType, Tokens, Ui, Value, caption, divider, full_width, icon_toggle,
+    icons, json, measure, number, outline_button, pos2, rule, section, section_row, sel_info, text_attrs, units, vec2, widgets,
 };
 
 /// Stroke panel: weight, cap, miter limit, join, alignment, type, arrowheads, gap colour.
@@ -366,7 +367,7 @@ const CONVERT_SHAPE: [(&str, &str, &str); 9] = [
 
 /// Points selected with Direct Selection, as InDesign's Properties shows them: Transform,
 /// Appearance, Convert Points (the point type of the selected points) and Delete Point(s).
-fn anchor_point_sections(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
+pub(super) fn anchor_point_sections(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     section(ui, crate::i18n::tr(&app.ui.language, "Transform"), true);
     anchor_transform_section(app, ui, i);
     divider(ui);
