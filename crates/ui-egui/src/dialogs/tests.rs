@@ -3568,7 +3568,18 @@ fn enter_on_the_toc_options_toggle_only_toggles() {
     app.run("file.newSample", json!({})).unwrap();
     open_toc(&mut app);
     let revision = app.session.doc().unwrap().revision;
-    let mut h = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(|ui, app: &mut DesignApp| show(app, ui.ctx()), app);
+    let mut h = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::unique("toc_toggle_test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
     h.run_steps(3);
     h.get_by_label("Fewer Options").focus();
     h.run_steps(2);
