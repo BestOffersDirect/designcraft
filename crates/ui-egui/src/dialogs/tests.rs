@@ -3521,3 +3521,70 @@ fn character_style_options_set_the_digits() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
+
+/// The course's chapter 26: Preferences › Interface as InDesign's. A Color Theme swatch shows
+/// its theme at once and Cancel goes back; OK keeps the theme and the Tools panel's columns.
+/// UI Size is in a UI Scaling section of its own.
+#[test]
+fn preferences_interface_sets_the_color_theme_and_tools_panel() {
+    use crate::theme::Brightness;
+    use egui::accesskit::Role;
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let opened = app.ui.brightness;
+    let open = |app: &mut DesignApp| {
+        app.run("app.preferences", json!({})).unwrap();
+        app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("interface"));
+    };
+    open(&mut app);
+    let mut h = Harness::builder().with_size(egui::vec2(1100.0, 760.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::new("prefs_interface_test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    let swatch =
+        |h: &Harness<'_, DesignApp>, name: &str| h.get_by(|n| n.role() == Role::RadioButton && n.label().as_deref() == Some(name)).click();
+    for l in ["Appearance", "Color Theme:", "Panels", "Tools Panel:"] {
+        assert!(h.query_by_label(l).is_some(), "{l}");
+    }
+    // A click shows the theme at once; Cancel goes back.
+    swatch(&h, "Light");
+    h.run_steps(3);
+    assert_eq!(h.state().ui.brightness, Brightness::Light);
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(h.state().ui.brightness, opened, "Cancel goes back to the theme Preferences opened with");
+    // OK keeps the theme and the Tools panel's columns.
+    open(h.state_mut());
+    h.run_steps(3);
+    swatch(&h, "Dark");
+    h.run_steps(2);
+    h.get_by(|n| n.role() == Role::ComboBox && n.value().as_deref() == Some("Single Column")).click();
+    h.run_steps(2);
+    h.get_by_label("Double Column").click();
+    h.run_steps(2);
+    h.get_by_label("  OK  ").click();
+    h.run_steps(3);
+    assert!(h.state().ui.dialog.is_none());
+    assert_eq!(h.state().ui.brightness, Brightness::Dark);
+    assert!(h.state().ui.tools_double_column);
+    // The same command the Window menu toggles, with an explicit state for Preferences.
+    assert_eq!(h.state_mut().run("window.toolsDoubleColumn", json!({"on": false})).unwrap(), json!(false));
+    assert_eq!(h.state_mut().run("window.toolsDoubleColumn", json!({"on": false})).unwrap(), json!(false), "set, not toggled");
+    assert_eq!(h.state_mut().run("window.toolsDoubleColumn", json!({})).unwrap(), json!(true), "toggled without `on`");
+    // UI Size has a section of its own.
+    open(h.state_mut());
+    h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("uiScaling"));
+    h.run_steps(3);
+    assert!(h.query_by_label("UI Size:").is_some());
+}
