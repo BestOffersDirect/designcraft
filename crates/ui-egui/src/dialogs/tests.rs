@@ -2401,7 +2401,7 @@ fn find_scope_dialog_domain_and_object_changes_release_original_range() {
 #[test]
 fn dialog_title_and_actions_fit_scaled_viewports() {
     for language in ["en", "ar"] {
-            for size in [egui::vec2(1178.0, 814.0), egui::vec2(589.0, 407.0), egui::vec2(392.0, 271.0), egui::vec2(360.0, 280.0)] {
+        for size in [egui::vec2(1178.0, 814.0), egui::vec2(589.0, 407.0), egui::vec2(392.0, 271.0), egui::vec2(360.0, 280.0)] {
             for (command, title, ok, cancel) in
                 [("app.preferences", "Preferences", "OK", "Cancel"), ("app.newDocumentDialog", "New Document", "Create", "Close")]
             {
@@ -2528,7 +2528,7 @@ fn preferences_horizontal_scroll_reaches_clipped_options() {
     let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
     app.run("app.preferences", json!({})).unwrap();
     let ctx = dialog_context("en");
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(360.0, 280.0));
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(360.0, 280.0));
     for _ in 0..3 {
         dialog_frame(&mut app, &ctx, screen, vec![]);
     }
@@ -2587,7 +2587,7 @@ fn new_document_vertical_scroll_reaches_every_field_and_preset() {
 
 #[test]
 fn arabic_new_document_fields_remain_reachable_and_editable() {
-        for size in [egui::vec2(392.0, 271.0), egui::vec2(360.0, 280.0), egui::vec2(1178.0, 814.0)] {
+    for size in [egui::vec2(392.0, 271.0), egui::vec2(360.0, 280.0), egui::vec2(1178.0, 814.0)] {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
         app.ui.language = "ar".into();
         app.run("app.newDocumentDialog", json!({})).unwrap();
