@@ -3279,7 +3279,7 @@ const FORMAT_SECTIONS: &[(&str, &str)] = &[
 fn info_icon(ui: &mut egui::Ui, tip: &str) {
     let (r, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
     crate::icons::paint(ui.painter(), r, "info", crate::theme::Tokens::get(ui.ctx()).icon);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tip));
     resp.on_hover_text(tip);
 }
 
@@ -3348,7 +3348,7 @@ fn change_format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dial
     let cf = CharFields { base: &base, sparse: true };
     let popup_open = egui::Popup::is_any_open(ctx);
     let mut result = None;
-    let host = egui::Id::new("change_format_settings");
+    let host = egui::Id::unique("change_format_settings");
     crate::modal_drag::modal(ctx, host, host).backdrop_color(egui::Color32::TRANSPARENT).show(ctx, |ui| {
         let title_top = ui.cursor().top();
         crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Change Format Settings")).font(semibold(16.0)));
