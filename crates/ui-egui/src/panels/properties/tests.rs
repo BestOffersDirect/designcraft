@@ -638,65 +638,65 @@ fn clicking_a_swatch_chip_in_the_appearance_fill_menu_applies_it() {
     assert_eq!(after, name, "clicking the swatch chip applies it");
 }
 
-    /// The course's chapter 23: a double-click on Properties › Appearance › Fill opens the Color
-    /// Picker with the fill's colour, as InDesign's (a click opens the swatches). For selected
-    /// text, the text's Fill chip opens it for the text.
-    #[test]
-    fn double_clicking_a_fill_chip_opens_the_color_picker() {
-        let double_click = |h: &mut Harness<'_, DesignApp>, label: &str| {
-            let at = h.get_by_label(label).rect().center();
-            h.hover_at(at);
+/// The course's chapter 23: a double-click on Properties › Appearance › Fill opens the Color
+/// Picker with the fill's colour, as InDesign's (a click opens the swatches). For selected
+/// text, the text's Fill chip opens it for the text.
+#[test]
+fn double_clicking_a_fill_chip_opens_the_color_picker() {
+    let double_click = |h: &mut Harness<'_, DesignApp>, label: &str| {
+        let at = h.get_by_label(label).rect().center();
+        h.hover_at(at);
+        h.step();
+        for pressed in [true, false, true, false] {
+            h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
             h.step();
-            for pressed in [true, false, true, false] {
-                h.event(egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
-                h.step();
-            }
-            h.run_steps(3);
-        };
-        // Frames 1 ms apart, so two clicks make a double-click.
-        let panel = |app: DesignApp| {
-            let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).with_step_dt(0.001).build_ui_state(
-                |ui, app: &mut DesignApp| {
-                    let id = egui::Id::new("test_fonts");
-                    if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
-                        crate::theme::install_fonts(ui.ctx(), "");
-                        ui.data_mut(|d| d.insert_temp(id, true));
-                        return;
-                    }
-                    show(app, ui);
-                },
-                app,
-            );
-            h.run_steps(3);
-            h
-        };
-        let frame = || {
-            let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
-            app.run("file.new", json!({})).unwrap();
-            let id = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
-            app.run("selection.set", json!({"ids": [id]})).unwrap();
-            app.run("object.fill", json!({"swatch": "C=0 M=0 Y=100 K=0"})).unwrap();
-            app
-        };
-        let mut h = panel(frame());
-        double_click(&mut h, "Fill swatch");
-        assert!(h.query_by_label("Tint:").is_none(), "the swatches popup isn't left open too");
-        let d = h.state().ui.dialog.clone().expect("the Color Picker");
-        assert_eq!((d.id.as_str(), d.s("target"), d.s("model"), d.b("text")), ("colorPicker", "fill".into(), "cmyk".into(), false));
-        assert_eq!(d.fields["cmyk"], json!([0.0, 0.0, 100.0, 0.0]));
-        let mut h = panel(frame());
-        double_click(&mut h, "Stroke swatch");
-        assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.s("target")), Some("stroke".into()));
-        // Selected text: its own Fill chip.
+        }
+        h.run_steps(3);
+    };
+    // Frames 1 ms apart, so two clicks make a double-click.
+    let panel = |app: DesignApp| {
+        let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).with_step_dt(0.001).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let id = egui::Id::new("test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(id, true));
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h
+    };
+    let frame = || {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
         app.run("file.new", json!({})).unwrap();
-        let f = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "content": "text", "text": "Lemon"})).unwrap();
-        app.run("text.select", json!({"story": f["story"], "anchor": 0, "focus": 5})).unwrap();
-        let mut h = panel(app);
-        double_click(&mut h, "Text fill swatch");
-        let d = h.state().ui.dialog.clone().expect("the Color Picker");
-        assert_eq!((d.id.as_str(), d.s("target"), d.b("text")), ("colorPicker", "fill".into(), true));
-    }
+        let id = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
+        app.run("selection.set", json!({"ids": [id]})).unwrap();
+        app.run("object.fill", json!({"swatch": "C=0 M=0 Y=100 K=0"})).unwrap();
+        app
+    };
+    let mut h = panel(frame());
+    double_click(&mut h, "Fill swatch");
+    assert!(h.query_by_label("Tint:").is_none(), "the swatches popup isn't left open too");
+    let d = h.state().ui.dialog.clone().expect("the Color Picker");
+    assert_eq!((d.id.as_str(), d.s("target"), d.s("model"), d.b("text")), ("colorPicker", "fill".into(), "cmyk".into(), false));
+    assert_eq!(d.fields["cmyk"], json!([0.0, 0.0, 100.0, 0.0]));
+    let mut h = panel(frame());
+    double_click(&mut h, "Stroke swatch");
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.s("target")), Some("stroke".into()));
+    // Selected text: its own Fill chip.
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let f = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "content": "text", "text": "Lemon"})).unwrap();
+    app.run("text.select", json!({"story": f["story"], "anchor": 0, "focus": 5})).unwrap();
+    let mut h = panel(app);
+    double_click(&mut h, "Text fill swatch");
+    let d = h.state().ui.dialog.clone().expect("the Color Picker");
+    assert_eq!((d.id.as_str(), d.s("target"), d.b("text")), ("colorPicker", "fill".into(), true));
+}
 
 fn panel(app: DesignApp) -> Harness<'static, DesignApp> {
     let mut h = Harness::builder().with_size(vec2(320.0, 1400.0)).build_ui_state(
