@@ -4396,7 +4396,7 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                     let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Based On"));
                     ui.end_row();
                     // Next Style: the style of the paragraph that follows when Enter ends this one.
-                    crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Next Style:"));
+                    let next_name = crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Next Style:"));
                     let next = match d.fields.get("nextStyle") {
                         Some(Value::String(n)) => Some(n.clone()),
                         Some(_) => None,
@@ -4404,7 +4404,7 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                     };
                     let same = crate::i18n::tr(&app.ui.language, "[Same style]").to_string();
                     let shown = next.as_deref().map_or(same.clone(), |n| crate::i18n::style_name(&app.ui.language, n).to_string());
-                    egui::ComboBox::from_id_salt("psnext").selected_text(crate::rtl::widget(ui, shown)).width(220.0).show_ui(ui, |ui| {
+                    craft_ui::ComboBox::from_id_salt("psnext").selected_text(crate::rtl::widget(ui, shown)).width(220.0).show_ui(ui, |ui| {
                         if ui.selectable_label(next.is_none(), crate::rtl::widget(ui, &same)).clicked() {
                             d.fields.insert("nextStyle".into(), Value::Null);
                         }
@@ -4416,7 +4416,9 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                                 d.fields.insert("nextStyle".into(), json!(n));
                             }
                         }
-                    });
+                    })
+                    .response
+                    .labelled_by(next_name.id);
                     ui.end_row();
                 });
                 // Reset To Base: the style keeps nothing of its own (the edits made here stay).
@@ -5832,7 +5834,7 @@ fn char_number(ui: &mut egui::Ui, d: &mut Dialog, cf: &CharFields, key: &str, su
 fn char_choice(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, cf: &CharFields, key: &str, opts: &[(Value, &str)]) {
     let cur = cf.get(d, key);
     let shown = opts.iter().find(|o| o.0 == cur).map_or("", |o| crate::i18n::tr(lang, o.1));
-    egui::ComboBox::from_id_salt(("cs", key)).selected_text(crate::rtl::widget(ui, shown)).width(140.0).show_ui(ui, |ui| {
+    craft_ui::ComboBox::from_id_salt(("cs", key)).selected_text(crate::rtl::widget(ui, shown)).width(140.0).show_ui(ui, |ui| {
         if cf.sparse && ui.selectable_label(cur.is_null(), " ").clicked() {
             cf.set(d, key, Value::Null);
         }
