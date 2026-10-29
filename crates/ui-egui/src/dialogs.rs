@@ -166,20 +166,20 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let mut parents = vec![(String::new(), crate::i18n::tr(&lang, "[None]").to_string())];
     parents.extend(st.doc.parents.iter().map(|p| (p.id.0.to_string(), p.parent.as_ref().map(|i| i.label()).unwrap_or_default())));
     egui::Grid::new("insert_pages").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-        crate::rtl::label(ui, crate::i18n::tr(&lang, "Pages:"));
+        let name = crate::rtl::label(ui, crate::i18n::tr(&lang, "Pages:"));
         let mut n = d.n("count").unwrap_or(1.0).clamp(1.0, 9999.0) as u32;
-        if ui.add(egui::DragValue::new(&mut n).range(1..=9999)).changed() {
+        if ui.add(egui::DragValue::new(&mut n).range(1..=9999)).labelled_by(name.id).changed() {
             d.fields.insert("count".into(), json!(n));
         }
         ui.end_row();
-        crate::rtl::label(ui, crate::i18n::tr(&lang, "Insert:"));
+        let name = crate::rtl::label(ui, crate::i18n::tr(&lang, "Insert:"));
         ui.horizontal(|ui| {
             let wheres = [("after", "After Page"), ("before", "Before Page"), ("start", "At Start of Document"), ("end", "At End of Document")];
-            translated_combo(&lang, ui, d, "insert", &wheres);
+            translated_combo(&lang, ui, d, "insert", &wheres).labelled_by(name.id);
             // The page, by name: At Start and At End need none.
             ui.add_enabled_ui(matches!(d.s("insert").as_str(), "after" | "before"), |ui| {
                 let cur = (d.n("page").unwrap_or(0.0).max(0.0) as usize).min(pages.len().saturating_sub(1));
-                egui::ComboBox::from_id_salt("insert_page").selected_text(pages.get(cur).cloned().unwrap_or_default()).width(64.0).show_ui(
+                craft_ui::ComboBox::from_id_salt("insert_page").selected_text(pages.get(cur).cloned().unwrap_or_default()).width(64.0).show_ui(
                     ui,
                     |ui| {
                         for (i, name) in pages.iter().enumerate() {
@@ -188,13 +188,15 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                             }
                         }
                     },
-                );
+                )
+                .response
+                .accessible_name(crate::i18n::tr(&lang, "Page").to_owned());
             });
         });
         ui.end_row();
-        crate::rtl::label(ui, crate::i18n::tr(&lang, "Parent:"));
+        let name = crate::rtl::label(ui, crate::i18n::tr(&lang, "Parent:"));
         let opts: Vec<(&str, &str)> = parents.iter().map(|(v, l)| (v.as_str(), l.as_str())).collect();
-        combo(ui, d, "parent", &opts);
+        combo(ui, d, "parent", &opts).labelled_by(name.id);
         ui.end_row();
     });
 }
@@ -6226,22 +6228,26 @@ fn delete_character_style(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog
         });
 }
 
-fn combo(ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) {
+fn combo(ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) -> egui::Response {
     let cur = d.s(key);
     let shown = opts.iter().find(|o| o.0 == cur).map_or(cur.as_str(), |o| o.1).to_string();
-    craft_ui::ComboBox::from_id_salt(key).selected_text(crate::rtl::widget(ui, &shown)).width(170.0).show_ui(ui, |ui| {
-        for (v, label) in opts {
-            if ui.selectable_label(cur == *v, crate::rtl::widget(ui, *label)).clicked() {
-                d.fields.insert(key.into(), json!(v));
+    craft_ui::ComboBox::from_id_salt(key)
+        .selected_text(crate::rtl::widget(ui, &shown))
+        .width(170.0)
+        .show_ui(ui, |ui| {
+            for (v, label) in opts {
+                if ui.selectable_label(cur == *v, crate::rtl::widget(ui, *label)).clicked() {
+                    d.fields.insert(key.into(), json!(v));
+                }
             }
-        }
-    });
+        })
+        .response
 }
 
 /// Translate enum captions without changing serialized values or user-defined names.
-fn translated_combo(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) {
+fn translated_combo(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) -> egui::Response {
     let opts: Vec<_> = opts.iter().map(|(value, label)| (*value, crate::i18n::tr(lang, label))).collect();
-    combo(ui, d, key, &opts);
+    combo(ui, d, key, &opts)
 }
 
 /// Style name picker (paragraph or character styles of the active document).
