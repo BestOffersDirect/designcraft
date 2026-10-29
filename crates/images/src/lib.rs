@@ -324,10 +324,17 @@ pub fn pixel_size(bytes: &[u8]) -> Option<(u32, u32)> {
         .or_else(|| tiff_decoder(bytes)?.dimensions().ok())
 }
 
+/// The largest decoded raster, in RGBA bytes: 256 Mpx, a 300 ppi scan of an A0 sheet fits.
+const MAX_RGBA_BYTES: u64 = 1 << 30;
+
 /// Straight (non-premultiplied) RGBA8 of a raster in display sRGB: an embedded ICC profile is
 /// applied, and CMYK goes through its own profile or the working CMYK space ([`colour`]).
 pub fn decode_rgba(bytes: &[u8]) -> Option<image::RgbaImage> {
     use colour::{DisplayColour, Pixels, to_display_rgba};
+    // `image` limits only its own output, which can be a quarter of the RGBA copy or less.
+    if pixel_size(bytes).is_some_and(|(w, h)| u64::from(w).saturating_mul(u64::from(h)).saturating_mul(4) > MAX_RGBA_BYTES) {
+        return None;
+    }
     if is_psd(bytes) {
         return psd::decode(bytes);
     }

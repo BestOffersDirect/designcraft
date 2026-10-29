@@ -401,3 +401,41 @@ fn bmp_decodes() {
     assert_eq!(pixel_size(&bmp), Some((3, 2)));
     assert_eq!(decode_rgba(&bmp).unwrap().get_pixel(1, 1).0, [0, 0, 255, 255]);
 }
+
+/// A 1-bit gray PNG of `side` x `side` blank pixels, written row by row so the test stays small.
+fn blank_png(side: u32) -> Vec<u8> {
+    use std::io::Write;
+    let chunk = |out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]| {
+        out.extend((data.len() as u32).to_be_bytes());
+        let mut crc = flate2::Crc::new();
+        crc.update(kind);
+        crc.update(data);
+        out.extend(kind);
+        out.extend(data);
+        out.extend(crc.sum().to_be_bytes());
+    };
+    let row = vec![0u8; 1 + side.div_ceil(8) as usize];
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+    for _ in 0..side {
+        z.write_all(&row).unwrap();
+    }
+    let mut ihdr = [side.to_be_bytes(), side.to_be_bytes()].concat();
+    ihdr.extend([1, 0, 0, 0, 0]);
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    chunk(&mut png, b"IHDR", &ihdr);
+    chunk(&mut png, b"IDAT", &z.finish().unwrap());
+    chunk(&mut png, b"IEND", &[]);
+    png
+}
+
+/// A small file that expands past 1 GiB of RGBA is refused from its header (#1586).
+#[test]
+fn rasters_past_the_rgba_budget_are_refused_before_decoding() {
+    let png = blank_png(16_385);
+    assert!(png.len() < 1 << 20, "{} bytes", png.len());
+    assert_eq!(pixel_size(&png), Some((16_385, 16_385)));
+    assert_eq!(natural_size(&png), Some((16_385.0, 16_385.0)));
+    assert!(decode_rgba(&png).is_none());
+    let small = decode_rgba(&blank_png(9)).expect("decodes");
+    assert_eq!(small.get_pixel(8, 8).0, [0, 0, 0, 255]);
+}
