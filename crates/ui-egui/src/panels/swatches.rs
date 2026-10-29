@@ -25,10 +25,10 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
             swatch_row(app, ui, &doc, sw, 0.0, fill_cur.as_deref());
         }
         for g in &doc.color_groups {
-            let open_id = egui::Id::new(("color_group_open", &g.name));
+            let open_id = egui::Id::unique(("color_group_open", &g.name));
             let mut open: bool = ui.data(|d| d.get_temp(open_id)).unwrap_or(true);
             let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &g.name));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &g.name));
             if resp.hovered() {
                 ui.painter().rect_filled(row, 0.0, t.hover);
             }
@@ -78,7 +78,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
     }
     ui.add_space(6.0);
     // InDesign's bottom row: New Color Group, New Swatch, Delete Swatch (the one last clicked).
-    let picked: Option<String> = ui.data(|d| d.get_temp(egui::Id::new(PICKED))).filter(|n: &String| doc.swatch(n).is_some_and(|w| !w.locked));
+    let picked: Option<String> = ui.data(|d| d.get_temp(egui::Id::unique(PICKED))).filter(|n: &String| doc.swatch(n).is_some_and(|w| !w.locked));
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let del = ui
@@ -88,7 +88,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                 && let Some(name) = &picked
                 && app.run("swatch.delete", json!({"name": name})).is_ok()
             {
-                ui.data_mut(|d| d.remove::<String>(egui::Id::new(PICKED)));
+                ui.data_mut(|d| d.remove::<String>(egui::Id::unique(PICKED)));
             }
             // The selection's fill or stroke (whichever is in front) becomes a swatch; with nothing
             // selected, a new colour.
@@ -167,7 +167,7 @@ fn header(app: &mut DesignApp, ui: &mut egui::Ui, doc: &designcraft_doc::Documen
     ui.horizontal(|ui| {
         let (r, resp) = ui.allocate_exact_size(vec2(27.0, 27.0), Sense::click());
         let tip = crate::i18n::tr(&app.ui.language, if stroke_front { "Stroke" } else { "Fill" });
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
         let fill_r = egui::Rect::from_min_size(r.min + vec2(1.0, 2.0), vec2(16.0, 16.0));
         let stroke_r = egui::Rect::from_min_size(r.min + vec2(10.0, 10.0), vec2(16.0, 16.0));
         let paint = |stroke: bool| {
@@ -231,7 +231,7 @@ fn set_tint(app: &mut DesignApp, percent: f64) -> Result<serde_json::Value, Stri
 fn folder_button(ui: &mut egui::Ui, tip: &str) -> egui::Response {
     let t = Tokens::get(ui.ctx());
     let (r, resp) = ui.allocate_exact_size(vec2(20.0, 20.0), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, tip));
     if resp.hovered() {
         ui.painter().rect_filled(r, 3.0, t.hover);
     }
@@ -241,6 +241,16 @@ fn folder_button(ui: &mut egui::Ui, tip: &str) -> egui::Response {
     resp.on_hover_ui(|ui| {
         crate::rtl::label(ui, tip);
     })
+}
+
+/// The swatch's chip following the pointer while the row is dragged.
+fn paint_drag_chip(ui: &egui::Ui, doc: &designcraft_doc::Document, name: &str, p: egui::Pos2) {
+    let t = Tokens::get(ui.ctx());
+    let (c, g) = crate::widgets::swatch_colors(doc, name, 1.0);
+    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("swatch_drag")));
+    let chip = egui::Rect::from_min_size(p + vec2(8.0, 8.0), vec2(16.0, 16.0));
+    crate::widgets::paint_chip(&painter, chip, c, g);
+    painter.rect_stroke(chip, 0.0, egui::Stroke::new(1.0, t.field_border), egui::StrokeKind::Outside);
 }
 
 /// What a Swatches panel row marks on its right, as InDesign's columns.
@@ -410,17 +420,12 @@ fn swatch_row(
     // What the row's marks show, for screen readers too: "Cyan, Process, CMYK".
     let marks = row_marks(sw);
     let spoken = row_label(&app.ui.language, &sw.name, marks);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &spoken));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &spoken));
     resp.dnd_set_drag_payload(SwatchDrag(sw.name.clone()));
     if resp.dragged()
         && let Some(p) = ui.ctx().pointer_interact_pos()
     {
-        // The swatch's chip follows the pointer.
-        let (c, g) = crate::widgets::swatch_colors(doc, &sw.name, 1.0);
-        let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("swatch_drag")));
-        let chip = egui::Rect::from_min_size(p + vec2(8.0, 8.0), vec2(16.0, 16.0));
-        crate::widgets::paint_chip(&painter, chip, c, g);
-        painter.rect_stroke(chip, 0.0, egui::Stroke::new(1.0, t.field_border), egui::StrokeKind::Outside);
+        paint_drag_chip(ui, doc, &sw.name, p);
     }
     if fill_cur == Some(sw.name.as_str()) {
         ui.painter().rect_filled(row, 0.0, t.row_selected);
@@ -451,7 +456,7 @@ fn swatch_row(
         ui.painter().text(row.right_center() - vec2(6.0, 0.0), egui::Align2::RIGHT_CENTER, label, egui::FontId::proportional(10.5), t.text_dim);
     }
     if resp.clicked() && !resp.double_clicked() {
-        ui.data_mut(|d| d.insert_temp(egui::Id::new(PICKED), sw.name.clone()));
+        ui.data_mut(|d| d.insert_temp(egui::Id::unique(PICKED), sw.name.clone()));
         let _ = super::apply_swatch(app, app.ui.stroke_front, &sw.name, None);
     }
     // Double-click: Swatch Options (the first click has applied the swatch).
@@ -514,7 +519,7 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     };
     let text = super::colors_affect_text(app);
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
-    let mode_id = egui::Id::new("color_panel_mode");
+    let mode_id = egui::Id::unique("color_panel_mode");
     let mut stroke = app.ui.stroke_front;
     let default_mode = if doc.settings.intent == designcraft_doc::Intent::Print { ColorMode::Cmyk } else { ColorMode::Rgb };
     let mut mode: ColorMode = ui.data(|d| d.get_temp(mode_id)).unwrap_or(default_mode);
@@ -546,7 +551,7 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         }
         ui.label(egui::RichText::new(&name).size(11.0).color(t.text_dim));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            egui::ComboBox::from_id_salt("color_mode")
+            let combo = craft_ui::ComboBox::from_id_salt("color_mode")
                 .width(64.0)
                 .selected_text(match mode {
                     ColorMode::Cmyk => "CMYK",
@@ -558,6 +563,7 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                     ui.selectable_value(&mut mode, ColorMode::Cmyk, "CMYK");
                     ui.selectable_value(&mut mode, ColorMode::Rgb, "RGB");
                 });
+            let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Color Mode"));
         });
     });
     app.ui.stroke_front = stroke;
@@ -582,7 +588,11 @@ pub fn color_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
             // tint is read back from the document every frame) and applies it, clamped, on Enter
             // or when it loses focus.
             ui.spacing_mut().slider_width = (ui.available_width() - 60.0).max(60.0);
-            if ui.add(egui::Slider::new(&mut tint, 0.0..=100.0).integer().show_value(false)).drag_stopped() {
+            // The painted "T" caption is not a text node next to the slider, so name it here.
+            let slider = ui
+                .add(egui::Slider::new(&mut tint, 0.0..=100.0).integer().show_value(false))
+                .accessible_name(crate::i18n::tr(&app.ui.language, "Tint"));
+            if slider.drag_stopped() {
                 commit = Some(tint);
             }
             if let Some(v) =
@@ -685,9 +695,11 @@ fn channel(ui: &mut egui::Ui, label: &str, v: &mut f32, scale: f32, suffix: &str
         changed |= resp.drag_stopped() || resp.clicked();
         // The value is applied when typing ends or a drag stops; until then the field's number
         // lives here, because `v` is read back from the document every frame.
-        let pending_id = ui.id().with(("channel", label));
+        let pending_id = ui.scope_id().with(("channel", label));
         let mut num = ui.data(|d| d.get_temp::<f32>(pending_id)).unwrap_or((*v * scale).round());
-        let field = ui.add(egui::DragValue::new(&mut num).range(0.0..=scale).suffix(suffix).update_while_editing(false));
+        // The channel name is a painted label beside a bare spinner: name the spinner too.
+        let field =
+            ui.add(egui::DragValue::new(&mut num).range(0.0..=scale).suffix(suffix).update_while_editing(false)).accessible_name(label.to_owned());
         if field.dragged() {
             ui.data_mut(|d| d.insert_temp(pending_id, num));
         } else {
@@ -756,11 +768,17 @@ fn color_json(c: &designcraft_color::Color) -> serde_json::Value {
     }
 }
 
-/// Stops in `object.gradient` form.
+/// Stops in `object.gradient` form: a stop on a swatch also names it, so it keeps its inks.
 fn stops_json(g: &designcraft_color::Gradient) -> Vec<serde_json::Value> {
     g.stops
         .iter()
-        .map(|s| json!({"location": s.offset as f64 * 100.0, "color": color_json(&s.color), "opacity": s.opacity as f64 * 100.0, "midpoint": s.midpoint as f64 * 100.0}))
+        .map(|s| {
+            let mut v = json!({"location": s.offset as f64 * 100.0, "color": color_json(&s.color), "opacity": s.opacity as f64 * 100.0, "midpoint": s.midpoint as f64 * 100.0});
+            if let (Some(o), Some(w)) = (v.as_object_mut(), &s.swatch) {
+                o.insert("swatch".to_string(), json!(w));
+            }
+            v
+        })
         .collect()
 }
 
@@ -789,6 +807,62 @@ fn thumbnail(p: &egui::Painter, r: egui::Rect, g: &designcraft_color::Gradient, 
         }
     }
     p.rect_stroke(r, 0.0, egui::Stroke::new(1.0, border), egui::StrokeKind::Outside);
+}
+
+/// The gradient across `ramp`, sampled in bands.
+fn paint_ramp(painter: &egui::Painter, ramp: egui::Rect, g: &designcraft_color::Gradient) {
+    let n = 96;
+    for i in 0..n {
+        let (a, b) = (i as f32 / n as f32, (i + 1) as f32 / n as f32);
+        let (c, alpha) = g.sample((a + b) / 2.0);
+        let x0 = ramp.left() + ramp.width() * a;
+        let x1 = ramp.left() + ramp.width() * b + 0.5;
+        painter.rect_filled(egui::Rect::from_x_y_ranges(x0..=x1, ramp.y_range()), 0.0, color32(&c, alpha));
+    }
+}
+
+/// The stops after dragging marker `h` to `o` (`off`: dropped off the ramp, which removes a stop),
+/// and the selection to move to if the drop changed it.
+fn ramp_release(g: &designcraft_color::Gradient, h: RampSel, o: f32, off: bool) -> (Vec<serde_json::Value>, Option<RampSel>) {
+    let mut stops = stops_json(g);
+    let mut sel = None;
+    match h {
+        RampSel::Stop(i) if off => {
+            if i < stops.len() {
+                stops.remove(i);
+            }
+            sel = Some(RampSel::Stop(0));
+        }
+        RampSel::Stop(i) => set_stop(&mut stops, i, "location", json!(o as f64 * 100.0)),
+        RampSel::Mid(i) => set_stop(&mut stops, i, "midpoint", json!(o as f64 * 100.0)),
+    }
+    (stops, sel)
+}
+
+/// Dragging the gradient's thumbnail: its swatch is the payload, and a thumbnail follows the pointer.
+fn drag_gradient_thumbnail(ui: &egui::Ui, resp: &egui::Response, g: &designcraft_color::Gradient, swatch: &str, t: &Tokens) {
+    resp.dnd_set_drag_payload(GradientDrag(swatch.to_string()));
+    if resp.dragged()
+        && let Some(p) = ui.ctx().pointer_interact_pos()
+    {
+        let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("gradient_drag")));
+        thumbnail(&painter, egui::Rect::from_min_size(p + vec2(8.0, 8.0), vec2(18.0, 18.0)), g, t.field_border);
+    }
+}
+
+/// The Gradient panel's Type menu; the kind chosen, as the command's parameters.
+fn gradient_type_combo(ui: &mut egui::Ui, lang: &str, g: &designcraft_color::Gradient, is_gradient: bool) -> Option<serde_json::Value> {
+    let mut send = None;
+    let shown = if is_gradient { crate::i18n::tr(lang, g.kind.label()) } else { "" };
+    let combo = craft_ui::ComboBox::from_id_salt("grad_type").selected_text(crate::rtl::widget(ui, shown)).width(104.0).show_ui(ui, |ui| {
+        for (k, v) in [("Linear", "linear"), ("Radial", "radial")] {
+            if ui.selectable_label(is_gradient && g.kind.label() == k, crate::rtl::widget(ui, crate::i18n::tr(lang, k))).clicked() {
+                send = Some(json!({"kind": v}));
+            }
+        }
+    });
+    let _ = crate::widgets::name_combo(combo, crate::i18n::tr(lang, "Type"));
+    send
 }
 
 /// What's selected on the ramp: a stop, or the midpoint after a stop.
@@ -836,8 +910,8 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
     let is_gradient = cur.is_some();
     let g = cur.unwrap_or_default();
     let radial = g.kind == designcraft_color::GradientKind::Radial;
-    let sel_id = egui::Id::new("grad_sel");
-    let drag_id = egui::Id::new("grad_drag");
+    let sel_id = egui::Id::unique("grad_sel");
+    let drag_id = egui::Id::unique("grad_drag");
     let mut sel: RampSel = ui.data(|d| d.get_temp(sel_id)).unwrap_or(RampSel::Stop(0));
     let last = g.stops.len().saturating_sub(1);
     sel = match sel {
@@ -854,13 +928,7 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
             thumbnail(ui.painter(), r.shrink(1.0), &g, t.field_border);
             // Drag the gradient onto the Swatches panel to keep it as a swatch.
             if is_gradient {
-                resp.dnd_set_drag_payload(GradientDrag(fill.swatch.clone()));
-                if resp.dragged()
-                    && let Some(p) = ui.ctx().pointer_interact_pos()
-                {
-                    let painter = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("gradient_drag")));
-                    thumbnail(&painter, egui::Rect::from_min_size(p + vec2(8.0, 8.0), vec2(18.0, 18.0)), &g, t.field_border);
-                }
+                drag_gradient_thumbnail(ui, &resp, &g, &fill.swatch, &t);
             }
             // Clicking the thumbnail applies the gradient shown (InDesign's way to start one).
             if resp.clicked() && !is_gradient {
@@ -871,14 +939,7 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 ui.horizontal(|ui| {
                     crate::widgets::caption_w(ui, crate::i18n::tr(&lang, "Type:"), 52.0);
-                    let shown = if is_gradient { crate::i18n::tr(&lang, g.kind.label()) } else { "" };
-                    egui::ComboBox::from_id_salt("grad_type").selected_text(crate::rtl::widget(ui, shown)).width(104.0).show_ui(ui, |ui| {
-                        for (k, v) in [("Linear", "linear"), ("Radial", "radial")] {
-                            if ui.selectable_label(is_gradient && g.kind.label() == k, crate::rtl::widget(ui, crate::i18n::tr(&lang, k))).clicked() {
-                                send = Some(json!({"kind": v}));
-                            }
-                        }
-                    });
+                    send = gradient_type_combo(ui, &lang, &g, is_gradient).or(send.take());
                 });
                 ui.horizontal(|ui| {
                     crate::widgets::caption_w(ui, crate::i18n::tr(&lang, "Location:"), 52.0);
@@ -919,14 +980,7 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         let (area, resp) = ui.allocate_exact_size(vec2(w, 40.0), Sense::click_and_drag());
         let ramp = egui::Rect::from_min_size(area.min + vec2(6.0, 10.0), vec2(w - 12.0, 14.0));
         let painter = ui.painter();
-        let n = 96;
-        for i in 0..n {
-            let (a, b) = (i as f32 / n as f32, (i + 1) as f32 / n as f32);
-            let (c, alpha) = g.sample((a + b) / 2.0);
-            let x0 = ramp.left() + ramp.width() * a;
-            let x1 = ramp.left() + ramp.width() * b + 0.5;
-            painter.rect_filled(egui::Rect::from_x_y_ranges(x0..=x1, ramp.y_range()), 0.0, color32(&c, alpha));
-        }
+        paint_ramp(painter, ramp, &g);
         painter.rect_stroke(ramp, 0.0, egui::Stroke::new(1.0, t.field_border), egui::StrokeKind::Outside);
         let x_of = |o: f32| ramp.left() + ramp.width() * o;
         let o_of = |x: f32| ((x - ramp.left()) / ramp.width()).clamp(0.0, 1.0);
@@ -981,16 +1035,9 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
         if resp.drag_stopped()
             && let Some((h, o, off)) = dragging.take()
         {
-            let mut stops = stops_json(&g);
-            match h {
-                RampSel::Stop(i) if off => {
-                    if i < stops.len() {
-                        stops.remove(i);
-                    }
-                    sel = RampSel::Stop(0);
-                }
-                RampSel::Stop(i) => set_stop(&mut stops, i, "location", json!(o as f64 * 100.0)),
-                RampSel::Mid(i) => set_stop(&mut stops, i, "midpoint", json!(o as f64 * 100.0)),
+            let (stops, kept) = ramp_release(&g, h, o, off);
+            if let Some(kept) = kept {
+                sel = kept;
             }
             send = Some(json!({"stops": stops}));
         }
@@ -1027,6 +1074,10 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                     let mut rgb = [(r * 255.0) as u8, (gg * 255.0) as u8, (bb * 255.0) as u8];
                     if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).changed() {
                         let mut stops = stops_json(&g);
+                        // A picked color replaces the stop's swatch.
+                        if let Some(o) = stops.get_mut(i).and_then(serde_json::Value::as_object_mut) {
+                            o.remove("swatch");
+                        }
                         set_stop(&mut stops, i, "color", json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
                         send = Some(json!({"stops": stops}));
                     }
@@ -1160,6 +1211,8 @@ mod gradient_panel_tests {
         assert_eq!(g.stops[1].color, Color::gray(0.6));
         assert!((g.stops[1].offset - 0.8).abs() < 1e-6);
         assert_eq!(g.stops[2].color, Color::gray(0.01), "a 1 % grey stays 1 %");
+        assert_eq!(g.stops[0].swatch.as_deref(), Some("C=0 M=100 Y=0 K=0"), "a stop keeps its swatch");
+        assert_eq!(g.stops[1].swatch, None);
     }
 
     #[test]
@@ -1180,7 +1233,7 @@ mod gradient_panel_tests {
         let app = app_with_frame();
         let mut h = Harness::builder().with_size(vec2(280.0, 200.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
@@ -1321,7 +1374,7 @@ mod swatches_header_tests {
     fn harness(app: DesignApp) -> Harness<'static, DesignApp> {
         Harness::builder().with_size(vec2(300.0, 520.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
