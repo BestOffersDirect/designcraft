@@ -3521,3 +3521,33 @@ fn character_style_options_set_the_digits() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
+
+/// The bookmarks checkbox persists through generation and reopening the dialog.
+#[test]
+fn toc_bookmarks_checkbox_sets_and_reopens_the_persisted_option() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.newSample", json!({})).unwrap();
+    open_toc(&mut app);
+    assert!(app.ui.dialog.as_ref().unwrap().b("createBookmarks"));
+    app.ui.dialog.as_mut().unwrap().fields.insert("included".into(), json!([{"style": "Headline", "level": 1}]));
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    visible_label(&labels, screen, "Create PDF Bookmarks");
+    confirm(&mut app).unwrap();
+    assert!(app.session.doc().unwrap().doc.toc.as_ref().unwrap().create_bookmarks);
+    assert!(!app.session.doc().unwrap().doc.bookmarks.is_empty());
+    open_toc(&mut app);
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "Create PDF Bookmarks").center());
+    confirm(&mut app).unwrap();
+    assert!(app.session.doc().unwrap().doc.bookmarks.is_empty());
+    open_toc(&mut app);
+    assert!(!app.ui.dialog.as_ref().unwrap().b("createBookmarks"));
+}

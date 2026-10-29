@@ -186,36 +186,6 @@ fn color_theme(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 mod color_theme_tests {
     use super::*;
 
-    /// The bookmarks checkbox persists through generation and reopening the dialog.
-    #[test]
-    fn toc_bookmarks_checkbox_sets_and_reopens_the_persisted_option() {
-        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
-        app.run("file.newSample", json!({})).unwrap();
-        open_toc(&mut app);
-        assert!(app.ui.dialog.as_ref().unwrap().b("createBookmarks"));
-        app.ui.dialog.as_mut().unwrap().fields.insert("included".into(), json!([{"style": "Headline", "level": 1}]));
-        let ctx = dialog_context("en");
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
-        for _ in 0..3 {
-            dialog_frame(&mut app, &ctx, screen, vec![]);
-        }
-        let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
-        visible_label(&labels, screen, "Create PDF Bookmarks");
-        confirm(&mut app).unwrap();
-        assert!(app.session.doc().unwrap().doc.toc.as_ref().unwrap().create_bookmarks);
-        assert!(!app.session.doc().unwrap().doc.bookmarks.is_empty());
-        open_toc(&mut app);
-        for _ in 0..3 {
-            dialog_frame(&mut app, &ctx, screen, vec![]);
-        }
-        let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
-        click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "Create PDF Bookmarks").center());
-        confirm(&mut app).unwrap();
-        assert!(app.session.doc().unwrap().doc.bookmarks.is_empty());
-        open_toc(&mut app);
-        assert!(!app.ui.dialog.as_ref().unwrap().b("createBookmarks"));
-    }
-
     #[test]
     fn color_theme_cancel_is_read_only_and_confirm_adds_the_preview() {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
