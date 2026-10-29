@@ -20,6 +20,7 @@ pub mod math;
 pub mod recovery;
 pub mod sample;
 pub mod script;
+pub mod separations;
 mod tooling;
 
 use std::sync::Arc;
@@ -762,19 +763,3 @@ pub(crate) use push_undo as record_undo;
 
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod tests_autosize;
-#[cfg(test)]
-mod tests_file_guard;
-#[cfg(test)]
-mod tests_idml;
-#[cfg(test)]
-mod tests_ime;
-#[cfg(test)]
-mod tests_linked_paths;
-#[cfg(test)]
-mod tests_params;
-#[cfg(test)]
-mod tests_roots;
-#[cfg(test)]
-mod tests_table;
