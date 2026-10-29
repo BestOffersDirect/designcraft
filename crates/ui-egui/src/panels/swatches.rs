@@ -575,7 +575,7 @@ fn cmyk_ramp(k: usize, x: f32) -> egui::Color32 {
 /// The spectrum ramp: hue across, light to dark down; click to apply.
 fn spectrum(app: &mut DesignApp, ui: &mut egui::Ui, target: &str) {
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, crate::i18n::tr(&app.ui.language, "Color spectrum")));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, crate::i18n::tr(&app.ui.language, "Color spectrum")));
     let at = |u: f32, v: f32| -> [f32; 3] {
         let c = egui::ecolor::Hsva::new(u, (v * 2.0).min(1.0), (2.0 - v * 2.0).min(1.0), 1.0).to_rgb();
         [c[0], c[1], c[2]]
@@ -683,7 +683,7 @@ mod color_panel_defaults_tests {
         let mut h = egui_kittest::Harness::builder().with_size(vec2(320.0, 480.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
                 // The panel's fonts are installed on the first frame and used from the next.
-                let id = egui::Id::new("test_fonts");
+                let id = egui::Id::unique("test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(id)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(id, true));
