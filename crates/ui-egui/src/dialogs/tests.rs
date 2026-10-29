@@ -3538,11 +3538,8 @@ fn the_rule_colour_menu_offers_text_color() {
             events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() });
             events.push(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() });
         }
-        let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 600.0))),
-            events,
-            ..Default::default()
-        };
+        let input =
+            egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 600.0))), events, ..Default::default() };
         let mut out = ctx.run_ui(input, |ui| {
             picked = swatch_menu_with(ui, &doc, "m", "[Black]", 130.0, text);
         });
@@ -3599,8 +3596,7 @@ fn a_rules_default_gap_tint_shows_100() {
     )
     .unwrap();
     let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
-    h.state_mut().app.ui.dialog =
-        Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "rules", "rule": "ruleBelow"})));
+    h.state_mut().app.ui.dialog = Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "rules", "rule": "ruleBelow"})));
     h.run_steps(4);
     let label = h.get_by_label("Gap Tint:").rect();
     let field = h
