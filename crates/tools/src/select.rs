@@ -768,51 +768,51 @@ impl SelectionTool {
             && let Some((id, si, ai, handle)) = anchor_at(cx, p)
         {
             let at = anchor_spread_point(cx, id, si, ai);
-                    let mut out = vec![];
-                    let mut others = vec![];
-                    if handle.is_none() {
-                        // InDesign's anchor point selection: a click selects the point, Shift+click
-                        // adds it or takes it away, and dragging a selected point moves all of them.
-                        let me = (ItemId(id), si, ai);
-                        let mut points = cx.selection.anchors.clone();
-                        let was = points.contains(&me);
-                        if ev.mods.shift && was {
-                            // Kept selected so a Shift-drag can constrain it; a click still takes it
-                            // away, on release, as for objects.
-                            self.anchor_release = Some(me);
-                        } else if ev.mods.shift {
-                            points.push(me);
-                        } else if !was {
-                            points = vec![me];
-                        }
-                        if points != cx.selection.anchors {
-                            out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points)));
-                        }
-                        others = points.iter().filter(|a| **a != me).map(|(i, s, a)| (i.0, *s, *a)).collect();
-                    }
-                    let label = if handle.is_some() {
-                        "Move Direction Handle"
-                    } else if others.is_empty() {
-                        "Move Anchor"
-                    } else {
-                        "Move Anchors"
-                    };
-                    self.drag = Drag::Anchor { id, si, ai, handle, start: p, at, others };
-                    out.push(Action::Begin(label.into()));
-                    return out;
+            let mut out = vec![];
+            let mut others = vec![];
+            if handle.is_none() {
+                // InDesign's anchor point selection: a click selects the point, Shift+click
+                // adds it or takes it away, and dragging a selected point moves all of them.
+                let me = (ItemId(id), si, ai);
+                let mut points = cx.selection.anchors.clone();
+                let was = points.contains(&me);
+                if ev.mods.shift && was {
+                    // Kept selected so a Shift-drag can constrain it; a click still takes it
+                    // away, on release, as for objects.
+                    self.anchor_release = Some(me);
+                } else if ev.mods.shift {
+                    points.push(me);
+                } else if !was {
+                    points = vec![me];
                 }
-                // As in InDesign, the Direct Selection tool pressed on a corner or anchor of an object
-                // that isn't selected selects it and moves just that point (Chris Nielsen's "The
-                // InDesign Toolbox", 10:10: click outside, then pull a frame's corner).
-                if self.direct
-                    && !ev.mods.shift
-                    && let Some((_, hit)) = cx.hit(p)
-                    && !cx.selection.contains(hit)
-                    && let Some((id, si, ai, None)) = anchor_at_in(cx, &[hit], p)
-                {
-                    let at = anchor_spread_point(cx, id, si, ai);
-                    self.drag = Drag::Anchor { id, si, ai, handle: None, start: p, at, others: vec![] };
-                    return vec![Action::Exec("selection.set".into(), json!({"ids": [id], "content": true})), Action::Begin("Move Anchor".into())];
+                if points != cx.selection.anchors {
+                    out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points)));
+                }
+                others = points.iter().filter(|a| **a != me).map(|(i, s, a)| (i.0, *s, *a)).collect();
+            }
+            let label = if handle.is_some() {
+                "Move Direction Handle"
+            } else if others.is_empty() {
+                "Move Anchor"
+            } else {
+                "Move Anchors"
+            };
+            self.drag = Drag::Anchor { id, si, ai, handle, start: p, at, others };
+            out.push(Action::Begin(label.into()));
+            return out;
+        }
+        // As in InDesign, the Direct Selection tool pressed on a corner or anchor of an object
+        // that isn't selected selects it and moves just that point (Chris Nielsen's "The
+        // InDesign Toolbox", 10:10: click outside, then pull a frame's corner).
+        if self.direct
+            && !ev.mods.shift
+            && let Some((_, hit)) = cx.hit(p)
+            && !cx.selection.contains(hit)
+            && let Some((id, si, ai, None)) = anchor_at_in(cx, &[hit], p)
+        {
+            let at = anchor_spread_point(cx, id, si, ai);
+            self.drag = Drag::Anchor { id, si, ai, handle: None, start: p, at, others: vec![] };
+            return vec![Action::Exec("selection.set".into(), json!({"ids": [id], "content": true})), Action::Begin("Move Anchor".into())];
         }
         // A selected placed graphic's own handles resize it inside its frame (the
         // frame's anchors, under Direct Selection, come first).
@@ -1151,18 +1151,18 @@ impl SelectionTool {
                 // Screen y points down: a positive screen angle is clockwise.
                 vec![Action::Preview("transform.rotate".into(), json!({"angle": -a}))]
             }
-                Drag::Anchor { id, si, ai, handle, start, at, others } => {
-                    let mut d = p - start;
-                    if d.hypot() >= cx.tol(3.0) {
-                        self.anchor_release = None;
-                    } else if self.anchor_release.is_some() {
-                        // A Shift-press on a selected point is still a click: nothing moves yet.
-                        return vec![];
-                    }
-                    // Shift: horizontal, vertical or at 45°.
-                    if ev.mods.shift {
-                        d = constrain_45(d);
-                    }
+            Drag::Anchor { id, si, ai, handle, start, at, others } => {
+                let mut d = p - start;
+                if d.hypot() >= cx.tol(3.0) {
+                    self.anchor_release = None;
+                } else if self.anchor_release.is_some() {
+                    // A Shift-press on a selected point is still a click: nothing moves yet.
+                    return vec![];
+                }
+                // Shift: horizontal, vertical or at 45°.
+                if ev.mods.shift {
+                    d = constrain_45(d);
+                }
                 let mut dx = d.x;
                 let mut dy = d.y;
                 self.guides.clear();
@@ -1190,23 +1190,23 @@ impl SelectionTool {
                         },
                     );
                     // dx and dy stay in canvas space. Snap.delta is spread space.
-                        let mut corr = spread_delta_to_canvas(cx.layout.xf(spread), hit.delta);
-                        corr = Vec2::new(if corr.x.is_finite() { corr.x } else { 0.0 }, if corr.y.is_finite() { corr.y } else { 0.0 });
-                        // Shift: the snap moves the points along the constrained direction only.
-                        if ev.mods.shift && d.hypot() > 1e-9 {
-                            let dir = d / d.hypot();
-                            corr = dir * corr.dot(dir);
+                    let mut corr = spread_delta_to_canvas(cx.layout.xf(spread), hit.delta);
+                    corr = Vec2::new(if corr.x.is_finite() { corr.x } else { 0.0 }, if corr.y.is_finite() { corr.y } else { 0.0 });
+                    // Shift: the snap moves the points along the constrained direction only.
+                    if ev.mods.shift && d.hypot() > 1e-9 {
+                        let dir = d / d.hypot();
+                        corr = dir * corr.dot(dir);
                     }
-                        dx += corr.x;
-                        dy += corr.y;
+                    dx += corr.x;
+                    dy += corr.y;
                     self.guides = hit.guides;
                 }
                 let mut params = json!({"id": id, "anchors": [[si, ai]], "dx": dx, "dy": dy});
                 if let Some(h) = handle {
                     params["handle"] = json!(h);
-                    } else if !others.is_empty() {
-                        let points: Vec<Value> = std::iter::once((id, si, ai)).chain(others).map(|(i, s, a)| json!([i, s, a])).collect();
-                        params = json!({"points": points, "dx": dx, "dy": dy});
+                } else if !others.is_empty() {
+                    let points: Vec<Value> = std::iter::once((id, si, ai)).chain(others).map(|(i, s, a)| json!([i, s, a])).collect();
+                    params = json!({"points": points, "dx": dx, "dy": dy});
                 }
                 vec![Action::Preview("path.moveAnchors".into(), params)]
             }
