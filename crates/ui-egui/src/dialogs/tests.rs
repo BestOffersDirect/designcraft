@@ -1647,14 +1647,14 @@ fn dialog_frame(app: &mut DesignApp, ctx: &egui::Context, screen: egui::Rect, ev
     labels
 }
 
-    /// What Find/Change's Search list shows for a scope.
-    fn scope_label(scope: &str) -> &'static str {
-        match scope {
-            "story" => "Story",
-            "selection" => "Selection",
-            _ => "Document",
-        }
+/// What Find/Change's Search list shows for a scope.
+fn scope_label(scope: &str) -> &'static str {
+    match scope {
+        "story" => "Story",
+        "selection" => "Selection",
+        _ => "Document",
     }
+}
 
 fn visible_label(labels: &[(String, egui::Rect, egui::Rect)], screen: egui::Rect, expected: &str) -> egui::Rect {
     let (_, rect, clip) = labels.iter().find(|(text, _, _)| text.trim() == expected).unwrap_or_else(|| panic!("{expected} is painted"));
@@ -1739,8 +1739,8 @@ fn scope_dialog_with_tool(text: &str, end: usize, tool: Option<&str>) -> (Design
     for _ in 0..3 {
         dialog_frame(&mut app, &ctx, screen, vec![]);
     }
-        scope_click(&mut app, &ctx, screen, "Document");
-        scope_click(&mut app, &ctx, screen, "Selection");
+    scope_click(&mut app, &ctx, screen, "Document");
+    scope_click(&mut app, &ctx, screen, "Selection");
     assert_eq!(app.ui.dialog.as_ref().unwrap().s("scope"), "selection");
     (app, ctx, screen, sid)
 }
@@ -3613,10 +3613,7 @@ fn a_change_format_goes_with_change_all() {
     let mut d = Dialog::new("findChange", json!({"find": "cook"}));
     d.fields.insert(CHANGE_FORMAT.into(), json!({"charStyle": "eggs", "paraStyle": "Method", "chars": {"underline": true}}));
     let p = find_change_params(&d);
-    assert_eq!(
-        (p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()),
-        (json!("eggs"), json!("Method"), json!({"underline": true}))
-    );
+    assert_eq!((p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()), (json!("eggs"), json!("Method"), json!({"underline": true})));
     assert_eq!(format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
     assert!(find_change_params(&Dialog::new("findChange", json!({"find": "cook"}))).get("attrs").is_none());
     // A Find Format goes with every search.

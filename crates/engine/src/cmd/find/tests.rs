@@ -621,26 +621,26 @@ fn document_scope_searches_and_changes_table_cells() {
     assert_eq!(s.execute("find.find", &json!({"find": "13.00", "scope": "document"})).unwrap().as_array().unwrap().len(), 2);
 }
 
-    /// Change (`found`) on text Find Next found in a table cell changes it there, leaves the
-    /// same text in the story alone, and Find Next goes on after it.
-    #[test]
-    fn change_changes_the_text_find_next_found_in_a_cell() {
-        let (mut s, sid) = scope_session("red here");
-        scope_select(&mut s, sid, 0, 0);
-        let table = s.execute("table.insert", &json!({"rows": 1, "cols": 2})).unwrap()["table"].as_u64().unwrap();
-        s.execute("table.setCell", &json!({"row": 0, "col": 1, "text": "red"})).unwrap();
-        let p = json!({"find": "red", "change": "blue", "scope": "document"});
-        let hit = s.execute("find.next", &p).unwrap();
-        assert_eq!(hit["cell"], json!({"table": table, "row": 0, "col": 1}), "{hit}");
-        let mut change = p.clone();
-        change["found"] = json!(true);
-        assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
-        let t = s.execute("table.get", &json!({"table": table})).unwrap();
-        assert_eq!(t["cells"][1]["text"], "blue");
-        assert!(s.doc().unwrap().doc.story(sid).unwrap().text.contains("red here"), "the story's red stays");
-        let next = s.execute("find.next", &p).unwrap();
-        assert!(next.get("cell").is_none() && next.get("start").is_some(), "on to the story: {next}");
-    }
+/// Change (`found`) on text Find Next found in a table cell changes it there, leaves the
+/// same text in the story alone, and Find Next goes on after it.
+#[test]
+fn change_changes_the_text_find_next_found_in_a_cell() {
+    let (mut s, sid) = scope_session("red here");
+    scope_select(&mut s, sid, 0, 0);
+    let table = s.execute("table.insert", &json!({"rows": 1, "cols": 2})).unwrap()["table"].as_u64().unwrap();
+    s.execute("table.setCell", &json!({"row": 0, "col": 1, "text": "red"})).unwrap();
+    let p = json!({"find": "red", "change": "blue", "scope": "document"});
+    let hit = s.execute("find.next", &p).unwrap();
+    assert_eq!(hit["cell"], json!({"table": table, "row": 0, "col": 1}), "{hit}");
+    let mut change = p.clone();
+    change["found"] = json!(true);
+    assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
+    let t = s.execute("table.get", &json!({"table": table})).unwrap();
+    assert_eq!(t["cells"][1]["text"], "blue");
+    assert!(s.doc().unwrap().doc.story(sid).unwrap().text.contains("red here"), "the story's red stays");
+    let next = s.execute("find.next", &p).unwrap();
+    assert!(next.get("cell").is_none() && next.get("start").is_some(), "on to the story: {next}");
+}
 
 fn child_scope_session(note: bool, child: &str) -> (Session, designcraft_doc::StoryId, designcraft_doc::TextSel) {
     let (mut s, sid) = scope_session("red");
