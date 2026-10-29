@@ -299,10 +299,11 @@ pub fn show_instructions(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let lang = app.ui.language.clone();
     egui::Grid::new("printing_instructions").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
         for (key, label, lines) in INSTRUCTION_FIELDS {
-            crate::rtl::label(ui, crate::i18n::tr(&lang, label));
+            let name = crate::rtl::label(ui, crate::i18n::tr(&lang, label));
             let mut text = d.s(key);
             let edit = if lines > 1 { egui::TextEdit::multiline(&mut text).desired_rows(lines) } else { egui::TextEdit::singleline(&mut text) };
-            let resp = ui.add(edit.desired_width(320.0));
+            // Named by its label, for screen readers.
+            let resp = ui.add(edit.desired_width(320.0)).labelled_by(name.id);
             if resp.changed() {
                 d.fields.insert(key.into(), json!(text));
             }
