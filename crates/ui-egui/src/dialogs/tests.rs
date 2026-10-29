@@ -3469,20 +3469,20 @@ fn guide_counts(app: &DesignApp) -> Vec<usize> {
 }
 
 #[test]
-    fn create_guides_dialog_covers_the_spread_in_view() {
+fn create_guides_dialog_covers_the_spread_in_view() {
     let mut app = facing_app(6);
-        // As in InDesign, both pages of the facing spread in view get the guides.
+    // As in InDesign, both pages of the facing spread in view get the guides.
     crate::canvas::go_to_page(&mut app, 1);
     crate::menus::activate(&mut app, "layout.createGuides", &Value::Null);
-        assert_eq!(app.ui.dialog.as_ref().unwrap().s("target"), "spread");
+    assert_eq!(app.ui.dialog.as_ref().unwrap().s("target"), "spread");
     ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": "2"}));
-        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
-        assert_eq!(guide_counts(&app), vec![0, 2, 2, 0, 0, 0]);
-        // "This page" narrows them to the page in view.
-        crate::canvas::go_to_page(&mut app, 4);
-        crate::menus::activate(&mut app, "layout.createGuides", &Value::Null);
-        ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": "3"}));
-        ctl(&mut app, "ui.dialog.set", json!({"field": "target", "value": "page"}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+    assert_eq!(guide_counts(&app), vec![0, 2, 2, 0, 0, 0]);
+    // "This page" narrows them to the page in view.
+    crate::canvas::go_to_page(&mut app, 4);
+    crate::menus::activate(&mut app, "layout.createGuides", &Value::Null);
+    ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": "3"}));
+    ctl(&mut app, "ui.dialog.set", json!({"field": "target", "value": "page"}));
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(guide_counts(&app), vec![0, 2, 2, 0, 4, 0]);
 }
