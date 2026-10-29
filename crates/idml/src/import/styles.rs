@@ -225,7 +225,7 @@ impl<'r> Importer<'r> {
 
     /// A paragraph style reference written as an element's text: as written when it names a
     /// style, otherwise without surrounding whitespace (see [`Self::listed_char_style_ref`]).
-    fn listed_para_style_ref(&self, r: &str) -> String {
+    pub(super) fn listed_para_style_ref(&self, r: &str) -> String {
         if self.para_names.contains_key(r) { self.para_style_ref(r) } else { self.para_style_ref(r.trim()) }
     }
     /// A character style reference written as an element's text (nested, line and GREP styles).
