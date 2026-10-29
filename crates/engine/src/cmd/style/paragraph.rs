@@ -328,7 +328,7 @@ fn apply_para_in_story(
             f.chars.retain_differences(style_chars);
         }
     });
-    for (pi, range) in st.paras_touching(r.clone()).into_iter().filter(|(pi, _)| (first..=last).contains(pi)) {
+    for (pi, range) in st.para_ranges().into_iter().enumerate().filter(|(pi, _)| (first..=last).contains(pi)) {
         let Some(pf) = st.paras.get(pi) else { continue };
         let (_, base) = styles.resolve_para(pf);
         let end = range.end.saturating_add(1).min(st.len());
