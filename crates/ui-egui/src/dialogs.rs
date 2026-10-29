@@ -1998,8 +1998,8 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
                     ui.add_space(8.0);
                     crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Panels")).font(semibold(12.0)));
                     ui.horizontal(|ui| {
-                        crate::rtl::label(ui, crate::i18n::tr(&lang, "Tools Panel:"));
-                        translated_combo(&lang, ui, d, "toolsColumns", &[("single", "Single Column"), ("double", "Double Column")]);
+                        let name = crate::rtl::label(ui, crate::i18n::tr(&lang, "Tools Panel:"));
+                        translated_combo(&lang, ui, d, "toolsColumns", &[("single", "Single Column"), ("double", "Double Column")]).labelled_by(name.id);
                     });
                 }
                 "uiScaling" => {
@@ -6131,22 +6131,26 @@ fn delete_character_style(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog
         });
 }
 
-fn combo(ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) {
+fn combo(ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) -> egui::Response {
     let cur = d.s(key);
     let shown = opts.iter().find(|o| o.0 == cur).map_or(cur.as_str(), |o| o.1).to_string();
-    craft_ui::ComboBox::from_id_salt(key).selected_text(crate::rtl::widget(ui, &shown)).width(170.0).show_ui(ui, |ui| {
-        for (v, label) in opts {
-            if ui.selectable_label(cur == *v, crate::rtl::widget(ui, *label)).clicked() {
-                d.fields.insert(key.into(), json!(v));
+    craft_ui::ComboBox::from_id_salt(key)
+        .selected_text(crate::rtl::widget(ui, &shown))
+        .width(170.0)
+        .show_ui(ui, |ui| {
+            for (v, label) in opts {
+                if ui.selectable_label(cur == *v, crate::rtl::widget(ui, *label)).clicked() {
+                    d.fields.insert(key.into(), json!(v));
+                }
             }
-        }
-    });
+        })
+        .response
 }
 
 /// Translate enum captions without changing serialized values or user-defined names.
-fn translated_combo(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) {
+fn translated_combo(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) -> egui::Response {
     let opts: Vec<_> = opts.iter().map(|(value, label)| (*value, crate::i18n::tr(lang, label))).collect();
-    combo(ui, d, key, &opts);
+    combo(ui, d, key, &opts)
 }
 
 /// Style name picker (paragraph or character styles of the active document).
