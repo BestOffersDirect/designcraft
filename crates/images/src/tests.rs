@@ -435,7 +435,9 @@ fn rasters_past_the_rgba_budget_are_refused_before_decoding() {
     assert!(png.len() < 1 << 20, "{} bytes", png.len());
     assert_eq!(pixel_size(&png), Some((16_385, 16_385)));
     assert_eq!(natural_size(&png), Some((16_385.0, 16_385.0)));
+    assert!(too_large_to_decode(&png));
     assert!(decode_rgba(&png).is_none());
+    assert!(!too_large_to_decode(&blank_png(16_384)));
     let small = decode_rgba(&blank_png(9)).expect("decodes");
     assert_eq!(small.get_pixel(8, 8).0, [0, 0, 0, 255]);
 }

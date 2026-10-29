@@ -161,9 +161,12 @@ pub(super) fn cmyk_tiff(data: &[u8], mode: RasterMode) -> Option<Image> {
     Image::from_custom(CmykImage(Arc::new(r)), mode.interpolate).ok()
 }
 
-/// Opaque raster → JPEG (quality 90). `None` when the image has transparency or can't be decoded.
-/// With `tag_rgb`, the JPEG keeps the source's RGB profile, or gets sRGB.
+/// Opaque raster → JPEG (quality 90). `None` when the image has transparency, is too large or
+/// can't be decoded. With `tag_rgb`, the JPEG keeps the source's RGB profile, or gets sRGB.
 pub(super) fn recompress(data: &[u8], mode: RasterMode) -> Option<Image> {
+    if designcraft_images::too_large_to_decode(data) {
+        return None;
+    }
     let img = image::load_from_memory(data).ok()?;
     if img.color().has_alpha() && img.to_rgba8().pixels().any(|p| p[3] < 255) {
         return None;
