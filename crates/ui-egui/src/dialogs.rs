@@ -3476,7 +3476,7 @@ fn format_style_options(lang: &str, ui: &mut egui::Ui, fd: &mut Dialog, styles: 
             crate::rtl::label(ui, crate::i18n::tr(lang, label));
             let cur = fd.fields.get(key).and_then(Value::as_str).map(str::to_string);
             let shown = cur.as_deref().map_or_else(|| any.to_string(), |n| crate::i18n::style_name(lang, n).to_string());
-            egui::ComboBox::from_id_salt(("format_style", key)).selected_text(crate::rtl::widget(ui, shown)).width(240.0).show_ui(ui, |ui| {
+            craft_ui::ComboBox::from_id_salt(("format_style", key)).selected_text(crate::rtl::widget(ui, shown)).width(240.0).show_ui(ui, |ui| {
                 if ui.selectable_label(cur.is_none(), crate::rtl::widget(ui, any)).clicked() {
                     fd.fields.remove(key);
                 }
