@@ -3521,3 +3521,80 @@ fn character_style_options_set_the_digits() {
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
+
+/// Replace the text of the field beside the `nth` label `label` (on its row, to its right) with
+/// `new`, and leave the field.
+fn retype_beside(h: &mut egui_kittest::Harness<'static, crate::test_window::Window>, label: &str, nth: usize, new: &str) {
+    use egui_kittest::kittest::Queryable;
+    let l = h.get_all_by_label(label).nth(nth).unwrap_or_else(|| panic!("no label {label} #{nth}")).rect();
+    let field = h
+        .get_all_by(|n| n.role() == egui::accesskit::Role::TextInput)
+        .map(|n| n.rect())
+        .filter(|r| r.center().x > l.max.x && (r.center().y - l.center().y).abs() < l.height().max(8.0))
+        .min_by(|a, b| a.min.x.total_cmp(&b.min.x))
+        .unwrap_or_else(|| panic!("no field beside {label} #{nth}"))
+        .center();
+    crate::test_window::click_at(h, field);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
+    h.event(egui::Event::Text(new.into()));
+    h.run_steps(1);
+    // Tab leaves the field (Enter would be the dialog's OK).
+    h.key_press(egui::Key::Tab);
+    h.run_steps(3);
+}
+
+/// The course's chapter 40: Paragraph Border's four weights are linked as InDesign's, so a
+/// side typed in sets all four; with the link off ("Make all settings the same") a side is set
+/// alone, as the lesson gives the border only a thick left side. The corners link the same way.
+#[test]
+fn paragraph_border_sides_and_corners_link_as_indesigns() {
+    use egui_kittest::kittest::Queryable;
+    let (app, _) = ruled_paragraph();
+    let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
+    h.state_mut().app.ui.dialog =
+        Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "border", "p.borderOn": true})));
+    h.run_steps(4);
+    let field = |h: &egui_kittest::Harness<'static, crate::test_window::Window>, key: &str| {
+        h.state().app.ui.dialog.as_ref().and_then(|d| d.fields.get(&format!("p.{key}")).cloned()).unwrap_or_default()
+    };
+    // The four weights start the same, so linked: Top sets them all.
+    retype_beside(&mut h, "Top:", 0, "3");
+    assert_eq!(field(&h, "borderWeights"), json!([3.0, 3.0, 3.0, 3.0]));
+    // Unlinked, Left alone takes 10 pt.
+    // The link of the weights (0), corners (1) or offsets (2), where it is now: the dialog
+    // scrolls as fields take focus.
+    let link = |h: &egui_kittest::Harness<'static, crate::test_window::Window>, n: usize| {
+        let links: Vec<egui::Rect> = h.get_all_by_label("Make all settings the same").map(|n| n.rect()).collect();
+        assert_eq!(links.len(), 3, "weights, corners and offsets each have a link");
+        links[n].center()
+    };
+    let at = link(&h, 0);
+    crate::test_window::click_at(&mut h, at);
+    retype_beside(&mut h, "Left:", 0, "10");
+    assert_eq!(field(&h, "borderWeights"), json!([3.0, 10.0, 3.0, 3.0]));
+    // Linked again, the four take Top's weight; unlinked once more for the thick left side.
+    let at = link(&h, 0);
+    crate::test_window::click_at(&mut h, at);
+    assert_eq!(field(&h, "borderWeights"), json!([3.0, 3.0, 3.0, 3.0]));
+    let at = link(&h, 0);
+    crate::test_window::click_at(&mut h, at);
+    retype_beside(&mut h, "Left:", 0, "10");
+    assert_eq!(field(&h, "borderWeights"), json!([3.0, 10.0, 3.0, 3.0]));
+    // The corners start the same too: Top Left's size goes to all four.
+    retype_beside(&mut h, "Top Left:", 0, "0p4");
+    let corners = field(&h, "borderCorners");
+    assert!((0..4).all(|i| corners[i]["size"] == json!(4.0)), "{corners}");
+    // Unlinked, Top Right alone takes 0p8; linked again, all four take Top Left's 4 pt.
+    let at = link(&h, 1);
+    crate::test_window::click_at(&mut h, at);
+    retype_beside(&mut h, "Top Right:", 0, "0p8");
+    assert_eq!(field(&h, "borderCorners")[1]["size"], json!(8.0));
+    assert_eq!(field(&h, "borderCorners")[0]["size"], json!(4.0));
+    let at = link(&h, 1);
+    crate::test_window::click_at(&mut h, at);
+    let corners = field(&h, "borderCorners");
+    assert!((0..4).all(|i| corners[i] == corners[0] && corners[i]["size"] == json!(4.0)), "{corners}");
+    confirm(&mut h.state_mut().app).unwrap();
+    let style = h.state().app.session.doc().unwrap().doc.styles.para("Ruled Child").cloned().unwrap();
+    assert_eq!(style.para.border_weights, Some([3.0, 10.0, 3.0, 3.0]));
+}
