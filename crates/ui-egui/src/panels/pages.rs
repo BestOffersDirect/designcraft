@@ -533,7 +533,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                         ui.painter().rect_filled(br, 0.0, BADGE);
                     }
                     ui.painter().galley(c - g.size() / 2.0, g, ink);
-                    let lr = ui.interact(br, ui.id().with(("spread_label", si)), Sense::click());
+                    let lr = ui.interact(br, ui.scope_id().with(("spread_label", si)), Sense::click());
                     // A click goes to the spread, so assistive technology hears a button.
                     lr.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
                     if lr.clicked() {
