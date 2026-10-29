@@ -18,7 +18,7 @@ pub(super) fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         return crate::cmd::table::step_cell(s, true);
     }
     // Typing with one cell selected replaces its text, as InDesign.
-    super::table::one_selected_cell_to_text(s)?;
+    crate::cmd::table::one_selected_cell_to_text(s)?;
     let raw = p.get("raw").and_then(Value::as_bool).unwrap_or(false);
     let text = if s.prefs.typographers_quotes && !raw { smart_quotes(s, &text) } else { text };
     let tracking = s.doc()?.doc.settings.track_changes;

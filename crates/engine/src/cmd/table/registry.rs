@@ -1,7 +1,7 @@
 use super::cell::{get_cell_stroke, set_cell};
 use super::content::{drop_cells, place_graphic, sort_rows};
 use super::options::{get, options};
-use super::selection::{move_rc, select, step_cell};
+use super::selection::{move_rc, select, step_cell, toggle_selection};
 use super::sizing::{distribute_cols, distribute_rows, resize_border, set_col_width, set_row_height};
 use super::structure::{
     can_convert_rows, convert_from_text, convert_rows, convert_to_text, delete_cols, delete_rows, delete_table, insert, insert_col, insert_row,
