@@ -555,7 +555,7 @@ fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
         ] {
             let ir = sub(b, x, y + 2.0, 17.0, 17.0);
             icons::paint(ui.painter(), ir, icon, if enabled { t.icon } else { t.text_dim });
-            ui.interact(ir, ui.id().with(("prop_wrap_off", k)), Sense::hover()).on_hover_ui(|ui| {
+            ui.interact(ir, ui.scope_id().with(("prop_wrap_off", k)), Sense::hover()).on_hover_ui(|ui| {
                 crate::rtl::label(ui, tr(tip));
             });
             let nv = place(ui, sub(b, x + 20.0, y, 76.0, FIELD_H), |ui| {
