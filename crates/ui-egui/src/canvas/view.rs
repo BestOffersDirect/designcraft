@@ -187,7 +187,7 @@ pub fn page_box(app: &DesignApp) -> Option<PageBox> {
 pub fn page_box_go(app: &mut DesignApp, b: &PageBox, i: usize) {
     if i < b.pages {
         if app.session.active().is_some_and(|st| st.editing_parents) {
-            let _ = app.run("layout.parents.edit", json!({"on": false}));
+            let _ = app.run("layout.parents.edit", serde_json::json!({"on": false}));
             // The canvas refits to the page's spread once it is centred.
             if let Some(v) = app.view_mut() {
                 v.fitted = false;
@@ -195,7 +195,7 @@ pub fn page_box_go(app: &mut DesignApp, b: &PageBox, i: usize) {
         }
         go_to_page(app, i);
     } else if let Some(id) = b.parents.get(i - b.pages) {
-        let _ = app.run("layout.parents.edit", json!({"parent": id.0}));
+        let _ = app.run("layout.parents.edit", serde_json::json!({"parent": id.0}));
     }
 }
 
