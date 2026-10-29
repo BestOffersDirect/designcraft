@@ -288,7 +288,7 @@ pub(super) fn draw_hidden_characters(app: &DesignApp, painter: &egui::Painter, x
 /// the line's ascent): its lines' marks, then its tables' — each text cell's own marks (nested
 /// tables included) with its # where its text ends, and a table paragraph's ¶ after the last
 /// row's bottom right corner. A table's own glyph-less line has no marks: its ¶ is that one.
-fn frame_hidden_marks(text: &str, ft: &compose::FrameText) -> Vec<(Point, &'static str, bool, f64)> {
+pub(super) fn frame_hidden_marks(text: &str, ft: &compose::FrameText) -> Vec<(Point, &'static str, bool, f64)> {
     let table_lines: Vec<usize> = ft.tables.iter().map(|t| t.line).collect();
     let mut out: Vec<_> = ft
         .lines
