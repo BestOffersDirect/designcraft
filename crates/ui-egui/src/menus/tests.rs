@@ -2107,46 +2107,46 @@ fn context_menus_hold_commands_and_menu_bar_submenus() {
     }
 }
 
-    #[test]
-    fn the_table_menu_follows_indesigns_order() {
-        // InDesign's Table menu with a text insertion point (Adobe's "How to make a table").
-        let table = menu_tree().into_iter().find(|(m, _)| *m == "Table").unwrap().1;
-        let labels: Vec<String> = table
-            .iter()
-            .map(|i| match i {
-                Item::Sep => "-".to_string(),
-                Item::Sub(n, _) => format!("{n} >"),
-                Item::Cmd { label, .. } => label.clone(),
-            })
-            .collect();
-        let expected = [
-            "Insert Table…",
-            "Convert Text to Table",
-            "Convert Table to Text",
-            "-",
-            "Cell Options >",
-            "-",
-            "Insert >",
-            "Delete >",
-            "Select >",
-            "-",
-            "Merge Cells",
-            "Unmerge Cells",
-            "Split Cell Horizontally",
-            "Split Cell Vertically",
-            "Convert Cell Type >",
-            "Convert Rows >",
-            "-",
-            "Distribute Rows Evenly",
-            "Distribute Columns Evenly",
-        ];
-        assert_eq!(labels, expected);
-        // Cmd+Alt+Shift+T opens the dialog, as InDesign's; the engine command has no shortcut of
-        // its own. The Table panel is in Window › Type & Tables.
-        assert_eq!(ui_label("app.insertTableDialog").and_then(|c| c.1), Some("Cmd+Alt+Shift+T"));
-        assert_eq!(designcraft_engine::find_command("table.insert").unwrap().shortcut, None);
-        assert_eq!(ui_label("app.tablePanel").and_then(|c| c.1), Some("Shift+F9"));
-    }
+#[test]
+fn the_table_menu_follows_indesigns_order() {
+    // InDesign's Table menu with a text insertion point (Adobe's "How to make a table").
+    let table = menu_tree().into_iter().find(|(m, _)| *m == "Table").unwrap().1;
+    let labels: Vec<String> = table
+        .iter()
+        .map(|i| match i {
+            Item::Sep => "-".to_string(),
+            Item::Sub(n, _) => format!("{n} >"),
+            Item::Cmd { label, .. } => label.clone(),
+        })
+        .collect();
+    let expected = [
+        "Insert Table…",
+        "Convert Text to Table",
+        "Convert Table to Text",
+        "-",
+        "Cell Options >",
+        "-",
+        "Insert >",
+        "Delete >",
+        "Select >",
+        "-",
+        "Merge Cells",
+        "Unmerge Cells",
+        "Split Cell Horizontally",
+        "Split Cell Vertically",
+        "Convert Cell Type >",
+        "Convert Rows >",
+        "-",
+        "Distribute Rows Evenly",
+        "Distribute Columns Evenly",
+    ];
+    assert_eq!(labels, expected);
+    // Cmd+Alt+Shift+T opens the dialog, as InDesign's; the engine command has no shortcut of
+    // its own. The Table panel is in Window › Type & Tables.
+    assert_eq!(ui_label("app.insertTableDialog").and_then(|c| c.1), Some("Cmd+Alt+Shift+T"));
+    assert_eq!(designcraft_engine::find_command("table.insert").unwrap().shortcut, None);
+    assert_eq!(ui_label("app.tablePanel").and_then(|c| c.1), Some("Shift+F9"));
+}
 
 #[test]
 fn the_type_menu_follows_indesigns_order() {

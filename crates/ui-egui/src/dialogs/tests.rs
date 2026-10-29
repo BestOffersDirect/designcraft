@@ -3369,7 +3369,7 @@ fn dragging_the_title_moves_the_dialog_and_dragging_the_body_does_not() {
     assert!((centred.center() - egui::pos2(600.0, 400.0)).length() < 1.0, "{centred:?}");
     assert!(centred.width() < 1000.0 && centred.height() < 700.0, "the area is the dialog, not the backdrop: {centred:?}");
 
-        let title = h.get_by_label("Insert Table").rect().center();
+    let title = h.get_by_label("Insert Table").rect().center();
     drag(&mut h, title, title + vec2(100.0, 60.0));
     let moved = rect(&h);
     assert!((moved.min - centred.min - vec2(100.0, 60.0)).length() < 2.0, "{centred:?} -> {moved:?}");
@@ -3379,7 +3379,7 @@ fn dragging_the_title_moves_the_dialog_and_dragging_the_body_does_not() {
     assert_eq!(rect(&h), moved, "a drag in the body leaves the dialog in place");
 
     // The title row stays inside the top edge.
-        let title = h.get_by_label("Insert Table").rect().center();
+    let title = h.get_by_label("Insert Table").rect().center();
     drag(&mut h, title, title - vec2(0.0, 1000.0));
     assert!(rect(&h).top().abs() < 1.0, "{:?}", rect(&h));
 
@@ -3391,7 +3391,7 @@ fn dragging_the_title_moves_the_dialog_and_dragging_the_body_does_not() {
     assert!((rect(&h).center() - centred.center()).length() < 1.0, "{:?}", rect(&h));
 
     // Past the left edge, about 100 px of the title row stays inside.
-        let title = h.get_by_label("Insert Table").rect().center();
+    let title = h.get_by_label("Insert Table").rect().center();
     drag(&mut h, title, title - vec2(900.0, 0.0));
     assert!((rect(&h).right() - 100.0).abs() < 2.0, "{:?}", rect(&h));
 }

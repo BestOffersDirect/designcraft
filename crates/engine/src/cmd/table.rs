@@ -28,5 +28,5 @@ mod styles;
 mod target;
 
 pub use registry::specs;
-pub use structure::{MAX_BODY_ROWS, MAX_COLUMNS, MAX_HEADER_FOOTER_ROWS};
 pub(crate) use selection::step_cell;
+pub use structure::{MAX_BODY_ROWS, MAX_COLUMNS, MAX_HEADER_FOOTER_ROWS};
