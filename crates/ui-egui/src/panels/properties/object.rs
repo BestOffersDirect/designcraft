@@ -355,7 +355,7 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
     let mresp = ui.interact(more, ui.scope_id().with("opmore"), Sense::click());
     ui.painter().rect(more, 0.0, if mresp.hovered() { t.hover } else { t.input }, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
     icons::paint(ui.painter(), more.shrink(4.0), "chevron-right", t.icon);
-    mresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, crate::i18n::tr(&app.ui.language, "Opacity")));
+    mresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, crate::i18n::tr(&app.ui.language, "Opacity")));
     opacity_slider(app, &mresp, i.opacity);
     ui.add_space(6.0);
     ui.horizontal(|ui| {
