@@ -276,6 +276,10 @@ pub(crate) fn corner_type_dropdown(app: &mut DesignApp, ui: &mut Ui, shape: Corn
 pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
     let t = Tokens::get(ui.ctx());
     let Some(doc) = app.session.active().map(|d| d.doc.clone()) else { return };
+    // Every selected object is a text frame: the popups offer Apply To Frame or Text, for one
+    // frame or several, as InDesign's do.
+    let text_frames =
+        i.is_text && app.session.active().is_some_and(|st| st.selection.items.iter().all(|id| doc.item(*id).is_some_and(|it| it.is_text_frame())));
     // Fill.
     let b = block(ui, FIELD_H);
     let (fc, fg) = widgets::swatch_colors(&doc, &i.fill, 1.0);
@@ -288,7 +292,7 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
         i.fill
     ));
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Fill swatch"));
-    swatch_menu(app, &resp, &doc, &i.fill, false, i.is_text && i.count == 1, false);
+    swatch_menu(app, &resp, &doc, &i.fill, false, text_frames, false);
     if resp.double_clicked() {
         open_color_picker(app, &doc, &i.fill, false, false);
     }
@@ -313,7 +317,7 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
         i.stroke
     ));
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Stroke swatch"));
-    swatch_menu(app, &resp, &doc, &i.stroke, true, i.is_text && i.count == 1, false);
+    swatch_menu(app, &resp, &doc, &i.stroke, true, text_frames, false);
     if resp.double_clicked() {
         open_color_picker(app, &doc, &i.stroke, true, false);
     }
