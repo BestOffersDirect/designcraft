@@ -554,6 +554,17 @@ pub(super) fn swatch_menu(
     }
 }
 
+/// The Align To button's glyph shows what the objects align to, as InDesign's.
+pub(super) fn align_to_icon(to: &str) -> &'static str {
+    match to {
+        "keyObject" => "align-to-key",
+        "margins" => "align-to-margins",
+        "page" => "align-to-page",
+        "spread" => "align-to-spread",
+        _ => "align-to",
+    }
+}
+
 pub(super) fn align_row(app: &mut DesignApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     ui.horizontal(|ui| {
@@ -570,7 +581,7 @@ pub(super) fn align_row(app: &mut DesignApp, ui: &mut Ui) {
             other => other,
         };
         let tip = format!("{}: {}", crate::i18n::tr(&app.ui.language, "Align To"), crate::i18n::tr(&app.ui.language, to_label));
-        let resp = icon_toggle(ui, "align-to", false, &tip);
+        let resp = icon_toggle(ui, align_to_icon(&to), false, &tip);
         egui::Popup::menu(&resp).show(|ui| {
             for (label, id) in [
                 ("Align to Selection", "selection"),
