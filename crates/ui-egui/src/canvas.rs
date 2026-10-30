@@ -56,7 +56,7 @@ use scroll::{mods, navigation_space, scrollbars, spring_zoom_mode};
 pub use text_overlay::selected_text;
 use text_overlay::{draw_dynamic_spelling, draw_hidden_characters};
 #[cfg(test)]
-use text_overlay::{draw_text_selection, hidden_marks};
+use text_overlay::{draw_text_selection, frame_hidden_marks, hidden_marks};
 use tool_overlays::draw_tool_overlays;
 pub(crate) use view::page_in_view;
 use view::present_fit;
