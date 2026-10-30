@@ -4629,8 +4629,30 @@ fn link_toggle(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, linked:
 /// A swatch menu with a colour chip per swatch (hidden swatches left out); returns the swatch
 /// picked.
 fn swatch_menu(ui: &mut egui::Ui, doc: &designcraft_doc::Document, id: impl egui::AsIdSalt, current: &str, width: f32) -> Option<String> {
+    swatch_menu_with(ui, doc, id, current, width, None)
+}
+
+/// [`swatch_menu`] with, given its translated label, Text Color first (a paragraph rule's
+/// colour: the text's own), as InDesign's Paragraph Rules › Color.
+fn swatch_menu_with(
+    ui: &mut egui::Ui,
+    doc: &designcraft_doc::Document,
+    id: impl egui::AsIdSalt,
+    current: &str,
+    width: f32,
+    text_color: Option<&str>,
+) -> Option<String> {
     let mut picked = None;
-    craft_ui::ComboBox::from_id_salt(id).selected_text(current).width(width).show_ui(ui, |ui| {
+    let shown = match text_color {
+        Some(label) if current == designcraft_doc::TEXT_COLOR => label,
+        _ => current,
+    };
+    craft_ui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
+        if let Some(label) = text_color
+            && ui.selectable_label(current == designcraft_doc::TEXT_COLOR, label).clicked()
+        {
+            picked = Some(designcraft_doc::TEXT_COLOR.to_string());
+        }
         for w in doc.swatches.iter().filter(|w| !w.hidden) {
             let (c, g) = crate::widgets::swatch_colors(doc, &w.name, 1.0);
             ui.horizontal(|ui| {
@@ -6481,22 +6503,65 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
     });
     ui.add_space(6.0);
     let on = rule["on"].as_bool().unwrap_or(false);
+    let kind: designcraft_doc::StrokeType = serde_json::from_value(rule["type"].clone()).unwrap_or_default();
+    let doc = app.session.active().map(|st| &st.doc);
+    // As InDesign's: Weight and Type, Color and Tint, Gap Color and Gap Tint, Width and Offset,
+    // Left and Right Indent, then Keep In Frame (rule above).
     ui.add_enabled_ui(on, |ui| {
         egui::Grid::new(("rules", which)).num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
             crate::rtl::label(ui, crate::i18n::tr(lang, "Weight:"));
-            if let Some(v) = sized(ui, &mut |ui| crate::widgets::number(ui, &key("weight"), rule["weight"].as_f64(), " pt", 80.0, 2)) {
+            if let Some(v) = sized(ui, &mut |ui| {
+                crate::widgets::NumField::number(&key("weight"), rule["weight"].as_f64(), " pt", 2).width(80.0).spinner().range(0.0, 1000.0).show(ui)
+            }) {
                 d.fields.insert(key("weight"), json!(v.clamp(0.0, 1000.0)));
             }
+            crate::rtl::label(ui, crate::i18n::tr(lang, "Type:"));
+            let custom: Vec<String> = doc.map_or_else(Vec::new, |doc| doc.stroke_styles.iter().map(|s| s.name.clone()).collect());
+            let shown = match &kind {
+                designcraft_doc::StrokeType::Style { name } => name.clone(),
+                k => crate::i18n::tr(lang, k.label()).to_string(),
+            };
+            craft_ui::ComboBox::from_id_salt(("rule_type", which)).selected_text(crate::rtl::widget(ui, shown)).width(130.0).show_ui(ui, |ui| {
+                for k in rule_types().into_iter().chain(custom.into_iter().map(|name| designcraft_doc::StrokeType::Style { name })) {
+                    let label = match &k {
+                        designcraft_doc::StrokeType::Style { name } => name.clone(),
+                        k => crate::i18n::tr(lang, k.label()).to_string(),
+                    };
+                    if ui.selectable_label(k == kind, crate::rtl::widget(ui, label)).clicked() {
+                        d.fields.insert(key("type"), serde_json::to_value(&k).unwrap_or_default());
+                    }
+                }
+            });
+            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Color:"));
             let color = rule["color"].as_str().unwrap_or("").to_string();
-            if let Some(w) = app.session.active().and_then(|st| swatch_menu(ui, &st.doc, ("rule_color", which), &color, 130.0)) {
+            let text_color = crate::i18n::tr(lang, "Text Color");
+            if let Some(w) = doc.and_then(|doc| swatch_menu_with(ui, doc, ("rule_color", which), &color, 130.0, Some(text_color))) {
                 d.fields.insert(key("color"), json!(w));
             }
-            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Tint:"));
             if let Some(v) = sized(ui, &mut |ui| crate::widgets::number(ui, &key("tint"), rule["tint"].as_f64().map(|t| t * 100.0), "%", 80.0, 0)) {
                 d.fields.insert(key("tint"), json!((v / 100.0).clamp(0.0, 1.0)));
             }
+            ui.end_row();
+            // A solid rule has no gaps.
+            let gaps = !matches!(kind, designcraft_doc::StrokeType::Solid);
+            crate::rtl::label(ui, crate::i18n::tr(lang, "Gap Color:"));
+            let gap = rule["gapColor"].as_str().unwrap_or(designcraft_color::swatch::NONE).to_string();
+            ui.add_enabled_ui(gaps, |ui| {
+                if let Some(w) = doc.and_then(|doc| swatch_menu(ui, doc, ("rule_gap", which), &gap, 130.0)) {
+                    d.fields.insert(key("gapColor"), json!(w));
+                }
+            });
+            crate::rtl::label(ui, crate::i18n::tr(lang, "Gap Tint:"));
+            ui.add_enabled_ui(gaps && gap != designcraft_color::swatch::NONE, |ui| {
+                // A full gap tint is left out of the rule's JSON: it reads 100%.
+                let gap_tint = rule["gapTint"].as_f64().unwrap_or(1.0) * 100.0;
+                if let Some(v) = sized(ui, &mut |ui| crate::widgets::number(ui, &key("gapTint"), Some(gap_tint), "%", 80.0, 0)) {
+                    d.fields.insert(key("gapTint"), json!((v / 100.0).clamp(0.0, 1.0)));
+                }
+            });
+            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Width:"));
             let column = rule["columnWidth"].as_bool().unwrap_or(true);
             craft_ui::ComboBox::from_id_salt(("rule_width", which))
@@ -6509,21 +6574,48 @@ fn paragraph_rules(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog, prefix: &
                         }
                     }
                 });
-            ui.end_row();
             crate::rtl::label(ui, crate::i18n::tr(lang, "Offset:"));
-            if let Some(v) = sized(ui, &mut |ui| crate::widgets::measure(ui, &key("offset"), rule["offset"].as_f64(), v_units, 80.0)) {
+            if let Some(v) = sized(ui, &mut |ui| {
+                crate::widgets::NumField::measure(&key("offset"), rule["offset"].as_f64(), v_units).width(80.0).spinner().show(ui)
+            }) {
                 d.fields.insert(key("offset"), json!(v));
             }
             ui.end_row();
             for (label, field) in [("Left Indent:", "leftIndent"), ("Right Indent:", "rightIndent")] {
                 crate::rtl::label(ui, crate::i18n::tr(lang, label));
-                if let Some(v) = sized(ui, &mut |ui| crate::widgets::measure(ui, &key(field), rule[field].as_f64(), h_units, 80.0)) {
+                if let Some(v) =
+                    sized(ui, &mut |ui| crate::widgets::NumField::measure(&key(field), rule[field].as_f64(), h_units).width(80.0).spinner().show(ui))
+                {
                     d.fields.insert(key(field), json!(v));
                 }
             }
             ui.end_row();
         });
+        if which == "ruleAbove" {
+            let mut keep = rule["keepInFrame"].as_bool().unwrap_or(false);
+            if ui.checkbox(&mut keep, crate::rtl::widget(ui, crate::i18n::tr(lang, "Keep In Frame"))).changed() {
+                d.fields.insert(key("keepInFrame"), json!(keep));
+            }
+        }
     });
+}
+
+/// The built-in stroke types a paragraph rule can have (Paragraph Rules › Type).
+fn rule_types() -> Vec<designcraft_doc::StrokeType> {
+    use designcraft_doc::StrokeType as T;
+    vec![
+        T::Solid,
+        T::ThickThick,
+        T::ThickThin,
+        T::ThickThinThick,
+        T::ThinThick,
+        T::ThinThickThin,
+        T::ThinThin,
+        T::Dashed { pattern: vec![12.0, 4.0] },
+        T::Dotted,
+        T::Hashed,
+        T::Wavy,
+    ]
 }
 
 /// Document Footnote Options: Numbering and Formatting / Layout tabs.

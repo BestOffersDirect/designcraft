@@ -222,8 +222,11 @@ impl ParaAttrs {
         let serde_json::Value::Object(patch) = value else { return self.set_json(key, value) };
         let mut merged = serde_json::to_value(rule).map_err(|e| format!("{key}: {e}"))?;
         let serde_json::Value::Object(fields) = &mut merged else { return Err(format!("{key}: not an object")) };
+        // Every field, those at their defaults (left out of the JSON) included.
+        const RULE_FIELDS: [&str; 12] =
+            ["on", "weight", "color", "tint", "columnWidth", "offset", "leftIndent", "rightIndent", "type", "gapColor", "gapTint", "keepInFrame"];
         for (k, v) in patch {
-            if !fields.contains_key(k) {
+            if !RULE_FIELDS.contains(&k.as_str()) {
                 return Err(format!("{key}: unknown rule field `{k}`"));
             }
             fields.insert(k.clone(), v.clone());
