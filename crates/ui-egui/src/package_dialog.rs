@@ -144,23 +144,35 @@ fn summary_lines(lang: &str, d: &Dialog) -> Vec<(String, bool)> {
     ]
 }
 
-/// The warning sign InDesign shows beside a line with problems, and the colours of statuses.
-const WARN: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xb3, 0x2c);
-const BAD: egui::Color32 = egui::Color32::from_rgb(0xe5, 0x4b, 0x4b);
+/// How a status is shown: coloured with the theme's warning or error colour.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Level {
+    Warn,
+    Bad,
+}
 
-fn status_text(lang: &str, status: &str) -> (String, Option<egui::Color32>) {
+impl Level {
+    fn color(self, ui: &egui::Ui) -> egui::Color32 {
+        match self {
+            Level::Warn => ui.visuals().warn_fg_color,
+            Level::Bad => ui.visuals().error_fg_color,
+        }
+    }
+}
+
+fn status_text(lang: &str, status: &str) -> (String, Option<Level>) {
     let tr = |s: &str| crate::i18n::tr(lang, s).to_string();
     match status {
-        "missing" => (format!("\u{26A0} {}", tr("Missing")), Some(BAD)),
-        "modified" => (format!("\u{25B2} {}", tr("Modified")), Some(WARN)),
-        "substituted" => (tr("Substituted"), Some(WARN)),
+        "missing" => (format!("\u{26A0} {}", tr("Missing")), Some(Level::Bad)),
+        "modified" => (format!("\u{25B2} {}", tr("Modified")), Some(Level::Warn)),
+        "substituted" => (tr("Substituted"), Some(Level::Warn)),
         "embedded" => (tr("Embedded"), None),
         _ => (tr("OK"), None),
     }
 }
 
-/// A table: a header row and `cells` rows (each with an optional colour for its last cell).
-fn table(ui: &mut egui::Ui, id: &str, header: &[String], cells: &[(Vec<String>, Option<egui::Color32>)]) {
+/// A table: a header row and `cells` rows (each with an optional level colouring its last cell).
+fn table(ui: &mut egui::Ui, id: &str, header: &[String], cells: &[(Vec<String>, Option<Level>)]) {
     let t = crate::theme::Tokens::get(ui.ctx());
     egui::Frame::NONE.stroke(egui::Stroke::new(1.0, t.field_border)).inner_margin(6.0).show(ui, |ui| {
         egui::ScrollArea::vertical().id_salt(id).max_height(220.0).auto_shrink([false, true]).show(ui, |ui| {
@@ -175,7 +187,7 @@ fn table(ui: &mut egui::Ui, id: &str, header: &[String], cells: &[(Vec<String>, 
                         if i + 1 == row.len()
                             && let Some(color) = color
                         {
-                            text = text.color(*color);
+                            text = text.color(color.color(ui));
                         }
                         crate::rtl::label(ui, text);
                     }
@@ -258,7 +270,7 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                     ui.add_space(6.0);
                     for (line, warn) in summary_lines(&lang, d) {
                         ui.horizontal(|ui| {
-                            let sign = egui::RichText::new(if warn { "\u{26A0}" } else { " " }).color(WARN);
+                            let sign = egui::RichText::new(if warn { "\u{26A0}" } else { " " }).color(Level::Warn.color(ui));
                             ui.add_sized([14.0, 16.0], egui::Label::new(sign));
                             crate::rtl::label(ui, line);
                         });
