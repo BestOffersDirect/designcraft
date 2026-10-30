@@ -348,7 +348,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?} — delete selected items (or the selected text or ruler guides)",
+            "{ids?} — delete selected items (or the selected text, points or ruler guides)",
             has_doc,
             |s, p| {
                 if s.doc()?.selection.text.is_some() && p.get("ids").is_none() {
@@ -356,6 +356,10 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
                 if p.get("ids").is_none() && s.doc()?.selection.items.is_empty() && !s.doc()?.selection.guides.is_empty() {
                     return s.execute("guide.delete", &json!({}));
+                }
+                // Points selected with Direct Selection: they go, not their paths (as InDesign).
+                if p.get("ids").is_none() && !s.doc()?.selection.anchors.is_empty() {
+                    return s.execute("path.deletePoints", &json!({}));
                 }
                 let ids = super::targets(s, p)?;
                 // With a placed graphic itself selected (Direct Selection), only the graphic goes: its

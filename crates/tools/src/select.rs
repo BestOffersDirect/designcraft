@@ -272,8 +272,10 @@ fn guides_crossing(cx: &ToolContext, r: Rect) -> Vec<Value> {
 }
 
 /// `selection.set` params selecting `points`: their paths, and those points.
-fn anchor_selection(cx: &ToolContext, points: &[(ItemId, usize, usize)]) -> Value {
-    let mut ids: Vec<u64> = cx.selection.items.iter().map(|i| i.0).collect();
+/// `keep` (Shift): the objects already selected stay selected; otherwise only the paths of
+/// `points` are.
+fn anchor_selection(cx: &ToolContext, points: &[(ItemId, usize, usize)], keep: bool) -> Value {
+    let mut ids: Vec<u64> = if keep { cx.selection.items.iter().map(|i| i.0).collect() } else { Vec::new() };
     for (i, _, _) in points {
         if !ids.contains(&i.0) {
             ids.push(i.0);
@@ -281,6 +283,18 @@ fn anchor_selection(cx: &ToolContext, points: &[(ItemId, usize, usize)]) -> Valu
     }
     let anchors: Vec<Value> = points.iter().map(|(i, s, a)| json!([i.0, s, a])).collect();
     json!({"ids": ids, "anchors": anchors})
+}
+
+/// `path.moveAnchors` points for `points` moved `d` on the canvas: each with its own movement in
+/// its spread (a rotated spread view turns it).
+fn moved_points(cx: &ToolContext, points: impl IntoIterator<Item = (ItemId, usize, usize)>, d: Vec2) -> Vec<Value> {
+    points
+        .into_iter()
+        .map(|(i, s, a)| {
+            let v = cx.doc.find(i).map_or(d, |loc| cx.layout.delta_to_spread(loc.spread, d));
+            json!([i.0, s, a, v.x, v.y])
+        })
+        .collect()
 }
 
 /// `d` held to the nearest multiple of 45°, as Shift does.
@@ -807,7 +821,7 @@ impl SelectionTool {
                     points = vec![me];
                 }
                 if points != cx.selection.anchors {
-                    out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points)));
+                    out.push(Action::Exec("selection.set".into(), anchor_selection(cx, &points, ev.mods.shift)));
                 }
                 others = points.iter().filter(|a| **a != me).map(|(i, s, a)| (i.0, *s, *a)).collect();
             }
@@ -1226,14 +1240,14 @@ impl SelectionTool {
                     dy += corr.y;
                     self.guides = hit.guides;
                 }
-                // path.moveAnchors takes a spread-space delta.
-                let delta = at.map_or(Vec2::new(dx, dy), |(spread, _)| cx.layout.delta_to_spread(spread, Vec2::new(dx, dy)));
-                let mut params = json!({"id": id, "anchors": [[si, ai]], "dx": delta.x, "dy": delta.y});
+                // The command moves in spread space: each point by the drag in its own spread.
+                let own = at.map_or(Vec2::new(dx, dy), |(spread, _)| cx.layout.delta_to_spread(spread, Vec2::new(dx, dy)));
+                let mut params = json!({"id": id, "anchors": [[si, ai]], "dx": own.x, "dy": own.y});
                 if let Some(h) = handle {
                     params["handle"] = json!(h);
                 } else if !others.is_empty() {
-                    let points: Vec<Value> = std::iter::once((id, si, ai)).chain(others).map(|(i, s, a)| json!([i, s, a])).collect();
-                    params = json!({"points": points, "dx": dx, "dy": dy});
+                    let points = std::iter::once((id, si, ai)).chain(others).map(|(i, s, a)| (ItemId(i), s, a));
+                    params = json!({"points": moved_points(cx, points, Vec2::new(dx, dy))});
                 }
                 vec![Action::Preview("path.moveAnchors".into(), params)]
             }
@@ -1307,7 +1321,7 @@ impl Tool for SelectionTool {
                     // A Shift-click on a selected point that never became a drag takes it away.
                     Drag::Anchor { .. } if anchor_release.is_some() => {
                         let points: Vec<_> = cx.selection.anchors.iter().copied().filter(|a| Some(*a) != anchor_release).collect();
-                        vec![Action::Commit, Action::Exec("selection.set".into(), anchor_selection(cx, &points))]
+                        vec![Action::Commit, Action::Exec("selection.set".into(), anchor_selection(cx, &points, true))]
                     }
                     Drag::Move { .. }
                     | Drag::Resize { .. }
@@ -1337,7 +1351,7 @@ impl Tool for SelectionTool {
                                         }
                                     }
                                 }
-                                return vec![Action::Exec("selection.set".into(), anchor_selection(cx, &points))];
+                                return vec![Action::Exec("selection.set".into(), anchor_selection(cx, &points, ev.mods.shift))];
                             }
                         }
                         // Items whose bounds intersect the marquee.
@@ -1376,15 +1390,20 @@ impl Tool for SelectionTool {
         if key == ToolKey::Escape && self.live.take().is_some_and(|id| cx.selection.items == [id]) {
             return vec![Action::Handled];
         }
-        let points: Vec<Value> = cx.selection.anchors.iter().map(|(i, s, a)| json!([i.0, s, a])).collect();
-        let direct_points = self.direct && !points.is_empty();
+        let direct_points = self.direct && !cx.selection.anchors.is_empty();
         let mv = |dx: f64, dy: f64| {
-            // Direct Selection with anchor points selected: the arrow keys move the points.
+            // Direct Selection with anchor points selected: the arrow keys move the points, each
+            // the way the arrow points on screen.
             if direct_points {
-                return vec![Action::Exec("path.moveAnchors".into(), json!({"points": points.clone(), "dx": dx, "dy": dy}))];
+                let points = moved_points(cx, cx.selection.anchors.iter().copied(), Vec2::new(dx, dy));
+                return vec![Action::Exec("path.moveAnchors".into(), json!({"points": points}))];
             }
             vec![Action::Exec("transform.move".into(), json!({"dx": dx, "dy": dy, "copy": mods.alt}))]
         };
+        // Selected points: Delete and Backspace delete them, not their paths.
+        if direct_points && matches!(key, ToolKey::Delete | ToolKey::Backspace) {
+            return vec![Action::Exec("path.deletePoints".into(), json!({}))];
+        }
         if cx.selection.items.is_empty() {
             // Selected ruler guides: the arrows nudge them, Delete deletes them.
             if cx.selection.guides.is_empty() {
