@@ -84,8 +84,9 @@ pub struct Tokens {
     pub measure_bg: Color32,
     pub measure_text: Color32,
     /// The readout beside the cursor while drawing, moving or measuring ("W: 3.13 cm"): InDesign's
-    /// light grey box with white text, in every brightness but High Contrast.
+    /// light grey box, with dark text in every brightness but High Contrast.
     pub readout_bg: Color32,
+    pub readout_text: Color32,
     /// Live-corner widget and corner diamonds.
     pub live_corner: Color32,
     /// The Windows caption Close button when hovered, and its glyph.
@@ -134,6 +135,7 @@ impl Tokens {
             measure_bg: Color32::from_rgba_unmultiplied(70, 70, 70, 230),
             measure_text: Color32::WHITE,
             readout_bg: hex(0xa8a8a8),
+            readout_text: hex(0x1e1e1e),
             live_corner: hex(0xffe500),
             caption_close: hex(0xc42b1c),
             caption_close_text: Color32::WHITE,
@@ -261,6 +263,7 @@ impl Tokens {
                 tab_strip: hex(0x000000),
                 // White on InDesign's grey is too faint here: black, as the rest of the chrome.
                 readout_bg: hex(0x000000),
+                readout_text: Color32::WHITE,
                 ..dark
             },
         }
@@ -864,16 +867,31 @@ mod russian_font_tests {
 mod readout_tests {
     use super::{Brightness, Tokens};
 
+    fn luminance(c: egui::Color32) -> f32 {
+        let lin = |v: u8| {
+            let v = v as f32 / 255.0;
+            if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
+    }
+
+    fn contrast(a: egui::Color32, b: egui::Color32) -> f32 {
+        let (x, y) = (luminance(a), luminance(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
     /// The readout beside the cursor ("W: 3.13 cm" while drawing a frame) is InDesign's light
-    /// grey box with white text in every brightness, as measured from the tutorials' frames;
-    /// High Contrast keeps it black.
+    /// grey box in every brightness, with text that stays readable on it; High Contrast keeps
+    /// it black.
     #[test]
-    fn the_cursor_readout_is_indesigns_light_grey() {
+    fn the_cursor_readout_is_indesigns_light_grey_with_readable_text() {
         for b in [Brightness::Dark, Brightness::MediumDark, Brightness::MediumLight, Brightness::Light] {
             let t = Tokens::for_brightness(b);
             assert_eq!(t.readout_bg, egui::Color32::from_rgb(0xa8, 0xa8, 0xa8), "{b:?}");
-            assert_eq!(t.measure_text, egui::Color32::WHITE, "{b:?}");
+            assert!(contrast(t.readout_text, t.readout_bg) >= 4.5, "{b:?}");
         }
-        assert_eq!(Tokens::for_brightness(Brightness::HighContrast).readout_bg, egui::Color32::BLACK);
+        let hc = Tokens::for_brightness(Brightness::HighContrast);
+        assert_eq!(hc.readout_bg, egui::Color32::BLACK);
+        assert!(contrast(hc.readout_text, hc.readout_bg) >= 4.5);
     }
 }
