@@ -200,9 +200,21 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.end_row();
     });
 }
-/// The temporary-data key a dialog sets, each frame, while one of its multi-line fields has focus:
-/// Enter then makes a new line there, and the footer doesn't take it for OK.
-pub(crate) const MULTILINE_FOCUS: &str = "dialog_multiline_focus";
+/// The temporary-data key the Printing Instructions dialog sets, each frame, while one of its
+/// multi-line fields has focus: Enter then makes a new line there, and the footer doesn't take it
+/// for OK. No other dialog changes how Enter works.
+const MULTILINE_FOCUS: &str = "dialog_multiline_focus";
+
+pub(crate) fn set_multiline_focus(ctx: &egui::Context) {
+    ctx.data_mut(|m| m.insert_temp(egui::Id::new(MULTILINE_FOCUS), true));
+}
+
+/// Whether Enter in dialog `id` goes to a multi-line field this frame. The flag is read (and cleared)
+/// for every dialog, but only the Printing Instructions dialog honours it.
+fn take_multiline_focus(ctx: &egui::Context, id: &str) -> bool {
+    let set = ctx.data_mut(|m| m.remove_temp::<bool>(egui::Id::new(MULTILINE_FOCUS))).unwrap_or(false);
+    set && id == crate::package_dialog::INSTRUCTIONS
+}
 
 /// Extract once when opened. Cancel is read-only; confirmation adds exactly these colours.
 pub(crate) fn open_color_theme(app: &mut DesignApp, params: Value) {
@@ -240,6 +252,18 @@ fn color_theme(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 #[cfg(test)]
 mod color_theme_tests {
     use super::*;
+
+    /// Enter in a multi-line field makes a new line in the Printing Instructions only; every other
+    /// dialog keeps Enter as OK, and the flag does not outlive the frame.
+    #[test]
+    fn enter_in_a_multiline_field_is_local_to_the_printing_instructions() {
+        let ctx = egui::Context::default();
+        set_multiline_focus(&ctx);
+        assert!(take_multiline_focus(&ctx, crate::package_dialog::INSTRUCTIONS));
+        assert!(!take_multiline_focus(&ctx, crate::package_dialog::INSTRUCTIONS), "cleared once read");
+        set_multiline_focus(&ctx);
+        assert!(!take_multiline_focus(&ctx, "insertPages"));
+    }
 
     /// A page past the end shows as the last page in the dialog, and Before Page puts the new
     /// page before that one rather than at the end.
@@ -3277,7 +3301,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                 style_options_preview(app, &mut d);
             }
             // A multi-line field with focus (set by the dialog this frame) takes Enter as a new line.
-            let multiline = ui.ctx().data_mut(|m| m.remove_temp::<bool>(egui::Id::unique(MULTILINE_FOCUS))).unwrap_or(false);
+            let multiline = take_multiline_focus(ui.ctx(), &d.id);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add(

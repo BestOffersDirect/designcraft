@@ -321,7 +321,7 @@ pub fn show_instructions(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             }
             // Enter there makes a new line: the footer mustn't take it for Continue.
             if lines > 1 && resp.has_focus() {
-                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(crate::dialogs::MULTILINE_FOCUS), true));
+                crate::dialogs::set_multiline_focus(ui.ctx());
             }
             ui.end_row();
         }
