@@ -8317,7 +8317,8 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         let v = ((fr.bottom() - pos.y) / fr.height()).clamp(0.0, 1.0);
         p = p.at(comp, tv, u, v);
     }
-    // The marker: a cross with an open centre, white over black.
+    // The marker: a cross with an open centre, white over black. Fixed colours: it sits on the
+    // colour field, whatever the theme.
     let (_, u, v) = p.coords(comp);
     let m = egui::pos2(fr.left() + u * fr.width(), fr.bottom() - v * fr.height());
     let painter = ui.painter().with_clip_rect(fr);
@@ -8328,7 +8329,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         painter.line_segment([a - side, b - side], egui::Stroke::new(1.0, egui::Color32::BLACK));
         painter.line_segment([a, b], egui::Stroke::new(1.5, egui::Color32::WHITE));
     }
-    // The slider, with a marker on each side.
+    // The slider, with a marker on each side (white with a dark edge, readable on any colour).
     let sr = put(at::slider());
     let sresp = ui.interact(sr.expand2(egui::vec2(6.0, 0.0)), ui.scope_id().with("cp_slider"), egui::Sense::click_and_drag());
     gradient_mesh(ui.painter(), sr, 1, 48, |_, y| p.slider_at(comp, y));
@@ -8355,7 +8356,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let old = designcraft_color::Color::from_hex(&d.s("old")).map_or([0.0; 3], |c| c.to_rgb_uncalibrated());
     ui.painter().rect_filled(egui::Rect::from_min_max(pr.min, egui::pos2(pr.max.x, pr.center().y)), 0.0, color32(p.rgb));
     ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(pr.min.x, pr.center().y), pr.max), 0.0, color32(old));
-    ui.painter().rect_stroke(pr, 0.0, egui::Stroke::new(1.0, egui::Color32::from_gray(80)), egui::StrokeKind::Inside);
+    ui.painter().rect_stroke(pr, 0.0, egui::Stroke::new(1.0, t.field_border), egui::StrokeKind::Inside);
     // OK, Cancel, Add CMYK Swatch: rounded, OK filled.
     let pill = |ui: &mut egui::Ui, i: usize, label: &str, primary: bool| -> bool {
         let r = put(at::button(i));
