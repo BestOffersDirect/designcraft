@@ -2968,7 +2968,9 @@ fn fitting_options(s: &mut Session, p: &Value) -> Result<Value> {
             } else if fitting.is_some() && g.auto_fit != designcraft_doc::Fitting::None {
                 g.auto_fit = mode;
             }
-            if let Some(xf) = g.fitted(r, mode) {
+            // Turning Auto-Fit off alone leaves the picture where the user put it.
+            let turn_off_only = auto == Some(false) && fitting.is_none() && align.is_none() && crop.is_none();
+            if !turn_off_only && let Some(xf) = g.fitted(r, mode) {
                 g.xf = xf;
             }
             n += 1;
@@ -4410,6 +4412,28 @@ mod fitting_tests {
         let back = designcraft_idml::import_idml(&designcraft_idml::export_idml(&s.doc().unwrap().doc)).unwrap();
         let g = back.spreads.iter().flat_map(|sp| sp.items.iter()).find_map(|i| i.graphic().cloned()).unwrap();
         assert_eq!(g.auto_fit, designcraft_doc::Fitting::FillProportionally);
+    }
+
+    /// Turning Auto-Fit off by itself keeps a moved picture where it is.
+    #[test]
+    fn auto_fit_off_alone_keeps_the_picture_position() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let f = s.execute("frame.create", &json!({"rect": [100, 100, 300, 300]})).unwrap()["id"].as_u64().unwrap();
+        let png = designcraft_render::Rendered { width: 40, height: 20, pixels: vec![200; 40 * 20 * 4] }.to_png();
+        s.execute("file.place", &json!({"base64": crate::cmd::base64_encode(&png), "name": "p.png", "frame": f})).unwrap();
+        s.execute("object.fittingOptions", &json!({"ids": [f], "autoFit": true, "fitting": "fitProportionally"})).unwrap();
+        let xf = |s: &Session| s.doc().unwrap().doc.item(designcraft_doc::ItemId(f)).unwrap().graphic().unwrap().xf;
+        s.edit(|d, _| {
+            if let Some(Content::Graphic(g)) = d.item_mut(ItemId(f)).map(|it| &mut it.content) {
+                g.xf = designcraft_geom::Affine::translate((7.0, 9.0)) * g.xf;
+            }
+            Ok(Value::Null)
+        })
+        .unwrap();
+        let moved = xf(&s);
+        s.execute("object.fittingOptions", &json!({"ids": [f], "autoFit": false})).unwrap();
+        assert_eq!(xf(&s), moved);
     }
 
     /// Clear Frame Fitting Options puts auto-fit, crop and the reference point back to their
