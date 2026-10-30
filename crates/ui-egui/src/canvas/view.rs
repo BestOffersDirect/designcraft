@@ -188,9 +188,11 @@ pub fn page_box_go(app: &mut DesignApp, b: &PageBox, i: usize) {
     if i < b.pages {
         if app.session.active().is_some_and(|st| st.editing_parents) {
             let _ = app.run("layout.parents.edit", serde_json::json!({"on": false}));
-            // The canvas refits to the page's spread once it is centred.
-            if let Some(v) = app.view_mut() {
-                v.fitted = false;
+            // Fit the page's spread first, then centre the page: a later refit would centre the
+            // spread, and the page box would then show its other page.
+            let spread = app.session.active().and_then(|st| st.doc.page_loc(i)).map(|(si, _)| SpreadRef::Doc(si));
+            if let Some(r) = spread {
+                show_spread(app, r);
             }
         }
         go_to_page(app, i);
