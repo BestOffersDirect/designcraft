@@ -795,9 +795,8 @@ fn change_format_styles_the_found_text_and_keeps_it() {
 fn a_find_format_finds_only_text_with_it() {
     let mut s = Session::new();
     s.execute("file.new", &json!({})).unwrap();
-    let r = s
-        .execute("frame.create", &json!({"rect": [36, 36, 300, 300], "content": "text", "text": "Break eggs; cook eggs.\nEggs and eggs"}))
-        .unwrap();
+    let r =
+        s.execute("frame.create", &json!({"rect": [36, 36, 300, 300], "content": "text", "text": "Break eggs; cook eggs.\nEggs and eggs"})).unwrap();
     let sid = r["story"].as_u64().unwrap();
     s.execute("style.character.create", &json!({"name": "eggs", "chars": {"fontStyle": "Bold"}})).unwrap();
     s.execute("style.paragraph.create", &json!({"name": "Method"})).unwrap();
