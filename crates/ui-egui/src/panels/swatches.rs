@@ -781,7 +781,7 @@ fn gradient_stop(app: &mut DesignApp, ui: &mut egui::Ui, g: &designcraft_color::
             ui.label(egui::RichText::new(format!("L {:.0}   a {:.0}   b {:.0}", lab.l, lab.a, lab.b)).color(t.text_dim));
         }
     }
-    if let Some([r, gr, b]) = spectrum_pick(ui) {
+    if let Some([r, gr, b]) = spectrum_pick(ui, &app.ui.language) {
         new = Some(Color::rgb(r, gr, b));
     }
     if let Some(c) = new {
@@ -793,16 +793,16 @@ fn gradient_stop(app: &mut DesignApp, ui: &mut egui::Ui, g: &designcraft_color::
 
 /// The spectrum ramp: hue across, light to dark down; click to apply.
 fn spectrum(app: &mut DesignApp, ui: &mut egui::Ui, target: &str) {
-    if let Some([r, g, b]) = spectrum_pick(ui) {
+    if let Some([r, g, b]) = spectrum_pick(ui, &app.ui.language) {
         let text = super::colors_affect_text(app);
         let _ = app.run("object.color", json!({"color": {"model": "rgb", "r": r, "g": g, "b": b}, "target": target, "text": text}));
     }
 }
 
 /// The spectrum ramp; a click on it gives that colour (RGB, 0–1, in 1/255 steps).
-fn spectrum_pick(ui: &mut egui::Ui) -> Option<[f32; 3]> {
+fn spectrum_pick(ui: &mut egui::Ui, language: &str) -> Option<[f32; 3]> {
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, crate::i18n::tr(&app.ui.language, "Color spectrum")));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, crate::i18n::tr(language, "Color spectrum")));
     let at = |u: f32, v: f32| -> [f32; 3] {
         let c = egui::ecolor::Hsva::new(u, (v * 2.0).min(1.0), (2.0 - v * 2.0).min(1.0), 1.0).to_rgb();
         [c[0], c[1], c[2]]
