@@ -3554,4 +3554,15 @@ fn frame_size_dialog_follows_the_ruler_units() {
     // The properties panel's link opens it in the same units.
     let d = frame_size_dialog(&app, json!({"width": 36.0, "height": 36.0}));
     assert_eq!((d.s("width"), d.s("height")), (format_measure(36.0, Unit::Inches), format_measure(36.0, Unit::Millimeters)));
+    // Every ruler unit: the shown size reads back as the size, so OK leaves a 72 pt frame 72 pt.
+    let units = serde_json::to_value(Unit::ALL).unwrap();
+    for (unit, name) in Unit::ALL.iter().zip(units.as_array().unwrap()) {
+        app.run("document.preferences", json!({"horizontalUnits": name, "verticalUnits": name})).unwrap();
+        let d = frame_size_dialog(&app, json!({"width": 72.0, "height": 145.0}));
+        assert_eq!(d.unit, *unit);
+        for (k, pt) in [("width", 72.0), ("height", 145.0)] {
+            let back = d.m_in(k, *unit).unwrap_or(f64::NAN);
+            assert!((back - pt).abs() < 0.05, "{name}: {k} shows {:?}, reads back {back}", d.s(k));
+        }
+    }
 }
