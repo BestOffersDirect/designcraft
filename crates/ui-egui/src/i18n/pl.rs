@@ -32,6 +32,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Paste", "Wklej"),
     ("Stroke Type", "Rodzaj obrysu"),
     ("Corner Shape", "Kształt narożnika"),
+    ("Corner Size and Shape:", "Rozmiar i kształt narożników:"),
     ("Restart Numbering", "Zacznij numerowanie od nowa"),
     ("Continue Numbering", "Kontynuuj numerowanie"),
     ("Keep Options…", "Opcje utrzymywania…"),

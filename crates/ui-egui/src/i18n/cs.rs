@@ -34,6 +34,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Paste", "Vložit"),
     ("Stroke Type", "Typ tahu"),
     ("Corner Shape", "Tvar rohu"),
+    ("Corner Size and Shape:", "Velikost a tvar rohů:"),
     ("Restart Numbering", "Začít číslování znovu"),
     ("Continue Numbering", "Pokračovat v číslování"),
     ("Keep Options…", "Volby zachování…"),

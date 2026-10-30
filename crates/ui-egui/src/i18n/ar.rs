@@ -33,6 +33,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Paste", "لصق"),
     ("Stroke Type", "نوع الحد"),
     ("Corner Shape", "شكل الزاوية"),
+    ("Corner Size and Shape:", "حجم الزوايا وشكلها:"),
     ("Restart Numbering", "إعادة الترقيم"),
     ("Continue Numbering", "متابعة الترقيم"),
     ("Keep Options…", "خيارات الإبقاء…"),

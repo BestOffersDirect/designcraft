@@ -36,6 +36,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Paste", "Вставить"),
     ("Stroke Type", "Тип обводки"),
     ("Corner Shape", "Форма угла"),
+    ("Corner Size and Shape:", "Размер и форма углов:"),
     ("Restart Numbering", "Начать нумерацию заново"),
     ("Continue Numbering", "Продолжить нумерацию"),
     ("Keep Options…", "Параметры удержания…"),
