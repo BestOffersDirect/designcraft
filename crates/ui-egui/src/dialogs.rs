@@ -202,6 +202,21 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.end_row();
     });
 }
+/// The temporary-data key the Printing Instructions dialog sets, each frame, while one of its
+/// multi-line fields has focus: Enter then makes a new line there, and the footer doesn't take it
+/// for OK. No other dialog changes how Enter works.
+const MULTILINE_FOCUS: &str = "dialog_multiline_focus";
+
+pub(crate) fn set_multiline_focus(ctx: &egui::Context) {
+    ctx.data_mut(|m| m.insert_temp(egui::Id::unique(MULTILINE_FOCUS), true));
+}
+
+/// Whether Enter in dialog `id` goes to a multi-line field this frame. The flag is read (and cleared)
+/// for every dialog, but only the Printing Instructions dialog honours it.
+fn take_multiline_focus(ctx: &egui::Context, id: &str) -> bool {
+    let set = ctx.data_mut(|m| m.remove_temp::<bool>(egui::Id::unique(MULTILINE_FOCUS))).unwrap_or(false);
+    set && id == crate::package_dialog::INSTRUCTIONS
+}
 
 /// Separators the Convert dialogs offer by name; anything else typed in the field is the
 /// separator's own characters.
@@ -385,6 +400,18 @@ fn color_theme(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 mod color_theme_tests {
     use super::*;
 
+    /// Enter in a multi-line field makes a new line in the Printing Instructions only; every other
+    /// dialog keeps Enter as OK, and the flag does not outlive the frame.
+    #[test]
+    fn enter_in_a_multiline_field_is_local_to_the_printing_instructions() {
+        let ctx = egui::Context::default();
+        set_multiline_focus(&ctx);
+        assert!(take_multiline_focus(&ctx, crate::package_dialog::INSTRUCTIONS));
+        assert!(!take_multiline_focus(&ctx, crate::package_dialog::INSTRUCTIONS), "cleared once read");
+        set_multiline_focus(&ctx);
+        assert!(!take_multiline_focus(&ctx, "insertPages"));
+    }
+
     /// A page past the end shows as the last page in the dialog, and Before Page puts the new
     /// page before that one rather than at the end.
     #[test]
@@ -526,6 +553,40 @@ mod color_theme_tests {
         assert_eq!((o.columns, o.vj_paragraph_spacing_limit), (2, 24.0));
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(opts(&app).columns, 1, "one undo step");
+    }
+
+    #[test]
+    fn toc_right_indent_separator_survives_the_dialog_and_update() {
+        let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+        app.run("file.newSample", json!({})).unwrap();
+        open_toc(&mut app);
+        app.ui.dialog.as_mut().unwrap().fields.insert(
+            "included".into(),
+            json!([
+                {"style": "Headline", "level": 1, "separator": " ^y "}
+            ]),
+        );
+        confirm(&mut app).unwrap();
+        if app.session.tool_id() == "tocPlace" {
+            app.run("toc.place", json!({"x":36,"y":36})).unwrap();
+        }
+        let separator = format!(" {} ", designcraft_doc::story::RIGHT_INDENT_TAB);
+        let d = &app.session.doc().unwrap().doc;
+        let toc = d.toc.as_ref().unwrap();
+        assert_eq!(toc.entries[0].separator.as_deref(), Some(separator.as_str()));
+        assert!(d.story(toc.story).unwrap().text.contains(&separator));
+        app.run("toc.update", json!({})).unwrap();
+        open_toc(&mut app);
+        assert_eq!(toc_rows(app.ui.dialog.as_ref().unwrap())[0].separator, " ^y ");
+        for text in ["^y", "^t^y", "^m^>", "unknown ^q and trailing ^", "a\t\u{E006}\u{2003}\u{2002}z"] {
+            assert_eq!(toc_separator_typed(&toc_separator_shown(text)), text);
+        }
+        // The picker after a literal caret: the caret stays, and the code is the code.
+        for (field, typed) in [("^", "^\u{E006}"), ("^^", "^\u{E006}"), ("a", "a\u{E006}"), ("^^^", "^^\u{E006}")] {
+            let mut f = field.to_string();
+            toc_separator_append(&mut f, "^y");
+            assert_eq!(toc_separator_typed(&f), typed, "{field:?} → {f:?}");
+        }
     }
 
     #[test]
@@ -726,6 +787,41 @@ fn print_dialog(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// English name; the caption is translated.
 const PDF_EXPORT_PRESETS: &[&str] =
     &["Desktop Printing", "Commercial Printing", "Screen and Email", "PDF/X-1a:2003", "PDF/X-4", "PDF/A-2b", "Custom"];
+
+/// The `file.exportPdf` options the Export PDF dialog's fields stand for (pages and title aside).
+fn pdf_export_params(d: &Dialog) -> Value {
+    let mut params = json!({
+        "standard": d.s("standard"),
+        "compressImages": d.b("compressImages"),
+        "spreads": d.b("spreads"),
+        "bleed": d.b("bleed"),
+        "tagged": d.b("tagged"),
+        "marks": {
+            "crop": d.b("marksCrop"),
+            "bleed": d.b("marksBleed"),
+            "pageInfo": d.b("marksPageInfo"),
+            "weight": d.pt("marksWeight").unwrap_or(0.25),
+            "offset": d.pt("marksOffset").unwrap_or(6.0),
+        },
+    });
+    let flatten = d.s("flatten");
+    if !flatten.is_empty() {
+        params["flatten"] = json!(flatten);
+    }
+    params
+}
+
+/// The PDF presets a document can be exported with, by name (Custom aside).
+pub(crate) fn pdf_presets() -> impl Iterator<Item = &'static str> {
+    PDF_EXPORT_PRESETS.iter().copied().filter(|p| *p != "Custom")
+}
+
+/// The `file.exportPdf` options of PDF preset `preset`, as the Export PDF dialog sets them.
+pub(crate) fn pdf_preset_params(preset: &str) -> Value {
+    let mut d = Dialog::new("pdfExport", json!({}));
+    apply_pdf_preset(&mut d, preset);
+    pdf_export_params(&d)
+}
 
 /// Apply a preset's dependent fields. Flatten is only touched by "Screen and Email" and
 /// "PDF/X-1a:2003" (High Resolution); "Custom" (and any unknown value) changes nothing.
@@ -2789,6 +2885,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "colorGroupOptions" => crate::i18n::tr(&app.ui.language, "Color Group Options"),
         "layerSettings" => crate::i18n::tr(&app.ui.language, "Layer Options"),
         crate::effects_dialog::ID => crate::i18n::tr(&app.ui.language, "Effects"),
+        crate::package_dialog::ID => crate::i18n::tr(&app.ui.language, "Package"),
+        crate::package_dialog::INSTRUCTIONS => crate::i18n::tr(&app.ui.language, "Printing Instructions"),
         id => match id.strip_prefix("cmd:").and_then(designcraft_engine::find_command) {
             Some(c) => crate::i18n::tr(&app.ui.language, c.label.trim_end_matches('…')),
             None => crate::i18n::tr(&app.ui.language, "Dialog"),
@@ -2810,6 +2908,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             "numberingSection" => 560.0,
             crate::effects_dialog::ID => 720.0,
             "colorPicker" => 580.0,
+            crate::package_dialog::ID => 720.0,
+            crate::package_dialog::INSTRUCTIONS => 520.0,
             _ => 640.0,
         };
         let width = preferred_width.min(available.x);
@@ -3146,6 +3246,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                     "colorGroupOptions" => options::color_group_options(app, ui, &mut d),
                     "layerSettings" => options::layer_options(app, ui, &mut d),
                     crate::effects_dialog::ID => crate::effects_dialog::show(app, ui, &mut d),
+                    crate::package_dialog::ID => crate::package_dialog::show(app, ui, &mut d),
+                    crate::package_dialog::INSTRUCTIONS => crate::package_dialog::show_instructions(app, ui, &mut d),
                     "preferences" => preferences(app, ui, &mut d, body_height),
                     "print" => print_dialog(app, ui, &mut d),
                     "pdfImport" => {
@@ -3604,6 +3706,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             "updateLink" => crate::i18n::tr(&app.ui.language, "  Update  ").to_string(),
             "findFont" => crate::i18n::tr(&app.ui.language, "Replace All").to_string(),
             "newDocument" => format!("  {}  ", crate::i18n::tr(&app.ui.language, "Create")),
+            crate::package_dialog::ID => crate::i18n::tr(&app.ui.language, "Package…").to_string(),
+            crate::package_dialog::INSTRUCTIONS => crate::i18n::tr(&app.ui.language, "Continue").to_string(),
             _ => crate::i18n::tr(&app.ui.language, "  OK  ").to_string(),
         };
         let cancel_label = match d.id.as_str() {
@@ -3617,6 +3721,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                 app.ui.style_preview = d.b("preview");
                 style_options_preview(app, &mut d);
             }
+            // A multi-line field with focus (set by the dialog this frame) takes Enter as a new line.
+            let multiline = take_multiline_focus(ui.ctx(), &d.id);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add(
@@ -3624,7 +3730,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             .fill(crate::theme::Tokens::get(ui.ctx()).accent_strong),
                     )
                     .clicked()
-                    || (!popup_open && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    || (!popup_open && !multiline && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                 {
                     result = Some(true);
                 }
@@ -4477,24 +4583,7 @@ fn confirm_part3(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             app.ui.pdf_export.marks_offset = d.s("marksOffset");
             app.ui.pdf_export.tagged = d.b("tagged");
 
-            let mut params = json!({
-                "standard": d.s("standard"),
-                "compressImages": d.b("compressImages"),
-                "spreads": d.b("spreads"),
-                "bleed": d.b("bleed"),
-                "tagged": d.b("tagged"),
-                "marks": {
-                    "crop": d.b("marksCrop"),
-                    "bleed": d.b("marksBleed"),
-                    "pageInfo": d.b("marksPageInfo"),
-                    "weight": d.pt("marksWeight").unwrap_or(0.25),
-                    "offset": d.pt("marksOffset").unwrap_or(6.0),
-                },
-            });
-            let flatten = d.s("flatten");
-            if !flatten.is_empty() {
-                params["flatten"] = json!(flatten);
-            }
+            let mut params = pdf_export_params(&d);
             let pages = d.s("pages");
             if !pages.trim().is_empty() && pages != "all" {
                 params["pages"] = json!(pages);
@@ -4812,6 +4901,22 @@ fn confirm_part6(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
         }
         "alert" => Ok(Value::Null),
         crate::effects_dialog::ID => crate::effects_dialog::confirm(app, &d),
+        crate::package_dialog::ID | crate::package_dialog::INSTRUCTIONS => {
+            let r = if d.id == crate::package_dialog::ID {
+                crate::package_dialog::confirm(app, &d)
+            } else {
+                crate::package_dialog::confirm_instructions(app, &d)
+            };
+            // Packaging failed: the dialog stays open with its options and instructions, and the
+            // status line says why.
+            if let Err(e) = &r
+                && app.ui.dialog.is_none()
+            {
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+            }
+            r
+        }
         "findChange" => {
             let result = if d.b("objectMode") { Ok(Value::Null) } else { app.run("find.change", find_change_params(&d)) };
             // Confirmation consumes retained bounds before closing, even on an error.
@@ -8081,11 +8186,20 @@ struct TocRow {
 }
 
 fn toc_separator_shown(s: &str) -> String {
-    s.replace('\t', "^t").replace('\u{2003}', "^m").replace('\u{2002}', "^>")
+    designcraft_doc::story::toc_separator_notation(s)
 }
 
 fn toc_separator_typed(s: &str) -> String {
-    s.replace("^t", "\t").replace("^m", "\u{2003}").replace("^>", "\u{2002}")
+    designcraft_doc::story::toc_separator_text(s)
+}
+
+/// Appends the special-character `code` (such as `^y`) to the separator field's notation. A
+/// trailing unescaped caret is a literal caret: it's escaped first, so it doesn't swallow the code.
+fn toc_separator_append(field: &mut String, code: &str) {
+    if field.chars().rev().take_while(|&c| c == '^').count() % 2 == 1 {
+        field.push('^');
+    }
+    field.push_str(code);
 }
 
 fn toc_rows(d: &Dialog) -> Vec<TocRow> {
@@ -8311,7 +8425,19 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             toc_style_combo(ui, "page_number", &char_styles, none, &mut r.page_number_style, name);
             ui.end_row();
             let between = crate::rtl::label(ui, tr("Between Entry and Number:")).id;
-            ui.add(egui::TextEdit::singleline(&mut r.separator).desired_width(80.0).align(egui::Align2::LEFT_TOP)).labelled_by(between);
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut r.separator).desired_width(80.0).align(egui::Align2::LEFT_TOP)).labelled_by(between);
+                ui.menu_button("▸", |ui| {
+                    for (label, code) in [("Tab Character", "^t"), ("Right Indent Tab", "^y"), ("Em Space", "^m"), ("En Space", "^>")] {
+                        if ui.button(tr(label)).clicked() {
+                            toc_separator_append(&mut r.separator, code);
+                            ui.close();
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(tr("Insert Special Character"));
+            });
             let name = crate::rtl::label(ui, tr("Style:")).id;
             toc_style_combo(ui, "separator", &char_styles, none, &mut r.separator_style, name);
             ui.end_row();

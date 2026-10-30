@@ -247,12 +247,9 @@ fn run_ui_part1(app: &mut DesignApp, id: &str, p: &Value) -> Option<Result<Value
         }
         "app.exportText" => export_bytes(app, p, "rtf", "file.exportText"),
         "app.packageDialog" => {
+            // Without a folder, the Package dialog: what the package carries, then the folder.
             let Some(dir) = p.get("dir").and_then(Value::as_str) else {
-                let name = app.session.active().map(|d| format!("{} Folder", d.doc.title)).unwrap_or_default();
-                let p = p.clone();
-                return Some(app.ask_save(&name, Bound::Document, move |app, dir| {
-                    run_ui(app, "app.packageDialog", &with_path(&p, "dir", dir)).unwrap_or(Ok(Value::Null))
-                }));
+                return Some(crate::package_dialog::open(app).map(|()| Value::Null));
             };
             let r = app.run("file.package", json!({"dir": dir}));
             if let Ok(v) = &r {

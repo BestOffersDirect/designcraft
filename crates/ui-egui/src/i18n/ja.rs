@@ -4,6 +4,7 @@
 //! shared table are carried over unchanged.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "オプションを減らす"),
+    ("Tab Character", "タブ文字"),
     ("File", "ファイル"),
     ("Edit", "編集"),
     ("Layout", "レイアウト"),

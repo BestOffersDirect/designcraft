@@ -35,7 +35,12 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
         None,
         "{page?: transparency|dropShadow|innerShadow|outerGlow|innerGlow|bevel|satin|feather|directionalFeather|gradientFeather} — the Effects dialog for the selected objects",
     ),
-    ("app.packageDialog", "Package…", Some("Cmd+Alt+Shift+P"), "{dir?} — choose the package folder to create (file.package)"),
+    (
+        "app.packageDialog",
+        "Package…",
+        Some("Cmd+Alt+Shift+P"),
+        "{dir?} — the Package dialog (what the package carries, printing instructions), then the folder to create; with dir, packages into it at once (file.package)",
+    ),
     ("app.saveSwatches", "Save Swatches for Exchange…", None, "{path?} — write the colour swatches as .ase"),
     ("app.exportPng", "Export Page as PNG…", Some("Cmd+E"), "{}"),
     ("app.exportIdml", "Export IDML…", None, "{path?} — InDesign Markup (IDML) package"),
