@@ -1311,6 +1311,7 @@ fn round_trips_cross_references() {
     assert_eq!(s.text, d.story(sid).unwrap().text);
     assert_eq!(s.xrefs.len(), 1);
     assert_eq!(s.xrefs[0].format, "Paragraph Text");
+    assert_eq!(s.xrefs[0].text, None, "generated text reads back as generated");
     let (tsid, tpos) = back.find_anchor(s.xrefs[0].target).expect("target resolves");
     assert_eq!((tsid, tpos), (s.id, 0));
     let mine = back.xref_format("Mine").unwrap();
@@ -4786,15 +4787,15 @@ fn epub_split_document_round_trips() {
     }
 }
 
-/// Text typed over a cross-reference's generated text is kept, its page number live (InDesign's
-/// XRefPageNumber variable); text the format still produces is generated again. The edits
-/// survive export and import.
+/// Text typed over a cross-reference's generated text is kept as shown, its page number live
+/// (InDesign's cross-reference page number variable, found by its `AssociatedTextVariable`),
+/// tracked insertions in and deletions out. The edits survive export and import.
 #[test]
 fn keeps_edited_cross_reference_text() {
     let story = r#"<?xml version="1.0" encoding="UTF-8"?>
 <idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
 <Story Self="s1"><ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/$ID/NormalParagraphStyle">
-<CrossReferenceSource Self="x1" AppliedFormat="n"><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>Page </Content></CharacterStyleRange><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><TextVariableInstance Self="v1" Name="&lt;?AID 001b?&gt;TV XRefPageNumber" ResultText="7" AssociatedTextVariable="dTextVariablen&lt;?AID 001b?&gt;TV XRefPageNumber"/></CharacterStyleRange><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>: Bove, Vinny. "Advent Horizon." 1996.</Content></CharacterStyleRange></CrossReferenceSource>
+<CrossReferenceSource Self="x1" AppliedFormat="n"><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>Page </Content></CharacterStyleRange><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><TextVariableInstance Self="v1" Name="Seitenzahl" ResultText="7" AssociatedTextVariable="dTextVariablen&lt;?AID 001b?&gt;TV XRefPageNumber"/></CharacterStyleRange><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>: Bove, Vinny. </Content><Change Self="c1" ChangeType="InsertedText"><Content>"Advent Horizon."</Content></Change><Change Self="c2" ChangeType="DeletedText"><Content> (draft)</Content></Change><Content> 1996.</Content></CharacterStyleRange></CrossReferenceSource>
 <CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content> and </Content></CharacterStyleRange>
 <CrossReferenceSource Self="x2" AppliedFormat="n"><CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"><Content>"Intro" on page </Content><TextVariableInstance Self="v2" Name="&lt;?AID 001b?&gt;TV XRefPageNumber" ResultText="3" AssociatedTextVariable="dTextVariablen&lt;?AID 001b?&gt;TV XRefPageNumber"/></CharacterStyleRange></CrossReferenceSource>
 </ParagraphStyleRange></Story></idPkg:Story>"#;
@@ -4804,12 +4805,36 @@ fn keeps_edited_cross_reference_text() {
     assert_eq!(s.xrefs.len(), 2);
     assert_eq!(s.xrefs[0].text.as_deref(), Some("Page <pageNum />: Bove, Vinny. \"Advent Horizon.\" 1996."));
     assert_eq!(s.xrefs[0].page.as_deref(), Some("7"));
-    assert_eq!(s.xrefs[1].text, None, "unedited text follows its format");
-    // Its destination is gone: the page it last showed.
+    // Its destination is gone: the text and page it last showed.
     assert_eq!(designcraft_compose::xref::xref_text(&d, &s.xrefs[0], None), "Page 7: Bove, Vinny. \"Advent Horizon.\" 1996.");
+    assert_eq!(s.xrefs[1].text.as_deref(), Some("\"Intro\" on page <pageNum />"), "with no destination to generate from, the text as shown");
     let back = import_idml(&export_idml(&d)).unwrap();
     back.check().unwrap();
     let b = back.stories.values().find(|s| !s.xrefs.is_empty()).unwrap();
     assert_eq!(b.xrefs[0].text, s.xrefs[0].text);
     assert_eq!(b.xrefs[0].page, s.xrefs[0].page);
+}
+
+/// Saved cross-reference text counts as generated only when it is exactly what its format
+/// generates for its destination: text added after it (or anywhere else) is an edit, and kept.
+#[test]
+fn only_exactly_generated_cross_reference_text_is_regenerated() {
+    let mut d = Document::new(&NewDocument::default());
+    let lid = d.default_layer();
+    let (_, sid) = d.add_text_frame(SpreadRef::Doc(0), Rect::new(40.0, 40.0, 400.0, 400.0), lid, "Results\nSee", ParaFormat::default()).unwrap();
+    let target = d.paragraph_anchor(sid, 0).unwrap();
+    d.xref_formats.push(designcraft_doc::XrefFormat { name: "Page".into(), definition: "Page <pageNum />".into() });
+    for t in ["Page <pageNum />, revised", "Page <pageNum />", "Seite <pageNum />"] {
+        let st = d.story_mut(sid).unwrap();
+        let end = st.len();
+        st.insert(end, " ");
+        let x = designcraft_doc::CrossRef { target, format: "Page".into(), text: Some(t.into()), page: Some("1".into()) };
+        st.insert_xref(end + 1, x);
+    }
+    d.check().unwrap();
+    let back = import_idml(&export_idml(&d)).unwrap();
+    back.check().unwrap();
+    let s = back.stories.values().find(|s| !s.xrefs.is_empty()).unwrap();
+    let got: Vec<Option<&str>> = s.xrefs.iter().map(|x| x.text.as_deref()).collect();
+    assert_eq!(got, [Some("Page <pageNum />, revised"), None, Some("Seite <pageNum />")]);
 }

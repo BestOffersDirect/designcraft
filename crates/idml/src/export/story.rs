@@ -327,14 +327,13 @@ impl<'a> Ex<'a> {
         segs
     }
 
-    /// A cross-reference source's text: `generated`, or the text typed over it, its page numbers
-    /// as InDesign's live cross-reference page number.
-    fn xref_content(&mut self, c: &mut El, x: &designcraft_doc::CrossRef, generated: String) {
-        let Some(t) = &x.text else {
-            let mut content = El::new("Content");
-            content.children.push(Node::Text(generated));
-            c.push(content);
-            return;
+    /// A cross-reference source's text: what its format generates, or the text typed over it, its
+    /// page numbers as InDesign's live cross-reference page number (as InDesign writes them, so
+    /// generated text reads back as generated).
+    fn xref_content(&mut self, c: &mut El, x: &designcraft_doc::CrossRef) {
+        let t = match &x.text {
+            Some(t) => t.clone(),
+            None => self.d.generated_xref_text(x.target, &x.format).unwrap_or_else(|| "??".into()),
         };
         let page = x.page.clone().unwrap_or_else(|| "?".into());
         for (n, part) in t.split(designcraft_doc::xref::PAGE_NUM_BLOCK).enumerate() {
@@ -447,12 +446,8 @@ impl<'a> Ex<'a> {
                     if let Some(x) = s.xrefs.get(k) {
                         let me = self.fresh();
                         let fmt = self.d.xref_formats.iter().position(|ff| ff.name == x.format).map_or("n".to_string(), xref_format_self);
-                        let text = self.d.xref_values(x.target).map_or("??".into(), |mut v| {
-                            v.page = "?".into();
-                            designcraft_doc::xref::expand(self.d.xref_format(&x.format).map_or("<fullPara />", |ff| ff.definition.as_str()), &v)
-                        });
                         let mut c = self.csr_el(&f);
-                        self.xref_content(&mut c, x, text);
+                        self.xref_content(&mut c, x);
                         let mut src = El::new("CrossReferenceSource")
                             .attr("Self", &me)
                             .attr("AppliedFormat", fmt)

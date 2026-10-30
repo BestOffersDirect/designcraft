@@ -53,36 +53,6 @@ pub fn expand_edited(text: &str, page: &str) -> String {
     text.replace(PAGE_NUM_BLOCK, page)
 }
 
-/// The literal text between a format's building blocks, in order.
-pub fn literal_parts(definition: &str) -> Vec<&str> {
-    let mut out = Vec::new();
-    let mut rest = definition;
-    while let Some(i) = rest.find('<') {
-        let Some(j) = rest[i..].find('>') else { break };
-        if i > 0 {
-            out.push(&rest[..i]);
-        }
-        rest = &rest[i + j + 1..];
-    }
-    if !rest.is_empty() {
-        out.push(rest);
-    }
-    out
-}
-
-/// Does `text` (a cross-reference's text as saved) still read as its format would generate it:
-/// every literal part of the definition, in order? Text that doesn't was edited by hand.
-pub fn matches_format(text: &str, definition: &str) -> bool {
-    let mut rest = text;
-    for part in literal_parts(definition) {
-        match rest.find(part) {
-            Some(i) => rest = &rest[i + part.len()..],
-            None => return false,
-        }
-    }
-    true
-}
-
 /// A cross-reference format: building blocks between literal text.
 ///
 /// Blocks: `<fullPara />`, `<paraText />` (without the list number), `<paraNum />`,
@@ -355,6 +325,35 @@ impl Story {
 }
 
 impl Document {
+    /// The text a cross-reference to `target` in `format` generates, with each page number as
+    /// [`PAGE_NUM_BLOCK`] (the form saved text takes); `None` when the destination is gone.
+    pub fn generated_xref_text(&self, target: u64, format: &str) -> Option<String> {
+        let mut v = self.xref_values(target)?;
+        v.page = PAGE_NUM_BLOCK.into();
+        Some(expand(self.xref_format(format).map_or("<fullPara />", |f| f.definition.as_str()), &v))
+    }
+
+    /// Forget saved cross-reference text that is exactly what its format generates for its
+    /// destination, so it is generated again (and follows edits to the destination). Any other
+    /// saved text was typed over the generated text, or its destination is gone: it is kept as
+    /// shown.
+    pub fn drop_generated_xref_text(&mut self) {
+        let generated: Vec<(StoryId, usize)> = self
+            .stories
+            .iter()
+            .flat_map(|(sid, st)| st.xrefs.iter().enumerate().map(move |(k, x)| (*sid, k, x)))
+            .filter(|(_, _, x)| x.text.as_ref().is_some_and(|t| self.generated_xref_text(x.target, &x.format).as_ref() == Some(t)))
+            .map(|(sid, k, _)| (sid, k))
+            .collect();
+        for (sid, k) in generated {
+            if let Some(x) = self.story_mut(sid).and_then(|st| st.xrefs.get_mut(k)) {
+                let x = Arc::make_mut(x);
+                x.text = None;
+                x.page = None;
+            }
+        }
+    }
+
     /// (story, byte) of anchor `id`.
     pub fn find_anchor(&self, id: u64) -> Option<(StoryId, usize)> {
         if id == 0 {
@@ -433,15 +432,8 @@ pub fn clean(s: &str) -> String {
 mod tests {
     use super::*;
 
-    /// Saved text that still reads as its format produced it is generated again; text typed
-    /// over it is kept.
     #[test]
-    fn edited_text_is_recognised() {
-        let def = "Page <pageNum />: Last, First. \"<txtAnchrName />.\" YYYY. Volume X, issue Y.";
-        assert_eq!(literal_parts(def), ["Page ", ": Last, First. \"", ".\" YYYY. Volume X, issue Y."]);
-        assert!(matches_format("Page <pageNum />: Last, First. \"Advent Horizon.\" YYYY. Volume X, issue Y.", def));
-        assert!(!matches_format("Page <pageNum />: Bove, Vinny. \"Advent Horizon.\" 1996. Volume 6, issue 5.", def));
-        assert!(matches_format("anything", "<paraText />"));
+    fn edited_text_fills_in_its_page_numbers() {
         assert_eq!(expand_edited("p. <pageNum /> and <pageNum />", "4"), "p. 4 and 4");
     }
 

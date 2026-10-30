@@ -50,16 +50,11 @@ impl<'r> Importer<'r> {
         for (k, x) in xrefs.into_iter().enumerate() {
             self.xref_srcs.insert(x.me, (id, k));
             let format = self.xref_format_names.get(&x.format).cloned().unwrap_or_else(|| "Full Paragraph & Page Number".into());
-            // Text typed over the generated text is kept (InDesign shows it until the
-            // cross-reference is updated); text the format still produces is generated again.
-            let definition = self.xref_formats.iter().find(|f| f.name == format).map_or("<fullPara />", |f| f.definition.as_str());
-            let edited = !x.text.is_empty() && !designcraft_doc::xref::matches_format(&x.text, definition);
-            xref_list.push(Arc::new(designcraft_doc::CrossRef {
-                target: 0,
-                format,
-                text: edited.then_some(x.text),
-                page: x.page.filter(|_| edited),
-            }));
+            // The text as saved: once the destinations are known, text the format generates
+            // exactly is dropped to be generated again (`drop_generated_xref_text`), and text
+            // typed over it is kept, as InDesign shows it until the cross-reference is updated.
+            let saved = !x.text.is_empty();
+            xref_list.push(Arc::new(designcraft_doc::CrossRef { target: 0, format, text: saved.then_some(x.text), page: x.page.filter(|_| saved) }));
         }
         let pref = e.find("StoryPreference");
         let optical_margin = designcraft_doc::OpticalMargin {
@@ -205,7 +200,7 @@ impl<'r> Importer<'r> {
                     "CrossReferenceSource" => {
                         // The generated text is regenerated from the format.
                         let (mut text, mut page) = (String::new(), None);
-                        xref_saved_text(c, &mut text, &mut page, 0);
+                        xref_saved_text(c, &self.xref_page_vars, &mut text, &mut page, 0);
                         b.xrefs.push(XrefSource {
                             me: c.get("Self").unwrap_or("").to_string(),
                             format: c.get("AppliedFormat").unwrap_or("").to_string(),
@@ -431,23 +426,32 @@ struct XrefSource {
     page: Option<String>,
 }
 
-/// The text a `CrossReferenceSource` holds, with its live page numbers (InDesign's
-/// `XRefPageNumber` text variable) as `<pageNum />`. Returns the text and the page shown.
-fn xref_saved_text(e: &El, text: &mut String, page: &mut Option<String>, depth: usize) {
+/// Whether a `TextVariableInstance` shows a cross-reference page number: its
+/// `AssociatedTextVariable` is a variable of that type (`page_vars`), or, in a file that doesn't
+/// define it, has the name InDesign gives that variable.
+fn is_xref_page_number(e: &El, page_vars: &HashSet<String>) -> bool {
+    e.get("AssociatedTextVariable").is_some_and(|v| page_vars.contains(v) || (page_vars.is_empty() && v.ends_with("TV XRefPageNumber")))
+}
+
+/// The text a `CrossReferenceSource` holds as shown, with its live page numbers (InDesign's
+/// cross-reference page number variable, `page_vars`) as `<pageNum />`. Tracked insertions count;
+/// tracked deletions don't. Returns the text and the page shown.
+fn xref_saved_text(e: &El, page_vars: &HashSet<String>, text: &mut String, page: &mut Option<String>, depth: usize) {
     if depth > 16 {
         return;
     }
     for c in e.elements() {
         match c.local() {
             "Content" => text.push_str(&c.text_content()),
-            "TextVariableInstance" if c.get("Name").is_some_and(|n| n.contains("XRefPageNumber")) => {
+            "TextVariableInstance" if is_xref_page_number(c, page_vars) => {
                 text.push_str(designcraft_doc::xref::PAGE_NUM_BLOCK);
                 if page.is_none() {
                     *page = c.get("ResultText").map(str::to_string);
                 }
             }
             "TextVariableInstance" => text.push_str(c.get("ResultText").unwrap_or("")),
-            "CharacterStyleRange" => xref_saved_text(c, text, page, depth + 1),
+            "Change" if c.get("ChangeType") == Some("DeletedText") => {}
+            "CharacterStyleRange" | "Change" => xref_saved_text(c, page_vars, text, page, depth + 1),
             _ => {}
         }
     }
