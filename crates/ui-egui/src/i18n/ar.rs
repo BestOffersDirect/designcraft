@@ -32,6 +32,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Copy", "نسخ"),
     ("Paste", "لصق"),
     ("Keep In Frame", "الإبقاء داخل الإطار"),
+    ("New Paragraph Style", "نمط فقرة جديد"),
+    ("New Character Style", "نمط حرف جديد"),
     ("Next Style:", "النمط التالي:"),
     ("[Same style]", "[النمط نفسه]"),
     ("Reset To Base", "إعادة التعيين إلى الأساس"),

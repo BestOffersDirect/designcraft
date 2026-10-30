@@ -31,6 +31,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Copy", "Копіювати"),
     ("Paste", "Вставити"),
     ("Keep In Frame", "Зберегти у фреймі"),
+    ("New Paragraph Style", "Новий стиль абзацу"),
+    ("New Character Style", "Новий стиль символів"),
     ("Next Style:", "Наступний стиль:"),
     ("[Same style]", "[Той самий стиль]"),
     ("Reset To Base", "Скинути до основи"),

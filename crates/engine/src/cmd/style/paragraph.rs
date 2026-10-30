@@ -403,8 +403,19 @@ fn continue_numbering(p: Option<&Value>, para: &mut ParaAttrs) {
     }
 }
 
+/// The style `p[key]` names: none when absent or null; anything but a name is refused.
+fn style_name_param(cmd: &str, p: &Value, key: &str) -> Result<Option<String>> {
+    match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(n)) => Ok(Some(n.clone())),
+        Some(_) => Err(bad(cmd, format!("`{key}` is a style name or null"))),
+    }
+}
+
 pub(super) fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
     let base = str_param(p, "name").unwrap_or("Paragraph Style 1").to_string();
+    let based_on = style_name_param("style.paragraph.create", p, "basedOn")?;
+    let next = style_name_param("style.paragraph.create", p, "nextStyle")?;
     let mut para: ParaAttrs =
         attrs("style.paragraph.create", "para", p, |a: &mut ParaAttrs, k, v| a.set_json_over(k, v, &designcraft_doc::ParaProps::default()))?;
     continue_numbering(p.get("para"), &mut para);
@@ -428,8 +439,6 @@ pub(super) fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
             chars = full;
         }
     }
-    let based_on = str_param(p, "basedOn").map(str::to_string);
-    let next = str_param(p, "nextStyle").map(str::to_string);
     s.edit(|d, _| {
         let name = Styles::unique_name(|n| d.styles.para(n).is_some(), &base);
         if let Some(b) = &based_on
@@ -818,7 +827,7 @@ pub(super) fn create_char(s: &mut Session, p: &Value) -> Result<Value> {
         chars = captured;
     }
     // Based on [None] is based on nothing.
-    let based_on = str_param(p, "basedOn").filter(|b| *b != designcraft_doc::NO_CHAR_STYLE).map(str::to_string);
+    let based_on = style_name_param("style.character.create", p, "basedOn")?.filter(|b| b != designcraft_doc::NO_CHAR_STYLE);
     s.edit(|d, _| {
         if let Some(b) = &based_on
             && d.styles.char_style(b).is_none()

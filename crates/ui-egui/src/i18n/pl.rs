@@ -32,6 +32,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Paste", "Wklej"),
     ("Keep In Frame", "Zachowaj w ramce"),
     ("Gap Tint:", "Odcień odstępu:"),
+    ("New Paragraph Style", "Nowy styl akapitowy"),
+    ("New Character Style", "Nowy styl znakowy"),
     ("Next Style:", "Następny styl:"),
     ("[Same style]", "[Ten sam styl]"),
     ("Reset To Base", "Przywróć bazowy"),

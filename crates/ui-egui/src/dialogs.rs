@@ -2219,8 +2219,10 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "fileInfo" => crate::i18n::tr(&app.ui.language, "File Info"),
         "numberingSection" => crate::i18n::tr(&app.ui.language, "Numbering & Section Options…").trim_end_matches('…'),
         "findChange" => crate::i18n::tr(&app.ui.language, "Find/Change"),
+        "paragraphStyleOptions" if d.b("new") => crate::i18n::tr(&app.ui.language, "New Paragraph Style"),
         "paragraphStyleOptions" => crate::i18n::tr(&app.ui.language, "Paragraph Style Options"),
         "deleteParagraphStyle" => crate::i18n::tr(&app.ui.language, "Delete Paragraph Style"),
+        "characterStyleOptions" if d.b("new") => crate::i18n::tr(&app.ui.language, "New Character Style"),
         "characterStyleOptions" => crate::i18n::tr(&app.ui.language, "Character Style Options"),
         "deleteCharacterStyle" => crate::i18n::tr(&app.ui.language, "Delete Character Style"),
         "footnoteOptions" => crate::i18n::tr(&app.ui.language, "Footnote Options"),
@@ -3442,7 +3444,13 @@ fn confirm_part2(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
                 if let Some(b) = based.filter(|b| b != designcraft_doc::NO_CHAR_STYLE) {
                     params["basedOn"] = json!(b);
                 }
-                app.run("style.character.create", params)
+                // Apply Style to Selection.
+                app.run("style.character.create", params).and_then(|r| {
+                    if d.b("apply") && app.session.active().is_some_and(|st| st.selection.text.is_some()) {
+                        app.run("style.character.apply", json!({"name": r["name"]}))?;
+                    }
+                    Ok(r)
+                })
             } else {
                 let mut params = json!({"name": name, "chars": chars});
                 if let Some(b) = based {
@@ -5729,6 +5737,17 @@ pub fn open_new_style(app: &mut DesignApp, para: bool) {
         }
         fields["apply"] = json!(true);
     }
+    // New Character Style with text selected starts from what the text has of its own over its
+    // paragraph ("[None] + Bold + color"), applied to the selection on OK, as InDesign's.
+    if !para
+        && has_text
+        && let Some(sel) = app.session.execute("type.selectionAttrs", &json!({})).ok().filter(|v| !v.is_null())
+    {
+        for (k, v) in sel["ownChars"].as_object().into_iter().flatten().filter(|(_, v)| !v.is_null()) {
+            fields[format!("c.{k}")] = v.clone();
+        }
+        fields["apply"] = json!(true);
+    }
     app.ui.dialog = Some(Dialog::new(id, fields));
 }
 
@@ -5846,7 +5865,13 @@ fn character_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
             "underline" => line_options(&lang, ui, d, &cf, &doc, "underline"),
             "strikethrough" => line_options(&lang, ui, d, &cf, &doc, "strikethrough"),
             s if style_cjk::is_section(s) => style_cjk::section_ui(app, ui, d, s, &cf, None, &doc),
-            _ => character_style_general(&lang, ui, d, styles, &style, &based),
+            _ => {
+                character_style_general(&lang, ui, d, styles, &style, &based);
+                if new {
+                    ui.add_space(8.0);
+                    check(ui, d, "apply", crate::i18n::tr(&lang, "Apply Style to Selection"));
+                }
+            }
         });
     });
 }

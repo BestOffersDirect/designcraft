@@ -30,6 +30,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Copy", "Copia"),
     ("Paste", "Incolla"),
     ("Keep In Frame", "Mantieni nella cornice"),
+    ("New Paragraph Style", "Nuovo stile di paragrafo"),
+    ("New Character Style", "Nuovo stile di carattere"),
     ("Next Style:", "Stile successivo:"),
     ("[Same style]", "[Stesso stile]"),
     ("Reset To Base", "Ripristina base"),
