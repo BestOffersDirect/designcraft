@@ -3525,13 +3525,18 @@ fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
         app,
     );
     h.run_steps(6);
-    // Where the frame shows on screen.
+    // Where the frame shows on screen, outside the picker (a drop on the picker takes nothing).
     let target = {
         let app = h.state();
         let doc = &app.session.doc().unwrap().doc;
         let layout = designcraft_tools::CanvasLayout::new(doc, false);
         let v = *app.view().unwrap();
-        crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v).to_screen(layout.slots[0].xf * designcraft_geom::Point::new(300.0, 600.0))
+        let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v);
+        [(60.0, 660.0), (60.0, 80.0), (300.0, 600.0), (540.0, 80.0)]
+            .into_iter()
+            .map(|(x, y)| xf.to_screen(layout.slots[0].xf * designcraft_geom::Point::new(x, y)))
+            .find(|p| h.ctx.layer_id_at(*p).is_none_or(|l| l.order != egui::Order::Foreground))
+            .expect("a point of the frame outside the picker")
     };
     let from = h.get_by_label("Eyedropper: drag it onto the page").rect().center();
     h.hover_at(from);
