@@ -4412,21 +4412,27 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                     };
                     let same = crate::i18n::tr(&app.ui.language, "[Same style]").to_string();
                     let shown = next.as_deref().map_or(same.clone(), |n| crate::i18n::style_name(&app.ui.language, n).to_string());
-                    craft_ui::ComboBox::from_id_salt("psnext").selected_text(crate::rtl::widget(ui, shown)).width(220.0).show_ui(ui, |ui| {
-                        if ui.selectable_label(next.is_none(), crate::rtl::widget(ui, &same)).clicked() {
-                            d.fields.insert("nextStyle".into(), Value::Null);
-                        }
-                        for n in names.iter().filter(|n| *n != designcraft_doc::NO_PARA_STYLE) {
-                            if ui
-                                .selectable_label(next.as_deref() == Some(n), crate::rtl::widget(ui, crate::i18n::style_name(&app.ui.language, n)))
-                                .clicked()
-                            {
-                                d.fields.insert("nextStyle".into(), json!(n));
+                    craft_ui::ComboBox::from_id_salt("psnext")
+                        .selected_text(crate::rtl::widget(ui, shown))
+                        .width(220.0)
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_label(next.is_none(), crate::rtl::widget(ui, &same)).clicked() {
+                                d.fields.insert("nextStyle".into(), Value::Null);
                             }
-                        }
-                    })
-                    .response
-                    .labelled_by(next_name.id);
+                            for n in names.iter().filter(|n| *n != designcraft_doc::NO_PARA_STYLE) {
+                                if ui
+                                    .selectable_label(
+                                        next.as_deref() == Some(n),
+                                        crate::rtl::widget(ui, crate::i18n::style_name(&app.ui.language, n)),
+                                    )
+                                    .clicked()
+                                {
+                                    d.fields.insert("nextStyle".into(), json!(n));
+                                }
+                            }
+                        })
+                        .response
+                        .labelled_by(next_name.id);
                     ui.end_row();
                 });
                 // Reset To Base: the style keeps nothing of its own (the edits made here stay).
