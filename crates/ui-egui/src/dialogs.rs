@@ -7217,6 +7217,32 @@ fn nums<const N: usize>(d: &Dialog, k: &str) -> Option<[f64; N]> {
     Some(out)
 }
 
+/// The Color Picker's eyedropper at `at`, as InDesign's: dragged onto the page, it takes the colour
+/// shown under the pointer when it is let go. The colour taken, if any.
+fn eyedropper(app: &mut DesignApp, ui: &mut egui::Ui, at: egui::Pos2, tip: String, t: &crate::theme::Tokens) -> Option<[u8; 3]> {
+    let er = egui::Rect::from_center_size(at, egui::vec2(21.0, 21.0));
+    let resp = ui.interact(er, egui::Id::unique("color_picker_eyedropper"), egui::Sense::click_and_drag());
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &tip));
+    if resp.hovered() || resp.dragged() {
+        ui.painter().rect_filled(er, 3.0, t.hover);
+    }
+    crate::icons::paint(ui.painter(), egui::Rect::from_center_size(er.center(), egui::vec2(15.0, 15.0)), "tool-eyedropper", t.icon);
+    if resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+    }
+    // Let go over the picker itself it takes nothing, though a page may lie under it. (Its modal
+    // backdrop shares the picker's layer and covers the screen: the picker is where it draws.)
+    let mut taken = None;
+    if resp.drag_stopped()
+        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
+        && !ui.clip_rect().contains(pos)
+    {
+        taken = crate::canvas::color_at(app, ui.ctx(), pos);
+    }
+    resp.on_hover_text(tip);
+    taken
+}
+
 /// The Color Picker, laid out as InDesign's: the colour space view (a field of two components,
 /// a slider for the third: the one whose radio button is on, R at first), the new colour over the
 /// one it replaces, OK / Cancel / Add CMYK Swatch at the top right, H/S/B beside L/a/b, R/G/B
@@ -7438,29 +7464,9 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         p = Picked::from_rgb(c.to_rgb_uncalibrated(), p.hsb[0]);
     }
     d.fields.insert("hexEdit".into(), json!(h));
-    // The eyedropper, as InDesign's: dragged onto the page, it takes the colour shown under the
-    // pointer when it is let go.
-    let tip = tr("Eyedropper: drag it onto the page");
-    let er = egui::Rect::from_center_size(egui::pos2(hr.right() + 16.0, cy), egui::vec2(21.0, 21.0));
-    let resp = ui.interact(er, egui::Id::unique("color_picker_eyedropper"), egui::Sense::click_and_drag());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &tip));
-    if resp.hovered() || resp.dragged() {
-        ui.painter().rect_filled(er, 3.0, t.hover);
-    }
-    crate::icons::paint(ui.painter(), egui::Rect::from_center_size(er.center(), egui::vec2(15.0, 15.0)), "tool-eyedropper", t.icon);
-    if resp.dragged() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
-    }
-    // Let go over the picker itself it takes nothing, though a page may lie under it. (Its modal
-    // backdrop shares the picker's layer and covers the screen: the picker is where it draws.)
-    if resp.drag_stopped()
-        && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
-        && !ui.clip_rect().contains(pos)
-        && let Some(c) = crate::canvas::color_at(app, ui.ctx(), pos)
-    {
+    if let Some(c) = eyedropper(app, ui, egui::pos2(hr.right() + 16.0, cy), tr("Eyedropper: drag it onto the page"), &t) {
         p = Picked::from_rgb(c.map(|v| f32::from(v) / 255.0), p.hsb[0]);
     }
-    resp.on_hover_text(tip);
     if p != before {
         store_picked(d, &p);
         if let Some(c) = exact_cmyk {
