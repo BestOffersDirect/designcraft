@@ -72,6 +72,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Nova seção"),
     ("Clear Frame Fitting Options", "Limpar opções de ajuste do quadro"),
     ("Cannot be edited", "Não editável"),
+    ("PDF Preset:", "Predefinição de PDF:"),
     ("Packaged {count} files into {dir}", "{count} arquivos empacotados em {dir}"),
     ("Continue", "Continuar"),
     ("Printing Instructions", "Instruções de impressão"),

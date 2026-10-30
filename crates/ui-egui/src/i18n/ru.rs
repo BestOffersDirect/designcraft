@@ -74,6 +74,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Новый раздел"),
     ("Clear Frame Fitting Options", "Очистить параметры подгонки фрейма"),
     ("Cannot be edited", "Нельзя изменить"),
+    ("PDF Preset:", "Стиль PDF:"),
     ("Packaged {count} files into {dir}", "Упаковано файлов: {count} в {dir}"),
     ("Continue", "Продолжить"),
     ("Printing Instructions", "Инструкции для печати"),

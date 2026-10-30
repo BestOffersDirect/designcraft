@@ -76,10 +76,14 @@ pub fn open(app: &mut DesignApp) -> Result<(), String> {
                 .collect()
         })
         .unwrap_or_default();
+    // The packaged PDF's preset: the one last used for Export PDF, as InDesign suggests it.
+    let last = app.ui.pdf_export.preset.clone();
+    let preset = crate::dialogs::pdf_presets().find(|p| *p == last).unwrap_or("Desktop Printing");
     let doc = app.session.active().map(|d| d.uid);
     app.ui.dialog = Some(Dialog::new(
         ID,
-        json!({"page": "summary", "doc": doc, "fonts": fonts, "links": links, "spot": spot, "instructions": false, "idml": true, "pdf": false, "problemsOnly": false}),
+        json!({"page": "summary", "doc": doc, "fonts": fonts, "links": links, "spot": spot, "instructions": false, "idml": true, "pdf": false,
+            "pdfPreset": preset, "problemsOnly": false}),
     ));
     Ok(())
 }
@@ -282,6 +286,26 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
                             d.fields.insert(key.into(), json!(on));
                         }
                     }
+                    // The PDF's preset, as InDesign's Select PDF Preset.
+                    ui.add_enabled_ui(d.b("pdf"), |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add_space(24.0);
+                            let name = crate::rtl::label(ui, tr("PDF Preset:"));
+                            let cur = d.s("pdfPreset");
+                            craft_ui::ComboBox::from_id_salt("package_pdf_preset")
+                                .selected_text(crate::rtl::widget(ui, tr(&cur)))
+                                .width(180.0)
+                                .show_ui(ui, |ui| {
+                                    for p in crate::dialogs::pdf_presets() {
+                                        if ui.selectable_label(cur == p, crate::rtl::widget(ui, tr(p))).clicked() {
+                                            d.fields.insert("pdfPreset".into(), json!(p));
+                                        }
+                                    }
+                                })
+                                .response
+                                .labelled_by(name.id);
+                        });
+                    });
                 }
             }
             if matches!(page.as_str(), "fonts" | "links") {
@@ -295,10 +319,15 @@ pub fn show(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// The `pdf` of `file.package`: false, or the options of the chosen PDF preset.
+fn pdf_param(d: &Dialog) -> Value {
+    if d.b("pdf") { crate::dialogs::pdf_preset_params(&d.s("pdfPreset")) } else { json!(false) }
+}
+
 /// Package…: the Printing Instructions first when asked for, else the folder.
 pub fn confirm(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
     same_document(app, d)?;
-    let (idml, pdf) = (d.b("idml"), d.b("pdf"));
+    let (idml, pdf) = (d.b("idml"), pdf_param(d));
     if d.b("instructions") {
         app.ui.dialog = Some(Dialog::new(INSTRUCTIONS, json!({"idml": idml, "pdf": pdf, "doc": d.fields.get("doc")})));
         return Ok(Value::Null);
@@ -356,13 +385,14 @@ fn instructions_text(d: &Dialog) -> String {
 pub fn confirm_instructions(app: &mut DesignApp, d: &Dialog) -> Result<Value, String> {
     same_document(app, d)?;
     let text = instructions_text(d);
-    package_to_folder(app, d.b("idml"), d.b("pdf"), Some(text).filter(|t| !t.is_empty()), d.clone())
+    package_to_folder(app, d.b("idml"), d.fields.get("pdf").cloned().unwrap_or(json!(false)), Some(text).filter(|t| !t.is_empty()), d.clone())
 }
 
 /// Ask for the folder to create ("<title> Folder") and package the document into it once it is
 /// chosen (Cancel packages nothing). Packaging that fails reopens `asking`, the dialog that asked,
-/// with its options.
-pub fn package_to_folder(app: &mut DesignApp, idml: bool, pdf: bool, instructions: Option<String>, asking: Dialog) -> Result<Value, String> {
+/// with its options. `pdf`:
+/// false, true or the PDF's `file.exportPdf` options.
+pub fn package_to_folder(app: &mut DesignApp, idml: bool, pdf: Value, instructions: Option<String>, asking: Dialog) -> Result<Value, String> {
     let name = app.session.active().map(|d| format!("{} Folder", d.doc.title)).unwrap_or_default();
     app.ask_save(&name, Bound::Document, move |app, dir| {
         let mut p = json!({"dir": dir, "idml": idml, "pdf": pdf});
@@ -479,8 +509,8 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
-    /// Without instructions, Package… goes straight to the folder; Include PDF adds the PDF and
-    /// Include IDML off leaves the IDML out.
+    /// Without instructions, Package… goes straight to the folder; Include PDF adds the PDF, made
+    /// with the PDF preset chosen, and Include IDML off leaves the IDML out.
     #[test]
     fn package_options_choose_the_idml_and_pdf() {
         let dir = temp_dir("options");
@@ -495,11 +525,18 @@ mod tests {
         h.run_steps(2);
         h.get_by_label("Include PDF (Print)").click();
         h.run_steps(2);
+        // The PDF's preset: PDF/X-4.
+        h.get_by_value("Desktop Printing").click();
+        h.run_steps(2);
+        h.get_by_label("PDF/X-4").click();
+        h.run_steps(2);
         h.get_by_label("Package…").click();
         h.run_steps(3);
         h.state_mut().settle_dialogs();
         assert!(h.state().ui.dialog.is_none());
         assert!(out.join("Packed.pdf").exists() && !out.join("Packed.idml").exists());
+        let pdf = std::fs::read(out.join("Packed.pdf")).unwrap();
+        assert!(pdf.windows(8).any(|w| w == b"GTS_PDFX"), "the PDF/X-4 preset's PDF");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

@@ -72,6 +72,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Nový oddíl"),
     ("Clear Frame Fitting Options", "Vymazat volby přizpůsobení rámečku"),
     ("Cannot be edited", "Nelze upravit"),
+    ("PDF Preset:", "Předvolba PDF:"),
     ("Continue", "Pokračovat"),
     ("Printing Instructions", "Pokyny k tisku"),
     ("Show Problems Only", "Zobrazit jen problémy"),

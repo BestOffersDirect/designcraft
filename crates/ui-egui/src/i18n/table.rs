@@ -213,6 +213,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         "Include PDF (Print)",
         ["PDF einschließen (Druck)", "Inclure le PDF (impression)", "Incluir PDF (impresión)", "PDF を含める（印刷）", "包括 PDF（打印）"],
     ),
+    ("PDF Preset:", ["PDF-Vorgabe:", "Paramètre prédéfini PDF :", "Ajuste preestablecido de PDF:", "PDF プリセット:", "PDF 预设："]),
     ("Show Problems Only", ["Nur Probleme anzeigen", "Afficher uniquement les problèmes", "Mostrar solo problemas", "問題のみ表示", "仅显示问题"]),
     ("Printing Instructions", ["Druckanweisungen", "Instructions d’impression", "Instrucciones de impresión", "印刷指示", "打印说明"]),
     ("Continue", ["Weiter", "Continuer", "Continuar", "続行", "继续"]),

@@ -70,6 +70,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Новий розділ"),
     ("Clear Frame Fitting Options", "Очистити параметри припасування фрейму"),
     ("Cannot be edited", "Не можна змінити"),
+    ("PDF Preset:", "Набір параметрів PDF:"),
     ("Packaged {count} files into {dir}", "Запаковано файлів: {count} у {dir}"),
     ("Continue", "Продовжити"),
     ("Printing Instructions", "Інструкції для друку"),

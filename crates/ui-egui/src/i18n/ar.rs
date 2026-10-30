@@ -67,6 +67,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "قسم جديد"),
     ("Clear Frame Fitting Options", "مسح خيارات ملاءمة الإطار"),
     ("Cannot be edited", "غير قابل للتحرير"),
+    ("PDF Preset:", "إعداد PDF المسبق:"),
     ("Packaged {count} files into {dir}", "تم حزم {count} ملفات في {dir}"),
     ("Continue", "متابعة"),
     ("Printing Instructions", "تعليمات الطباعة"),

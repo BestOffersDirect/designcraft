@@ -66,6 +66,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "ახალი სექცია"),
     ("Clear Frame Fitting Options", "ჩარჩოს მორგების პარამეტრების გასუფთავება"),
     ("Cannot be edited", "რედაქტირება შეუძლებელია"),
+    ("PDF Preset:", "PDF-ის წინასწარი პარამეტრი:"),
     ("Continue", "გაგრძელება"),
     ("Printing Instructions", "ბეჭდვის ინსტრუქციები"),
     ("Show Problems Only", "მხოლოდ პრობლემების ჩვენება"),
@@ -82,6 +83,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Missing", "აკლია"),
     ("Colors and Inks: {process} process, {spot} spot", "ფერები და მელნები: {process} პროცესის; {spot} ლაქის"),
     ("Embedded images: {embedded}", "გამოსახულებები: ჩაშენებულია {embedded}"),
+    ("Colors and Inks: {process} Process Inks; {spot} Spot Inks", "ფერები და მელნები: {process} პროცესის მელანი; {spot} სპოტ-საღებავი"),
+    ("Images: {embedded} Embedded", "გამოსახულებები: ჩაშენებულია {embedded}"),
     (
         "Links and Images: {found} linked, {modified} changed, {missing} not found",
         "ბმულები და გამოსახულებები: ნაპოვნია {found}; შეცვლილია {modified}, აკლია {missing}",

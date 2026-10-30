@@ -206,13 +206,13 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 const MULTILINE_FOCUS: &str = "dialog_multiline_focus";
 
 pub(crate) fn set_multiline_focus(ctx: &egui::Context) {
-    ctx.data_mut(|m| m.insert_temp(egui::Id::new(MULTILINE_FOCUS), true));
+    ctx.data_mut(|m| m.insert_temp(egui::Id::unique(MULTILINE_FOCUS), true));
 }
 
 /// Whether Enter in dialog `id` goes to a multi-line field this frame. The flag is read (and cleared)
 /// for every dialog, but only the Printing Instructions dialog honours it.
 fn take_multiline_focus(ctx: &egui::Context, id: &str) -> bool {
-    let set = ctx.data_mut(|m| m.remove_temp::<bool>(egui::Id::new(MULTILINE_FOCUS))).unwrap_or(false);
+    let set = ctx.data_mut(|m| m.remove_temp::<bool>(egui::Id::unique(MULTILINE_FOCUS))).unwrap_or(false);
     set && id == crate::package_dialog::INSTRUCTIONS
 }
 
@@ -581,6 +581,41 @@ fn print_dialog(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
 /// English name; the caption is translated.
 const PDF_EXPORT_PRESETS: &[&str] =
     &["Desktop Printing", "Commercial Printing", "Screen and Email", "PDF/X-1a:2003", "PDF/X-4", "PDF/A-2b", "Custom"];
+
+/// The `file.exportPdf` options the Export PDF dialog's fields stand for (pages and title aside).
+fn pdf_export_params(d: &Dialog) -> Value {
+    let mut params = json!({
+        "standard": d.s("standard"),
+        "compressImages": d.b("compressImages"),
+        "spreads": d.b("spreads"),
+        "bleed": d.b("bleed"),
+        "tagged": d.b("tagged"),
+        "marks": {
+            "crop": d.b("marksCrop"),
+            "bleed": d.b("marksBleed"),
+            "pageInfo": d.b("marksPageInfo"),
+            "weight": d.pt("marksWeight").unwrap_or(0.25),
+            "offset": d.pt("marksOffset").unwrap_or(6.0),
+        },
+    });
+    let flatten = d.s("flatten");
+    if !flatten.is_empty() {
+        params["flatten"] = json!(flatten);
+    }
+    params
+}
+
+/// The PDF presets a document can be exported with, by name (Custom aside).
+pub(crate) fn pdf_presets() -> impl Iterator<Item = &'static str> {
+    PDF_EXPORT_PRESETS.iter().copied().filter(|p| *p != "Custom")
+}
+
+/// The `file.exportPdf` options of PDF preset `preset`, as the Export PDF dialog sets them.
+pub(crate) fn pdf_preset_params(preset: &str) -> Value {
+    let mut d = Dialog::new("pdfExport", json!({}));
+    apply_pdf_preset(&mut d, preset);
+    pdf_export_params(&d)
+}
 
 /// Apply a preset's dependent fields. Flatten is only touched by "Screen and Email" and
 /// "PDF/X-1a:2003" (High Resolution); "Custom" (and any unknown value) changes nothing.
@@ -4110,24 +4145,7 @@ fn confirm_part3(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             app.ui.pdf_export.marks_offset = d.s("marksOffset");
             app.ui.pdf_export.tagged = d.b("tagged");
 
-            let mut params = json!({
-                "standard": d.s("standard"),
-                "compressImages": d.b("compressImages"),
-                "spreads": d.b("spreads"),
-                "bleed": d.b("bleed"),
-                "tagged": d.b("tagged"),
-                "marks": {
-                    "crop": d.b("marksCrop"),
-                    "bleed": d.b("marksBleed"),
-                    "pageInfo": d.b("marksPageInfo"),
-                    "weight": d.pt("marksWeight").unwrap_or(0.25),
-                    "offset": d.pt("marksOffset").unwrap_or(6.0),
-                },
-            });
-            let flatten = d.s("flatten");
-            if !flatten.is_empty() {
-                params["flatten"] = json!(flatten);
-            }
+            let mut params = pdf_export_params(&d);
             let pages = d.s("pages");
             if !pages.trim().is_empty() && pages != "all" {
                 params["pages"] = json!(pages);
