@@ -621,7 +621,8 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("find.change", format!("no paragraph style `{n}`")));
     }
     // InDesign: with a Change Format and nothing in Change to, the found text is only formatted.
-    let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty() || !cleared.is_empty());
+    let format_only =
+        str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty() || !cleared.is_empty());
     let context = scope(s, p)?;
     let targets = context.targets.clone();
     // Change: only the text Find Next found, the selection, while it is still a match (as Find
