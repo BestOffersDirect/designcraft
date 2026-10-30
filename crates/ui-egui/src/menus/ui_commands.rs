@@ -109,7 +109,14 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
         "{path | text} — a set saved by InDesign's Show Set (.txt), imported as a new shortcut set, which becomes active: matched commands, panels (Window menu items) and tools (Tools items) take its Default shortcuts (an item without Default keys takes its Text keys), or none when every item matched to them has none; other commands lose keys it takes unless they share them as defaults → {set, imported, changed [{id, label, item, line, from, to}], conflictsCleared [{id, label, shortcut}], skipped [{id, item, line, shortcut, takenBy, reason}] (an earlier item whose keys a later one took, or a reserved key), failed [{id, label, change, shortcuts}], unmatched [{item, line, keys, reason: noMatch | ambiguous | tool | context}], unmatchedWithoutShortcut, unreadable [{item, line, keys, reason}], approximated [{item, line, keys, note}] (numeric keypad keys bound as the main keys), suggestions [{item, line, candidates}] (never applied), matchedWithoutChange [{id, label, item, line, reason}] (a keyless panel-menu item that clears nothing), truncated, shortcutSet (the new set's name)}; ids are command keys (`window.panel {\"panel\":\"layers\"}`)",
     ),
     ("app.findChange", "Find/Change…", Some("Cmd+F"), "{}"),
-    ("app.insertTableDialog", "Create Table…", None, "{} — Insert Table dialog (body/header/footer rows, columns)"),
+    ("app.insertTableDialog", "Insert Table…", Some("Cmd+Alt+Shift+T"), "{} — Insert Table dialog (body/header/footer rows, columns, table style)"),
+    (
+        "app.convertTextToTableDialog",
+        "Convert Text to Table…",
+        None,
+        "{} — Convert Text to Table dialog (column and row separators, number of columns, table style)",
+    ),
+    ("app.convertTableToTextDialog", "Convert Table to Text…", None, "{} — Convert Table to Text dialog (column and row separators)"),
     (
         "app.cellOptionsDialog",
         "Strokes and Fills…",
