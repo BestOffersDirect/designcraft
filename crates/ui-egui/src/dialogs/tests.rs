@@ -4173,6 +4173,8 @@ fn toc_bookmarks_checkbox_sets_and_reopens_the_persisted_option() {
     assert!(app.session.doc().unwrap().doc.bookmarks.is_empty());
     open_toc(&mut app);
     assert!(!app.ui.dialog.as_ref().unwrap().b("createBookmarks"));
+}
+
 #[test]
 fn corner_options_dialog_sets_each_corner_with_preview_and_one_undo_step() {
     use designcraft_geom::corners::CornerShape;
