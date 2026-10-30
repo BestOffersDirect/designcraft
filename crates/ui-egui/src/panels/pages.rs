@@ -483,6 +483,27 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 t.icon,
                                 Stroke::NONE,
                             ));
+                            let marker =
+                                ui.interact(egui::Rect::from_center_size(c, vec2(12.0, 8.0)), ui.scope_id().with(("section", abs)), Sense::click());
+                            let label = format!(
+                                "{}: {}",
+                                crate::i18n::tr(&app.ui.language, "Numbering & Section Options…").trim_end_matches('…'),
+                                app.session.page_label(abs)
+                            );
+                            marker.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+                            // A double click, or the keyboard or a screen reader activating it (a
+                            // single pointer click only selects, as on a page).
+                            let activated = marker.double_clicked() || marker.clicked() && !marker.clicked_by(egui::PointerButton::Primary);
+                            if activated {
+                                if editing_parents {
+                                    let _ = app.run("layout.parents.edit", json!({"on": false}));
+                                    if let Some(view) = app.view_mut() {
+                                        view.fitted = false;
+                                    }
+                                }
+                                crate::canvas::go_to_page(app, abs);
+                                crate::menus::activate(app, "layout.section", &serde_json::Value::Null);
+                            }
                         }
                         // Parent prefix in the outer top corner (black on white).
                         if let Some(pid) = p.parent
@@ -803,6 +824,70 @@ mod spread_label_tests {
     use serde_json::json;
 
     use super::*;
+
+    /// Section-marker activation targets its page and leaves parent editing without editing the document.
+    #[test]
+    fn double_clicking_a_section_marker_opens_that_pages_numbering_options() {
+        let mut app = app();
+        app.run("layout.section", json!({"page": 1, "startNumber": 1, "style": "lowerRoman"})).unwrap();
+        app.run("layout.section", json!({"page": 3, "startNumber": 1, "style": "arabic"})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1000.0, 800.0)));
+        app.run("layout.parents.edit", json!({"on": true})).unwrap();
+        let mut h = Harness::builder().with_size(vec2(280.0, 900.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::unique("section_marker_test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        let pos = h.get_by_label("Numbering & Section Options: 1").rect().center();
+        let before = h.state().session.doc().unwrap().doc.clone();
+        for _ in 0..2 {
+            for pressed in [true, false] {
+                h.event(egui::Event::PointerMoved(pos));
+                h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+                h.run_steps(1);
+            }
+        }
+        let dialog = h.state().ui.dialog.as_ref().unwrap();
+        assert_eq!(dialog.id, "numberingSection");
+        assert_eq!(dialog.fields.get("page"), Some(&json!(3)));
+        assert!(!h.state().session.doc().unwrap().editing_parents);
+        assert!(std::sync::Arc::ptr_eq(&h.state().session.doc().unwrap().doc, &before), "opening options does not edit the section");
+    }
+
+    #[test]
+    fn a_section_marker_opens_its_options_from_the_keyboard_but_not_on_one_click() {
+        let mut app = app();
+        app.run("layout.section", json!({"page": 3, "startNumber": 5})).unwrap();
+        app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, vec2(1000.0, 800.0)));
+        let mut h = Harness::builder().with_size(vec2(280.0, 900.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+            |ui, app: &mut DesignApp| {
+                let key = egui::Id::unique("section_marker_key_test_fonts");
+                if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                    crate::theme::install_fonts(ui.ctx(), "");
+                    ui.data_mut(|d| d.insert_temp(key, true));
+                    return;
+                }
+                show(app, ui);
+            },
+            app,
+        );
+        h.run_steps(3);
+        h.get_by_label("Numbering & Section Options: 5").click();
+        h.run_steps(2);
+        assert!(h.state().ui.dialog.is_none(), "one pointer click doesn't open the options");
+        h.run_steps(30);
+        h.get_by_label("Numbering & Section Options: 5").click_accesskit();
+        h.run_steps(2);
+        assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.id.as_str()), Some("numberingSection"));
+    }
 
     /// Create a facing-page document for section navigation tests.
     fn app() -> DesignApp {
