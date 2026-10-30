@@ -355,6 +355,9 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
     let first_only = bool_or(p, "first", false);
     let attrs = p.get("attrs").cloned();
     let over = char_overrides(attrs.as_ref())?;
+    // A null attribute clears that override on the found text.
+    let cleared: Vec<String> =
+        attrs.as_ref().and_then(Value::as_object).map(|o| o.iter().filter(|(_, v)| v.is_null()).map(|(k, _)| k.clone()).collect()).unwrap_or_default();
     super::text::validate_char_fill(&s.doc()?.doc, &over, "find.change")?;
     let char_style = str_param(p, "charStyle").map(str::to_string);
     let para_style = str_param(p, "paraStyle").map(str::to_string);
@@ -366,7 +369,7 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("find.change", format!("no paragraph style `{n}`")));
     }
     // InDesign: with a Change Format and nothing in Change to, the found text is only formatted.
-    let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty());
+    let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty() || !cleared.is_empty());
     let targets = scope(s, p)?.targets;
     s.edit(|d, sel| {
         let styles = d.styles.clone();
@@ -401,8 +404,13 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
                     if let Some(n) = &char_style {
                         super::style::apply_char_style(st, &styles, n, &changed);
                     }
-                    if !over.is_empty() {
-                        st.format_chars(changed, |f| f.over.merge(&over));
+                    if !over.is_empty() || !cleared.is_empty() {
+                        st.format_chars(changed, |f| {
+                            f.over.merge(&over);
+                            for k in &cleared {
+                                let _ = f.over.set_json(k, &Value::Null);
+                            }
+                        });
                     }
                 }
                 count += 1;
@@ -582,6 +590,12 @@ Three"
         assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "charStyle": "Nope"})).is_err());
         assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "paraStyle": "Nope"})).is_err());
         assert_eq!(s.doc().unwrap().doc, before);
+        // A null attribute is a Change Format too: the found text stays and loses that override.
+        let before = s.doc().unwrap().doc.story(sid).unwrap().clone();
+        s.execute("find.change", &json!({"find": "cook", "change": "", "attrs": {"underline": null}})).unwrap();
+        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
+        assert_eq!(story.text, before.text, "the words stay");
+        assert_eq!(story.format_after(25).over.underline, None);
         // With no Change Format, an empty Change to still deletes the found text.
         s.execute("find.change", &json!({"find": "Break ", "change": ""})).unwrap();
         assert!(!s.doc().unwrap().doc.story(sid).unwrap().text.contains("Break"));
