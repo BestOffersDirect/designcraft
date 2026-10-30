@@ -1720,10 +1720,11 @@ fn confirm_document_setup(app: &mut DesignApp, d: &Dialog) -> Result<Value, Stri
     app.run("layout.documentSetup", p)
 }
 
-/// Preferences: a section list and the section's options. Application options always; units and
-/// increments when a document is open (InDesign keeps those with the document).
+/// Preferences: a section list and the section's options. Application options always; with a
+/// document open, its own settings (InDesign keeps those with the document); with none, Units &
+/// Increments for new documents.
 fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_height: f32) {
-    let has_doc = d.fields.contains_key("horizontalUnits");
+    let has_doc = d.fields.contains_key("horizontalUnits") && !d.b("defaults");
     let sections: &[(&str, &str)] = if has_doc {
         &[
             ("general", "General"),
@@ -1752,6 +1753,7 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
             ("uiScaling", "UI Scaling"),
             ("type", "Type"),
             ("composition", "Composition"),
+            ("units", "Units & Increments"),
             ("spelling", "Spelling"),
             ("autocorrect", "Autocorrect"),
             ("notes", "Notes"),
@@ -3946,7 +3948,23 @@ fn confirm_part4(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             if d.b("cjkFeatures") != d.b("cjkFeatures.initial") {
                 prefs["cjkFeatures"] = json!(d.b("cjkFeatures"));
             }
-            app.run("prefs.set", prefs)?;
+            // No document open: the Units & Increments new documents start with, saved with the
+            // rest in one `prefs.set` (which checks everything before it changes anything). A value
+            // that doesn't read, or that it refuses, keeps the dialog open to be fixed, with no
+            // preference changed.
+            let saved = default_units_of(&d).and_then(|du| {
+                if let Some(du) = du {
+                    prefs["defaultUnits"] = du;
+                }
+                app.run("prefs.set", prefs)
+            });
+            if let Err(e) = saved {
+                let mut d = d.clone();
+                d.fields.insert("status".into(), json!(e));
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+                return Err(e);
+            }
             app.ui.dynamic_spelling = d.b("dynamicSpelling");
             if d.fields.contains_key("userWords") {
                 let words: Vec<String> = d.s("userWords").lines().map(str::to_string).collect();
@@ -3989,6 +4007,10 @@ fn confirm_part4(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
                     snap["zone"] = json!(zone);
                 }
                 app.run("view.snapPreferences", snap)?;
+            }
+            if d.b("defaults") {
+                // The default units went with the preferences above.
+                return Ok(Value::Null);
             }
             let Some(horizontal) = d.fields.get("horizontalUnits") else { return Ok(Value::Null) };
             let mut doc = json!({"horizontalUnits": horizontal});
@@ -5977,6 +5999,29 @@ fn section_list(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, cjk: bool, sectio
             }
         });
     });
+}
+
+/// Preferences with no document open: the Units & Increments new documents start with, as
+/// `prefs.set`'s `defaultUnits` (None with a document open). An increment that doesn't read is an
+/// error naming the field.
+fn default_units_of(d: &Dialog) -> Result<Option<Value>, String> {
+    if !d.b("defaults") {
+        return Ok(None);
+    }
+    let mut du = json!({});
+    for k in ["horizontalUnits", "verticalUnits", "rulerOrigin"] {
+        if let Some(v) = d.fields.get(k).filter(|v| v.is_string()) {
+            du[k] = v.clone();
+        }
+    }
+    if let Some(t) = d.fields.get("keyboardIncrement").and_then(Value::as_str) {
+        du["keyboardIncrement"] = json!(parse_measure(t, Unit::Points).map_err(|_| format!("Cursor Key: `{t}` is not a measurement"))?);
+    }
+    if let Some(v) = d.fields.get("kerningIncrement").filter(|v| !v.is_null()) {
+        let n = d.n("kerningIncrement").filter(|v| v.is_finite());
+        du["kerningIncrement"] = json!(n.ok_or_else(|| format!("Kerning/Tracking: `{}` is not a number", v.as_str().unwrap_or_default()))?);
+    }
+    Ok(Some(du))
 }
 
 /// "Paragraph Style n" / "Character Style n": the first name no style has.
