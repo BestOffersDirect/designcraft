@@ -6861,20 +6861,23 @@ fn toc_params(app: &DesignApp, d: &Dialog) -> Value {
 fn toc_style_combo(ui: &mut egui::Ui, salt: &str, styles: &[String], auto: &str, cur: &mut String, name: egui::Id) -> bool {
     let shown = if cur.is_empty() { auto.to_string() } else { cur.clone() };
     let mut changed = false;
-    craft_ui::ComboBox::from_id_salt(("toc_style", salt)).selected_text(shown).width(200.0).show_ui(ui, |ui| {
-        if ui.selectable_label(cur.is_empty(), auto).clicked() {
-            cur.clear();
-            changed = true;
-        }
-        for n in styles.iter().filter(|n| *n != auto) {
-            if ui.selectable_label(cur == n, n.as_str()).clicked() {
-                *cur = n.clone();
+    craft_ui::ComboBox::from_id_salt(("toc_style", salt))
+        .selected_text(shown)
+        .width(200.0)
+        .show_ui(ui, |ui| {
+            if ui.selectable_label(cur.is_empty(), auto).clicked() {
+                cur.clear();
                 changed = true;
             }
-        }
-    })
-    .response
-    .labelled_by(name);
+            for n in styles.iter().filter(|n| *n != auto) {
+                if ui.selectable_label(cur == n, n.as_str()).clicked() {
+                    *cur = n.clone();
+                    changed = true;
+                }
+            }
+        })
+        .response
+        .labelled_by(name);
     changed
 }
 
@@ -6969,15 +6972,18 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             let page_number = crate::rtl::label(ui, tr("Page Number:")).id;
             let choices = [("after", "After Entry"), ("before", "Before Entry"), ("none", "No Page Number")];
             let cur = choices.iter().find(|(v, _)| *v == r.page_number).map_or("After Entry", |(_, l)| l);
-            craft_ui::ComboBox::from_id_salt("toc_page_number").selected_text(tr(cur)).width(200.0).show_ui(ui, |ui| {
-                for (v, l) in choices {
-                    if ui.selectable_label(r.page_number == v, tr(l)).clicked() {
-                        r.page_number = v.into();
+            craft_ui::ComboBox::from_id_salt("toc_page_number")
+                .selected_text(tr(cur))
+                .width(200.0)
+                .show_ui(ui, |ui| {
+                    for (v, l) in choices {
+                        if ui.selectable_label(r.page_number == v, tr(l)).clicked() {
+                            r.page_number = v.into();
+                        }
                     }
-                }
-            })
-            .response
-            .labelled_by(page_number);
+                })
+                .response
+                .labelled_by(page_number);
             let name = crate::rtl::label(ui, tr("Style:")).id;
             toc_style_combo(ui, "page_number", &char_styles, none, &mut r.page_number_style, name);
             ui.end_row();
@@ -6990,15 +6996,18 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             ui.checkbox(&mut r.sort, tr("Sort Entries in Alphabetical Order"));
             ui.end_row();
             let level = crate::rtl::label(ui, tr("Level:")).id;
-            craft_ui::ComboBox::from_id_salt("toc_level").selected_text(r.level.to_string()).width(60.0).show_ui(ui, |ui| {
-                for l in 1..=9u8 {
-                    if ui.selectable_label(r.level == l, l.to_string()).clicked() {
-                        r.level = l;
+            craft_ui::ComboBox::from_id_salt("toc_level")
+                .selected_text(r.level.to_string())
+                .width(60.0)
+                .show_ui(ui, |ui| {
+                    for l in 1..=9u8 {
+                        if ui.selectable_label(r.level == l, l.to_string()).clicked() {
+                            r.level = l;
+                        }
                     }
-                }
-            })
-            .response
-            .labelled_by(level);
+                })
+                .response
+                .labelled_by(level);
             ui.end_row();
         });
     }
