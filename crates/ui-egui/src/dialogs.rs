@@ -276,7 +276,7 @@ mod color_theme_tests {
         assert_eq!(app.ui.dialog.as_ref().unwrap().id, "insertPages");
         let mut h = Harness::builder().with_size(egui::vec2(1000.0, 700.0)).build_ui_state(
             |ui, app: &mut DesignApp| {
-                let key = egui::Id::new("insert_pages_test_fonts");
+                let key = egui::Id::unique("insert_pages_test_fonts");
                 if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                     crate::theme::install_fonts(ui.ctx(), "");
                     ui.data_mut(|d| d.insert_temp(key, true));
