@@ -1703,6 +1703,69 @@ fn paragraph_style_references_must_name_styles() {
     s.execute("style.paragraph.edit", &json!({"name": "Body", "basedOn": null, "nextStyle": "Self"})).unwrap();
 }
 
+/// Direct Selection: a marquee over the top edges of two frames selects their top points, and a
+/// drag on one of them slants both frames in one undo step (InDesign's way to make a row of
+/// parallelograms).
+#[test]
+fn direct_selection_moves_the_points_of_several_frames_at_once() {
+    use designcraft_tools::{Mods, PointerEvent, PointerKind};
+    let mut s = session();
+    let v = ViewInfo::at_zoom(1.0);
+    let a = s.execute("frame.create", &json!({"rect": [100, 300, 200, 400]})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("frame.create", &json!({"rect": [200, 300, 300, 400]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"ids": []})).unwrap();
+    s.set_tool("directSelection");
+    s.pointer(&PointerEvent::new(PointerKind::Down, 80.0, 280.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 320.0, 320.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 320.0, 320.0), v).unwrap();
+    let sel = s.doc().unwrap().selection.clone();
+    assert_eq!(sel.anchors.len(), 4, "{:?}", sel.anchors);
+    assert!(sel.items.contains(&designcraft_doc::ItemId(a)) && sel.items.contains(&designcraft_doc::ItemId(b)));
+    let shift = Mods { shift: true, ..Default::default() };
+    s.pointer(&PointerEvent::new(PointerKind::Down, 100.0, 300.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 136.0, 302.0).with_mods(shift), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 136.0, 302.0).with_mods(shift), v).unwrap();
+    let corners = |s: &Session, id: u64| -> Vec<(f64, f64)> {
+        let st = s.doc().unwrap();
+        let it = st.doc.item(designcraft_doc::ItemId(id)).unwrap();
+        it.path.subpaths[0].anchors.iter().map(|an| ((it.xf * an.p).x.round(), (it.xf * an.p).y.round())).collect()
+    };
+    // Both frames: top points 36 pt to the right, bottom points where they were.
+    assert_eq!(corners(&s, a), vec![(136.0, 300.0), (236.0, 300.0), (200.0, 400.0), (100.0, 400.0)]);
+    assert_eq!(corners(&s, b), vec![(236.0, 300.0), (336.0, 300.0), (300.0, 400.0), (200.0, 400.0)]);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(corners(&s, a), vec![(100.0, 300.0), (200.0, 300.0), (200.0, 400.0), (100.0, 400.0)]);
+    assert_eq!(corners(&s, b), vec![(200.0, 300.0), (300.0, 300.0), (300.0, 400.0), (200.0, 400.0)]);
+}
+
+#[test]
+fn selected_points_follow_their_path() {
+    let mut s = session();
+    let a = s.execute("frame.create", &json!({"rect": [100, 300, 200, 400]})).unwrap()["id"].as_u64().unwrap();
+    let b = s.execute("frame.create", &json!({"rect": [200, 300, 300, 400]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"anchors": [[a, 0, 1], [b, 0, 2]]})).unwrap();
+    // Shift-clicking a frame off the selection drops its points too.
+    s.execute("selection.toggle", &json!({"id": a})).unwrap();
+    let id = |n| designcraft_doc::ItemId(n);
+    assert_eq!(s.doc().unwrap().selection.anchors, vec![(id(b), 0, 2)]);
+    // A point added before the first one: the selected point keeps pointing at the same anchor.
+    let l = s.execute("path.create", &json!({"anchors": [{"p": [100, 100]}, {"p": [200, 100]}, {"p": [300, 150]}]})).unwrap()["id"].as_u64().unwrap();
+    s.execute("selection.set", &json!({"anchors": [[l, 0, 1]]})).unwrap();
+    s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [50, 120]}, "at": "start"})).unwrap();
+    let st = s.doc().unwrap();
+    let (_, si, ai) = st.selection.anchors[0];
+    let it = st.doc.item(id(l)).unwrap();
+    assert_eq!((it.xf * it.path.subpaths[si].anchors[ai].p).round(), designcraft_geom::Point::new(200.0, 100.0));
+    // `points` that isn't a list is refused, even with an `id` beside it.
+    for bad in [json!("x"), json!({"0": 1}), json!(5)] {
+        assert!(s.execute("path.moveAnchors", &json!({"points": bad, "id": l, "anchors": [[0, 0]], "dx": 5})).is_err(), "points {bad}");
+    }
+    for bad in [json!(3), json!(-1), json!("0")] {
+        assert!(s.execute("path.appendAnchor", &json!({"id": l, "anchor": {"p": [0, 0]}, "subpath": bad})).is_err(), "subpath {bad}");
+    }
+    assert_eq!(s.doc().unwrap().doc.item(id(l)).unwrap().path.subpaths[0].anchors.len(), 4, "nothing appended");
+}
+
 #[test]
 fn direct_selection_pulls_one_corner_of_an_unselected_frame() {
     // Chris Nielsen's "The Adobe InDesign Toolbox" (10:10): with the White Arrow, click outside,
