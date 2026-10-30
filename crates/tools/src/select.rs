@@ -146,21 +146,42 @@ pub fn anchor_at(cx: &ToolContext, p: Point) -> Option<(u64, usize, usize, Optio
     anchor_at_in(cx, &cx.selection.items, p)
 }
 
-/// [`anchor_at`] over the given items.
+/// Whether the Direct Selection tool shows (and lets you drag) a direction handle of anchor `ai`
+/// of a sub-path of `n` anchors, as InDesign: both handles of a selected anchor, and on its
+/// neighbours the handle that shapes the segment to it (`out`: the outgoing handle). With no
+/// anchor selected no handle shows.
+pub fn handle_shown(n: usize, closed: bool, ai: usize, out: bool, chosen: impl Fn(usize) -> bool) -> bool {
+    if chosen(ai) {
+        return true;
+    }
+    let neighbour = if out {
+        if ai + 1 < n { Some(ai + 1) } else { closed.then_some(0) }
+    } else if ai > 0 {
+        Some(ai - 1)
+    } else {
+        closed.then(|| n.saturating_sub(1))
+    };
+    neighbour.is_some_and(chosen)
+}
+
+/// [`anchor_at`] over the given items. Of the direction handles, only those [`handle_shown`]
+/// shows are found.
 pub fn anchor_at_in(cx: &ToolContext, ids: &[designcraft_doc::ItemId], p: Point) -> Option<(u64, usize, usize, Option<&'static str>)> {
     let tol = cx.tol(5.0);
     for id in ids {
         let (Some(it), Some(xf)) = (cx.doc.item(*id), cx.item_canvas_xf(*id)) else { continue };
         let m = xf * it.xf;
         for (si, sp) in it.path.subpaths.iter().enumerate() {
+            let chosen = |a: usize| cx.selection.anchors.contains(&(*id, si, a));
             for (ai, a) in sp.anchors.iter().enumerate() {
                 if ((m * a.p) - p).hypot() <= tol {
                     return Some((id.0, si, ai, None));
                 }
-                if a.has_in() && ((m * a.h_in) - p).hypot() <= tol {
+                let shown = |out: bool| handle_shown(sp.anchors.len(), sp.closed, ai, out, chosen);
+                if a.has_in() && shown(false) && ((m * a.h_in) - p).hypot() <= tol {
                     return Some((id.0, si, ai, Some("in")));
                 }
-                if a.has_out() && ((m * a.h_out) - p).hypot() <= tol {
+                if a.has_out() && shown(true) && ((m * a.h_out) - p).hypot() <= tol {
                     return Some((id.0, si, ai, Some("out")));
                 }
             }
@@ -812,19 +833,6 @@ impl SelectionTool {
         {
             let at = anchor_spread_point(cx, id, si, ai);
             self.drag = Drag::Anchor { id, si, ai, handle: None, start: p, at, others: vec![] };
-            return vec![Action::Exec("selection.set".into(), json!({"ids": [id], "content": true})), Action::Begin("Move Anchor".into())];
-        }
-        // As in InDesign, the Direct Selection tool pressed on a corner or anchor of an object
-        // that isn't selected selects it and moves just that point (Chris Nielsen's "The
-        // InDesign Toolbox", 10:10: click outside, then pull a frame's corner).
-        if self.direct
-            && !ev.mods.shift
-            && let Some((_, hit)) = cx.hit(p)
-            && !cx.selection.contains(hit)
-            && let Some((id, si, ai, None)) = anchor_at_in(cx, &[hit], p)
-        {
-            let at = anchor_spread_point(cx, id, si, ai);
-            self.drag = Drag::Anchor { id, si, ai, handle: None, start: p, at };
             return vec![Action::Exec("selection.set".into(), json!({"ids": [id], "content": false})), Action::Begin("Move Anchor".into())];
         }
         // A selected placed graphic's own handles resize it inside its frame (the
@@ -1520,4 +1528,27 @@ fn edit_text_at(cx: &ToolContext, p: Point) -> Option<Vec<Action>> {
     }
     let (_, sp) = cx.layout.spread_at(p).unwrap_or((SpreadRef::Doc(0), p));
     Some(vec![Action::SwitchTool("type".into()), Action::Exec("text.placeCaret".into(), json!({"frame": id.0, "point": [sp.x, sp.y]}))])
+}
+
+#[cfg(test)]
+mod handle_tests {
+    use super::handle_shown;
+
+    /// InDesign's Direct Selection shows a selected anchor's two handles, and on its neighbours
+    /// the handle shaping the segment to it; nothing with no anchor selected.
+    #[test]
+    fn handles_show_around_the_selected_anchors() {
+        let shown = |closed: bool, chosen: &[usize]| {
+            (0..4)
+                .flat_map(|ai| [false, true].map(|out| (ai, out)))
+                .filter(|(ai, out)| handle_shown(4, closed, *ai, *out, |a| chosen.contains(&a)))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shown(true, &[]), vec![], "no anchor selected");
+        assert_eq!(shown(true, &[2]), vec![(1, true), (2, false), (2, true), (3, false)]);
+        // Closed, the first anchor's neighbours wrap round.
+        assert_eq!(shown(true, &[0]), vec![(0, false), (0, true), (1, false), (3, true)]);
+        // Open, the end has no neighbour beyond it.
+        assert_eq!(shown(false, &[0]), vec![(0, false), (0, true), (1, false)]);
+    }
 }
