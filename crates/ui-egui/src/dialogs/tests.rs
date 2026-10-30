@@ -3884,8 +3884,8 @@ fn find_change_gives_the_found_text_a_change_format() {
         [8, 19, 36].map(|at| story.format_after(at).style.clone()),
         [designcraft_doc::NO_CHAR_STYLE.to_string(), "eggs".into(), "eggs".into()]
     );
-    // The trash clears it.
-    h.get_by_label("Clear specified attributes").click();
+    // The trash clears it (the second: the first is the Find Format's).
+    h.get_all_by_label("Clear specified attributes").nth(1).unwrap().click();
     h.run_steps(3);
     assert_eq!(field(&h, CHANGE_FORMAT), None);
     assert!(h.query_by_label(TIP).is_none());
@@ -3899,8 +3899,72 @@ fn a_change_format_goes_with_change_all() {
     d.fields.insert(CHANGE_FORMAT.into(), json!({"charStyle": "eggs", "paraStyle": "Method", "chars": {"underline": true}}));
     let p = find_change_params(&d);
     assert_eq!((p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()), (json!("eggs"), json!("Method"), json!({"underline": true})));
-    assert_eq!(change_format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
+    assert_eq!(format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
     assert!(find_change_params(&Dialog::new("findChange", json!({"find": "cook"}))).get("attrs").is_none());
+    // A Find Format goes with every search.
+    d.fields.insert(FIND_FORMAT.into(), json!({"paraStyle": "Method"}));
+    assert_eq!(find_change_params(&d)["findFormat"], json!({"paraStyle": "Method"}));
+}
+
+/// Find/Change › Find Format, as InDesign's: Find Format Settings sets the character style the
+/// found text must have, the box shows it with Find what's ⓘ, and Count counts only "eggs" in
+/// it; with nothing in Find what, Find Next finds the text in the style; the first trash clears
+/// it.
+#[test]
+fn find_format_finds_only_text_with_it() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let f = app.run("frame.create", json!({"rect": [36, 36, 400, 300], "content": "text", "text": "Break eggs; cook eggs."})).unwrap();
+    app.run("style.character.create", json!({"name": "eggs", "chars": {"fontStyle": "Bold"}})).unwrap();
+    app.run("text.select", json!({"story": f["story"], "anchor": 6, "focus": 10})).unwrap();
+    app.run("style.character.apply", json!({"name": "eggs"})).unwrap();
+    app.run("text.select", json!({"story": f["story"], "anchor": 0, "focus": 0})).unwrap();
+    app.run("app.findChange", json!({})).unwrap();
+    if let Some(d) = app.ui.dialog.as_mut() {
+        d.fields.insert("find".into(), json!("eggs"));
+    }
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::unique("find_format_test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    const TIP: &str = "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it";
+    assert!(h.query_by_label("Find Format:").is_some() && h.query_by_label(TIP).is_none());
+    h.get_by_label("Specify attributes to find").click();
+    h.run_steps(3);
+    assert!(h.query_by_label("Find Format Settings").is_some());
+    h.get_all_by_value("[Any Style]").next().unwrap().click();
+    h.run_steps(3);
+    h.get_by_label("eggs").click();
+    h.run_steps(3);
+    h.get_all_by_label("  OK  ").last().unwrap().click();
+    h.run_steps(3);
+    let field = |h: &Harness<'_, DesignApp>, k: &str| h.state().ui.dialog.as_ref().unwrap().fields.get(k).cloned();
+    assert_eq!((field(&h, FIND_FORMAT), field(&h, CHANGE_FORMAT)), (Some(json!({"charStyle": "eggs"})), None));
+    assert!(h.query_by_label("Character Style: eggs").is_some() && h.query_by_label(TIP).is_some());
+    h.get_by_label("Count").click();
+    h.run_steps(3);
+    assert_eq!(field(&h, "status"), Some(json!("1 match(es)")), "only the \"eggs\" in the style");
+    // Nothing in Find what: the text in the style.
+    h.state_mut().ui.dialog.as_mut().unwrap().fields.insert("find".into(), json!(""));
+    h.run_steps(2);
+    h.get_by_label("Find Next").click();
+    h.run_steps(3);
+    let sel = h.state().session.doc().unwrap().selection.text.unwrap();
+    assert_eq!(sel.range(), 6..10);
+    // The first trash is the Find Format's.
+    h.get_all_by_label("Clear specified attributes").next().unwrap().click();
+    h.run_steps(3);
+    assert_eq!(field(&h, FIND_FORMAT), None);
 }
 
 /// The course's chapter 26: Preferences › Interface as InDesign's. A Color Theme swatch shows

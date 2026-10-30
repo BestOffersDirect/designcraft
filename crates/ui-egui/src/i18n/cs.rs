@@ -41,6 +41,13 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("[Same style]", "[Stejný styl]"),
     ("Reset To Base", "Obnovit podle základu"),
     ("Apply Style to Selection", "Použít styl na výběr"),
+    ("Find Format:", "Hledat formát:"),
+    ("Find Format Settings", "Nastavení hledání formátu"),
+    ("Specify attributes to find", "Určit atributy k hledání"),
+    (
+        "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it",
+        "S formátem hledání se najde jen text, který ho má; s prázdným polem „Najít“ veškerý text, který ho má",
+    ),
     ("Change Format:", "Změnit formát:"),
     ("Change Format Settings", "Nastavení změny formátu"),
     ("Style Options", "Volby stylu"),

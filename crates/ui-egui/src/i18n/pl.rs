@@ -39,6 +39,13 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("[Same style]", "[Ten sam styl]"),
     ("Reset To Base", "Przywróć bazowy"),
     ("Apply Style to Selection", "Zastosuj styl do zaznaczenia"),
+    ("Find Format:", "Znajdź format:"),
+    ("Find Format Settings", "Ustawienia wyszukiwania formatu"),
+    ("Specify attributes to find", "Określ atrybuty do znalezienia"),
+    (
+        "With a Find Format, only text that has it is found; with nothing in Find what, all text that has it",
+        "Przy formacie wyszukiwania znajdowany jest tylko tekst, który go ma; przy pustym polu „Znajdź” — cały taki tekst",
+    ),
     ("Change Format:", "Zmień format:"),
     ("Change Format Settings", "Ustawienia zmiany formatu"),
     ("Style Options", "Opcje stylu"),
