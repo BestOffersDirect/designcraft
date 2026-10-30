@@ -34,7 +34,6 @@ use object::{align_row, appearance_section, guide_section, quick_actions_object,
 #[cfg(test)]
 use object::{align_to_icon, preview_row};
 pub(crate) use object::{corner_shape_button, corner_type_dropdown, ref_point_proxy, stroke_type_dropdown};
-use object_panels::pathfinder_row;
 pub use object_panels::{align_panel, attributes_panel, effects_panel, pathfinder_panel, stroke_panel, wrap_panel};
 use object_panels::{anchor_point_sections, pathfinder_row};
 pub(crate) use text::{LANGUAGES, kerning_control, language_menu};
