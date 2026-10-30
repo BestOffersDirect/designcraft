@@ -2082,3 +2082,18 @@ fn direct_selection_click_on_one_of_several_selected_frames_selects_only_it() {
     let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, p.x, p.y));
     assert_eq!(acts, vec![Action::Exec("selection.set".into(), serde_json::json!({"ids": [a.0], "content": true}))]);
 }
+
+#[test]
+fn pulling_a_corner_of_an_unselected_frame_selects_the_frame_not_its_content() {
+    let mut d = Document::new(&NewDocument::default());
+    let a = add_rect(&mut d, Rect::new(100.0, 100.0, 200.0, 200.0));
+    let (s, c, l) = (Selection::default(), Cache::new(), CanvasLayout::new(&d, false));
+    let cx = ctx(&d, &s, &c, &l);
+    let p = spread_pt(&l, 200.0, 100.0);
+    let mut t = create("directSelection");
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, p.x, p.y));
+    assert_eq!(
+        acts,
+        vec![Action::Exec("selection.set".into(), serde_json::json!({"ids": [a.0], "content": false})), Action::Begin("Move Anchor".into())]
+    );
+}
