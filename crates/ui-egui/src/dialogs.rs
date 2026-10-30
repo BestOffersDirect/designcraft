@@ -934,19 +934,20 @@ fn doc_unit(app: &DesignApp) -> Unit {
     app.session.active().map(|s| s.doc.settings.horizontal_units).unwrap_or(Unit::Picas)
 }
 
-/// Layout › Create Guides…: guides go on the page in view (or the parent page being edited), not
-/// on the first page, and the gutters are typed in the document's ruler unit.
+/// Layout › Create Guides…: guides go on every page of the spread in view (or of the parent
+/// spread being edited), as InDesign's do; "This page" narrows them to
+/// the page in view. The gutters are typed in the document's ruler unit.
 pub fn open_create_guides(app: &mut DesignApp) {
     let unit = doc_unit(app);
     let Some((spread, page)) = crate::canvas::current_spread_page(app) else { return };
-    let editing_parents = matches!(spread, SpreadRef::Parent(_));
     let gutter = json!(format_measure(12.0, unit));
     let mut d = Dialog::new(
         "createGuides",
         json!({"rows": 0, "columns": 0, "rowGutter": gutter, "columnGutter": gutter, "fitTo": "margins", "removeExisting": false,
             "spread": serde_json::to_value(spread).unwrap_or(json!(0)), "page": page,
-            // A parent spread is edited as a whole (both pages of a facing spread), so the guides show on every page that uses it.
-            "target": if editing_parents { "spread" } else { "page" },
+            // InDesign puts the guides on both pages of a facing spread (and a parent spread is
+            // edited as a whole, so they show on every page that uses it).
+            "target": "spread",
             "where": target_description(app, spread, page)}),
     );
     d.unit = unit;
