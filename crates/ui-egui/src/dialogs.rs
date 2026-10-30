@@ -3340,7 +3340,7 @@ const FORMAT_SECTIONS: &[(&str, &str)] = &[
 fn info_icon(ui: &mut egui::Ui, tip: &str) {
     let (r, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
     crate::icons::paint(ui.painter(), r, "info", crate::theme::Tokens::get(ui.ctx()).icon);
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, tip));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tip));
     resp.on_hover_text(tip);
 }
 
@@ -3418,7 +3418,7 @@ fn format_settings(app: &mut DesignApp, ctx: &egui::Context, d: &mut Dialog) {
     let find = fd.s("for") == "find";
     let popup_open = egui::Popup::is_any_open(ctx);
     let mut result = None;
-    let host = egui::Id::new("format_settings");
+    let host = egui::Id::unique("format_settings");
     crate::modal_drag::modal(ctx, host, host).backdrop_color(egui::Color32::TRANSPARENT).show(ctx, |ui| {
         let title_top = ui.cursor().top();
         let title = if find { "Find Format Settings" } else { "Change Format Settings" };

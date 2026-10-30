@@ -3551,7 +3551,7 @@ fn find_change_gives_the_found_text_a_change_format() {
     }
     let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
         |ui, app: &mut DesignApp| {
-            let key = egui::Id::new("change_format_test_fonts");
+            let key = egui::Id::unique("change_format_test_fonts");
             if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                 crate::theme::install_fonts(ui.ctx(), "");
                 ui.data_mut(|d| d.insert_temp(key, true));
@@ -3641,7 +3641,7 @@ fn find_format_finds_only_text_with_it() {
     }
     let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
         |ui, app: &mut DesignApp| {
-            let key = egui::Id::new("find_format_test_fonts");
+            let key = egui::Id::unique("find_format_test_fonts");
             if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                 crate::theme::install_fonts(ui.ctx(), "");
                 ui.data_mut(|d| d.insert_temp(key, true));
@@ -3701,7 +3701,7 @@ fn change_and_change_find_change_the_found_text() {
     }
     let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
         |ui, app: &mut DesignApp| {
-            let key = egui::Id::new("change_find_test_fonts");
+            let key = egui::Id::unique("change_find_test_fonts");
             if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                 crate::theme::install_fonts(ui.ctx(), "");
                 ui.data_mut(|d| d.insert_temp(key, true));
