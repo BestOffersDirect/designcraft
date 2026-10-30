@@ -425,8 +425,8 @@ pub const MENUS: &[(&str, &[&str])] = &[
         "Table",
         &[
             "ui:app.insertTableDialog",
-            "cmd:table.convertFromText",
-            "cmd:table.convertToText",
+            "ui:app.convertTextToTableDialog",
+            "ui:app.convertTableToTextDialog",
             "-",
             ">Cell Options",
             "ui:app.cellOptionsDialog",
