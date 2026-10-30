@@ -484,8 +484,9 @@ pub(super) fn bullets_section(app: &mut DesignApp, ui: &mut Ui) {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(8.0);
+            // As InDesign's: the Bullets and Numbering dialog for the selected paragraphs.
             if outline_button(ui, crate::i18n::tr(&app.ui.language, "Options"), 66.0).clicked() {
-                show_panel(app, "paragraph");
+                let _ = app.run("app.bulletsNumberingDialog", json!({}));
             }
         });
     });
