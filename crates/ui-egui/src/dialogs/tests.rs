@@ -3566,3 +3566,41 @@ fn frame_size_dialog_follows_the_ruler_units() {
         }
     }
 }
+
+/// #2055 review: the Rectangle dialog reads the height in the vertical unit it showed when it
+/// opened. Rulers switched while it is open (the control channel) leave a typed 50 at 50 mm.
+#[test]
+fn frame_size_dialog_keeps_its_units_while_open() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("document.preferences", json!({"horizontalUnits": "millimeters", "verticalUnits": "millimeters"})).unwrap();
+    app.session.ui_requests.push(designcraft_engine::UiRequest::Dialog {
+        id: "frameSize".into(),
+        params: json!({"spread": 0, "shape": "rectangle", "content": "graphic", "x": 36.0, "y": 36.0, "width": 72.0, "height": 72.0}),
+    });
+    app.after_engine();
+    let d = app.ui.dialog.as_mut().expect("the Rectangle dialog");
+    d.fields.insert("width".into(), json!("50"));
+    d.fields.insert("height".into(), json!("50"));
+    app.run("document.preferences", json!({"horizontalUnits": "inches", "verticalUnits": "inches"})).unwrap();
+    let before = app.session.doc().unwrap().doc.clone();
+    confirm(&mut app).unwrap();
+    let after = &app.session.doc().unwrap().doc;
+    let added: Vec<_> = after.spreads[0].items.iter().filter(|i| !before.spreads[0].items.iter().any(|b| b.id == i.id)).collect();
+    assert_eq!(added.len(), 1, "one frame");
+    let b = added[0].bounds();
+    let mm50 = 50.0 / 25.4 * 72.0;
+    assert!((b.width() - mm50).abs() < 0.01 && (b.height() - mm50).abs() < 0.01, "50 mm by 50 mm (about 141.73 pt): {b:?}");
+    // A dialog made without the vertical unit (`Dialog::new`) reads the height in its own unit.
+    let mut d = Dialog::new("frameSize", json!({"width": "2", "height": "3"}));
+    d.unit = Unit::Inches;
+    assert_eq!(d.vertical_unit, None);
+    app.ui.dialog = Some(d);
+    let before = app.session.doc().unwrap().doc.clone();
+    confirm(&mut app).unwrap();
+    let after = &app.session.doc().unwrap().doc;
+    let added: Vec<_> = after.spreads[0].items.iter().filter(|i| !before.spreads[0].items.iter().any(|b| b.id == i.id)).collect();
+    assert_eq!(added.len(), 1, "one frame");
+    let b = added[0].bounds();
+    assert!((b.width() - 144.0).abs() < 0.01 && (b.height() - 216.0).abs() < 0.01, "{b:?}");
+}

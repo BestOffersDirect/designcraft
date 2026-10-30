@@ -22,6 +22,10 @@ pub struct Dialog {
     /// Set from the active document when the dialog is shown or confirmed (picas without one).
     #[serde(skip)]
     pub unit: Unit,
+    /// The vertical ruler unit, for a dialog with a height field (the Rectangle dialog): kept
+    /// from when it opened, so a bare `50` means what it did then. `None` falls back to `unit`.
+    #[serde(skip)]
+    pub vertical_unit: Option<Unit>,
 }
 
 impl Dialog {
@@ -79,7 +83,7 @@ impl Dialog {
         if id == "ruby" {
             fields.entry("section".to_string()).or_insert(json!("cjk.rubyPlacement"));
         }
-        Dialog { id: id.into(), fields, unit: Unit::Picas }
+        Dialog { id: id.into(), fields, unit: Unit::Picas, vertical_unit: None }
     }
     /// Set a field and report a genuine Find domain/mode transition to the caller.
     pub(crate) fn set_field(&mut self, key: &str, value: Value) -> bool {
@@ -947,6 +951,7 @@ pub fn frame_size_dialog(app: &DesignApp, params: Value) -> Dialog {
         }
     }
     d.unit = doc_unit(app);
+    d.vertical_unit = Some(doc_vertical_unit(app));
     d
 }
 
@@ -3293,7 +3298,8 @@ fn confirm_part1(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             let x = d.fields.get("x").and_then(Value::as_f64).unwrap_or(0.0);
             let y = d.fields.get("y").and_then(Value::as_f64).unwrap_or(0.0);
             let w = d.m("width").unwrap_or(72.0);
-            let h = d.m_in("height", doc_vertical_unit(app)).unwrap_or(72.0);
+            // In the units the dialog showed, not ones changed while it was open.
+            let h = d.m_in("height", d.vertical_unit.unwrap_or(d.unit)).unwrap_or(72.0);
             app.run(
                 "frame.create",
                 json!({"spread": d.fields.get("spread").cloned().unwrap_or(json!(0)), "shape": d.s("shape"), "content": d.s("content"), "rect": [x, y, x + w, y + h]}),
