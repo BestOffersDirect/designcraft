@@ -591,8 +591,10 @@ fn the_color_picker_enter_confirms_and_escape_cancels_even_in_a_field() {
         dialog_frame(&mut app, &ctx, screen, vec![key_press(key)]);
         dialog_frame(&mut app, &ctx, screen, vec![]);
         assert!(app.ui.dialog.is_none(), "{key:?} closes the picker");
-        let hex = fill(&app, id).to_hex();
-        assert_eq!(hex == "#f59019", applied, "{key:?}: {hex}");
+        let d = &app.session.active().unwrap().doc;
+        let swatch = d.item(designcraft_doc::ItemId(id)).unwrap().fill.swatch.clone();
+        let hex = d.resolve_color(&swatch, 1.0).map(|c| c.to_hex());
+        assert_eq!(hex.as_deref() == Some("#f59019"), applied, "{key:?}: {hex:?}");
     }
 }
 
@@ -3535,7 +3537,8 @@ fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
     let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
     let id = app.run("frame.create", json!({"rect": [36, 36, 560, 700], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
-    app.run("object.fill", json!({"ids": [id], "swatch": "C=0 M=100 Y=100 K=0"})).unwrap();
+    app.run("swatch.create", json!({"name": "Eyedrop Red", "color": {"c": 0, "m": 100, "y": 100, "k": 0}})).unwrap();
+    app.run("object.fill", json!({"ids": [id], "swatch": "Eyedrop Red"})).unwrap();
     app.ui.dialog = Some(Dialog::new("colorPicker", json!({"target": "fill", "hex": "#000000"})));
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_ui_state(
         |ui, app: &mut DesignApp| {
@@ -3565,7 +3568,7 @@ fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
     h.drop_at(target);
     h.run_steps(3);
     let d = h.state().ui.dialog.as_ref().expect("the picker stays open");
-    let [r, g, b, _] = h.state().session.doc().unwrap().doc.resolve_color("C=0 M=100 Y=100 K=0", 1.0).unwrap().to_rgba8(1.0);
+    let [r, g, b, _] = h.state().session.doc().unwrap().doc.resolve_color("Eyedrop Red", 1.0).unwrap().to_rgba8(1.0);
     let got: Vec<f64> = d.fields["rgb"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
     for (a, e) in got.iter().zip([r, g, b]) {
         assert!((a - f64::from(e)).abs() <= 3.0, "{got:?} vs {:?}", [r, g, b]);
