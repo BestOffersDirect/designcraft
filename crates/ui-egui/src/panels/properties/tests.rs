@@ -935,6 +935,56 @@ fn properties_text_wrap_shows_and_sets_the_offsets() {
     assert_eq!(of(&h, third), [8.0; 4], "linked again for this selection");
 }
 
+/// A row is as wide as its translated name needs: a long one isn't cut at a fixed width.
+#[test]
+fn preview_rows_fit_long_translated_names() {
+    let ctx = egui::Context::default();
+    let long = "Скругленный прямоугольник с обратным углом";
+    let mut widths = (0.0, 0.0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        egui::Area::new(egui::Id::unique("rows")).show(ui.ctx(), |ui| {
+            ui.set_max_width(10.0);
+            let r = preview_row(ui, false, long, 40.0, |_, _, _| {});
+            let text = ui.fonts_mut(|f| f.layout_no_wrap(long.to_string(), egui::FontId::proportional(12.0), egui::Color32::WHITE).size().x);
+            widths = (r.rect.width(), 40.0 + 12.0 + text);
+        });
+    });
+    out.textures_delta.clear();
+    assert!(widths.0 >= widths.1, "{widths:?}");
+}
+
+/// The corner shape list shows each shape's glyph beside its name, as InDesign's; a row picks
+/// the shape and the current one is marked.
+#[test]
+fn the_corner_shape_list_has_glyph_rows_and_picks_a_shape() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+    app.run("selection.set", json!({"ids": [id]})).unwrap();
+    let mut h = panel(app);
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Corner Shape").click();
+    h.run_steps(3);
+    let rows = ["None", "Fancy", "Bevel", "Inset", "Inverse Rounded", "Rounded"];
+    for r in rows {
+        let _ = h.get_by_role_and_label(egui::accesskit::Role::Button, r);
+    }
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Bevel").click();
+    h.run_steps(3);
+    let it = h.state().session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().clone();
+    assert!(it.corners.corners.iter().all(|c| c.shape == designcraft_geom::corners::CornerShape::Bevel), "{:?}", it.corners);
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Corner Shape").click();
+    h.run_steps(3);
+    use egui_kittest::kittest::NodeT;
+    let n = h.get_by_role_and_label(egui::accesskit::Role::Button, "Bevel");
+    assert_eq!(n.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True), "the current shape is marked");
+    // The stroke type list has the same rows, by name.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Stroke Type").click();
+    h.run_steps(3);
+    let _ = h.get_by_role_and_label(egui::accesskit::Role::Button, "Thick - Thin");
+}
+
 const CYAN: &str = "C=100 M=0 Y=0 K=0";
 
 #[test]

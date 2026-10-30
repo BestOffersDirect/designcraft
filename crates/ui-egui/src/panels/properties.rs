@@ -30,6 +30,8 @@ pub use flex::flex_panel;
 use flex::flex_section;
 pub(crate) use links::run_update_links;
 pub use links::{info_panel, links_panel, preflight_panel, update_links};
+#[cfg(test)]
+use object::preview_row;
 use object::{align_row, appearance_section, guide_section, quick_actions_object, transform_section, wrap_section};
 pub(crate) use object::{corner_type_dropdown, ref_point_proxy, stroke_type_dropdown};
 use object_panels::pathfinder_row;
