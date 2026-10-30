@@ -7503,7 +7503,15 @@ Three";
     // No limit: equal steps. A big limit: all of it between paragraphs (here every line is one).
     assert!((gaps(&none).0 - gaps(&none).1).abs() < 1e-6, "{none:?}");
     assert!((gaps(&big).0 - gaps(&big).1).abs() < 1e-6, "{big:?}");
-    // A small limit: each paragraph gap gets at most 20 pt more than the even share's base.
+    // A small limit: every paragraph gap takes the whole 20 pt, and the rest spreads over lines,
+    // so each gap is wider than the top-aligned one by at least 20 pt and narrower than with a big limit.
+    let top = {
+        let (d, sid, _) = doc_with(text, Rect::new(0.0, 0.0, 300.0, 400.0), ParaAttrs::default());
+        all_lines(&compose_story(&d, sid, &ComposeOptions::default())).iter().map(|l| l.baseline).collect::<Vec<_>>()
+    };
+    let (natural, small_gaps, big_gaps) = (gaps(&top), gaps(&small), gaps(&big));
+    assert!(small_gaps.0 >= natural.0 + 20.0 - 1e-6 && small_gaps.1 >= natural.1 + 20.0 - 1e-6, "{top:?} {small:?}");
+    assert!(small_gaps.0 <= big_gaps.0 + 1e-6, "{small:?} {big:?}");
     assert!((none[2] - big[2]).abs() < 1e-6 && (none[2] - small[2]).abs() < 1e-6, "the last line stays at the bottom");
     // A paragraph of two lines keeps its leading when the limit absorbs the space.
     let (mut d, sid, fid) = doc_with(
