@@ -32,6 +32,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Stroke Type", "Tipo traccia"),
     ("Corner Shape", "Forma angolo"),
     ("Corner Size and Shape:", "Dimensione e forma angoli:"),
+    ("Join", "Unisci"),
+    ("Convert Point", "Converti punto"),
     ("Restart Numbering", "Riavvia numerazione"),
     ("Continue Numbering", "Continua numerazione"),
     ("Keep Options…", "Opzioni di separazione…"),

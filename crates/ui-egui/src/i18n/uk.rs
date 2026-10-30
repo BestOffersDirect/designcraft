@@ -33,6 +33,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Stroke Type", "Тип обведення"),
     ("Corner Shape", "Форма кута"),
     ("Corner Size and Shape:", "Розмір і форма кутів:"),
+    ("Join", "Зʼєднати"),
+    ("Convert Point", "Перетворити точку"),
     ("Restart Numbering", "Почати нумерацію знову"),
     ("Continue Numbering", "Продовжити нумерацію"),
     ("Keep Options…", "Параметри утримання…"),

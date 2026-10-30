@@ -1706,6 +1706,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Object/Fitting", "ობიექტი/ზომაზე მორგება"),
     ("Object/Pathfinder", "ობიექტი/ტრაექტორიების ოპერაციები"),
     ("Object/Paths", "ობიექტი/ტრაექტორიები"),
+    ("Object/Convert Point", "ობიექტი/წერტილის გარდაქმნა"),
     ("Object/Select", "ობიექტი/მონიშვნა"),
     ("Object/Transform", "ობიექტი/გარდაქმნა"),
     ("Object/Transform Again", "ობიექტი/გარდაქმნის გამეორება"),

@@ -127,6 +127,8 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         "Corner Size and Shape:",
         ["Eckengröße und -form:", "Taille et forme des angles:", "Tamaño y forma de esquinas:", "角のサイズとシェイプ:", "角大小和形状："],
     ),
+    ("Join", ["Join", "Joindre", "Unir", "Join", "连接"]),
+    ("Convert Point", ["Convert Point", "Convertir le point", "Convertir punto", "Convert Point", "转换点"]),
     ("Hide Rulers", ["Lineale ausblenden", "Masquer les règles", "Ocultar reglas", "定規を隠す", "隐藏标尺"]),
     ("Inches Decimal", ["Zoll dezimal", "Pouces décimaux", "Pulgadas decimales", "インチ（10 進）", "十进制英寸"]),
     (
