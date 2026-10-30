@@ -717,7 +717,7 @@ fn preview_rows_fit_long_translated_names() {
     let long = "Скругленный прямоугольник с обратным углом";
     let mut widths = (0.0, 0.0);
     let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-        egui::Area::new(egui::Id::new("rows")).show(ui.ctx(), |ui| {
+        egui::Area::new(egui::Id::unique("rows")).show(ui.ctx(), |ui| {
             ui.set_max_width(10.0);
             let r = preview_row(ui, false, long, 40.0, |_, _, _| {});
             let text = ui.fonts_mut(|f| f.layout_no_wrap(long.to_string(), egui::FontId::proportional(12.0), egui::Color32::WHITE).size().x);

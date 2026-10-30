@@ -4700,7 +4700,7 @@ fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: 
         let tip = crate::i18n::tr(lang, tip);
         let (r, resp) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
         crate::icons::paint(ui.painter(), r, icon, crate::theme::Tokens::get(ui.ctx()).icon);
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, tip));
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tip));
         resp.on_hover_text(tip);
         let id = format!("ps{key}{i}");
         if let Some(v) = crate::widgets::NumField::measure(&id, Some(c.size), units).width(84.0).spinner().range(0.0, 10_000.0).show(ui) {
