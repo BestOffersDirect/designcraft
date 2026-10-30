@@ -576,6 +576,26 @@ fn fill(app: &DesignApp, id: u64) -> designcraft_color::Color {
     d.resolve_color(&d.item(designcraft_doc::ItemId(id)).unwrap().fill.swatch, 1.0).unwrap()
 }
 
+fn key_press(key: egui::Key) -> egui::Event {
+    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }
+}
+
+#[test]
+fn the_color_picker_enter_confirms_and_escape_cancels_even_in_a_field() {
+    for (key, applied) in [(egui::Key::Enter, true), (egui::Key::Escape, false)] {
+        let (mut app, ctx, screen, id) = picker(json!({"target": "fill", "hex": "#ffffff"}));
+        let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+        click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "ffffff").center());
+        dialog_frame(&mut app, &ctx, screen, vec![select_all_key()]);
+        type_slowly(&mut app, &ctx, screen, "#f59019");
+        dialog_frame(&mut app, &ctx, screen, vec![key_press(key)]);
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+        assert!(app.ui.dialog.is_none(), "{key:?} closes the picker");
+        let hex = fill(&app, id).to_hex();
+        assert_eq!(hex == "#f59019", applied, "{key:?}: {hex}");
+    }
+}
+
 #[test]
 fn the_hex_field_keeps_typed_text_and_commits_a_valid_code() {
     let (mut app, ctx, screen, _) = picker(json!({"target": "fill", "hex": "#ffffff"}));

@@ -8371,11 +8371,17 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
         resp.clicked()
     };
-    if pill(ui, 0, &tr("OK"), true) || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-        d.fields.insert("_close".into(), json!("ok"));
-    }
-    if pill(ui, 1, &tr("Cancel"), false) || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-        d.fields.insert("_close".into(), json!("cancel"));
+    // The picker draws its own buttons, so the generic footer's Enter/Esc handling is skipped.
+    // The keys are consumed here so nothing else reacts to them as well, and a click on a pill
+    // wins over a key pressed in the same frame, so the dialog closes once.
+    let ok = pill(ui, 0, &tr("OK"), true);
+    let cancel = pill(ui, 1, &tr("Cancel"), false);
+    let enter = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+    let esc = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+    if ok || cancel {
+        d.fields.insert("_close".into(), json!(if cancel { "cancel" } else { "ok" }));
+    } else if enter || esc {
+        d.fields.insert("_close".into(), json!(if enter { "ok" } else { "cancel" }));
     }
     // The C/M/Y/K the fields show: the percentages typed or given, else the colour converted.
     let cmyk = nums::<4>(d, "cmyk").map(|v| v.map(|x| x as f32)).unwrap_or_else(|| {
