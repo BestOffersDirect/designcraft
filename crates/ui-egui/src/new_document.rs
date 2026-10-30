@@ -397,7 +397,7 @@ fn card(ui: &mut Ui, c: &Card, units: Unit, selected: bool) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(CARD, Sense::click());
     if selected {
         ui.painter().rect(r.shrink(1.0), 3.0, t.hover, Stroke::new(2.0, t.accent), StrokeKind::Inside);
-    } else if resp.hovered() {
+    } else if ui.rect_contains_pointer(r) {
         ui.painter().rect_filled(r, 3.0, t.hover);
     }
     let page = Rect::from_center_size(pos2(r.center().x, r.top() + 56.0), vec2(72.0, 72.0));
@@ -503,19 +503,32 @@ fn presets(app: &mut DesignApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         ui.spacing_mut().item_spacing = vec2(10.0, 10.0);
         for c in &list {
             let resp = card(ui, c, card_units, current == c.key);
-            if resp.clicked() || resp.double_clicked() {
-                select(d, c);
-            }
-            if resp.double_clicked() {
-                create = true;
-            }
+            let mut remove = false;
             if tab == "saved" && c.key != DEFAULT_CARD {
+                if current == c.key || ui.rect_contains_pointer(resp.rect) {
+                    let x = if rtl { resp.rect.left() + 4.0 } else { resp.rect.right() - 26.0 };
+                    let rect = Rect::from_min_size(pos2(x, resp.rect.top() + 4.0), vec2(22.0, 22.0));
+                    let button = ui.interact(rect, ui.scope_id().with(("delete-preset", &c.key)), Sense::click());
+                    let label = format!("{}: {}", crate::i18n::tr(&lang, "Delete Preset"), c.label);
+                    button.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label.as_str()));
+                    if button.hovered() {
+                        ui.painter().rect_filled(rect, 2.0, t.hover);
+                    }
+                    crate::icons::paint(ui.painter(), rect.shrink(3.0), "trash", t.icon);
+                    remove = button.on_hover_text(label).clicked();
+                }
                 resp.context_menu(|ui| {
                     if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&lang, "Delete Preset"))).clicked() {
                         delete = Some(c.nd.title.clone());
                         ui.close();
                     }
                 });
+            }
+            if remove {
+                delete = Some(c.nd.title.clone());
+            } else if resp.clicked() || resp.double_clicked() {
+                select(d, c);
+                create |= resp.double_clicked();
             }
         }
     });
