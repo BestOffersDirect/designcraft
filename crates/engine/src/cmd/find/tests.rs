@@ -621,6 +621,27 @@ fn document_scope_searches_and_changes_table_cells() {
     assert_eq!(s.execute("find.find", &json!({"find": "13.00", "scope": "document"})).unwrap().as_array().unwrap().len(), 2);
 }
 
+/// Change (`found`) on text Find Next found in a table cell changes it there, leaves the
+/// same text in the story alone, and Find Next goes on after it.
+#[test]
+fn change_changes_the_text_find_next_found_in_a_cell() {
+    let (mut s, sid) = scope_session("red here");
+    scope_select(&mut s, sid, 0, 0);
+    let table = s.execute("table.insert", &json!({"rows": 1, "cols": 2})).unwrap()["table"].as_u64().unwrap();
+    s.execute("table.setCell", &json!({"row": 0, "col": 1, "text": "red"})).unwrap();
+    let p = json!({"find": "red", "change": "blue", "scope": "document"});
+    let hit = s.execute("find.next", &p).unwrap();
+    assert_eq!(hit["cell"], json!({"table": table, "row": 0, "col": 1}), "{hit}");
+    let mut change = p.clone();
+    change["found"] = json!(true);
+    assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
+    let t = s.execute("table.get", &json!({"table": table})).unwrap();
+    assert_eq!(t["cells"][1]["text"], "blue");
+    assert!(s.doc().unwrap().doc.story(sid).unwrap().text.contains("red here"), "the story's red stays");
+    let next = s.execute("find.next", &p).unwrap();
+    assert!(next.get("cell").is_none() && next.get("start").is_some(), "on to the story: {next}");
+}
+
 fn child_scope_session(note: bool, child: &str) -> (Session, designcraft_doc::StoryId, designcraft_doc::TextSel) {
     let (mut s, sid) = scope_session("red");
     scope_select(&mut s, sid, 3, 3);
@@ -861,4 +882,74 @@ fn a_find_format_finds_only_text_with_it() {
         assert!(s.execute("find.find", &json!({"find": "eggs", "findFormat": f})).is_err(), "{f}");
     }
     assert!(s.execute("find.find", &json!({"find": ""})).is_err());
+}
+
+/// Change and Change/Find: only the text Find Next found changes; it stays selected and the
+/// search goes on after it in its domain (here the original selection). A selection that
+/// isn't a match changes nothing and makes no undo step.
+#[test]
+fn change_changes_the_found_text_and_the_search_goes_on() {
+    let (mut s, sid) = scope_session("red red | red");
+    scope_select(&mut s, sid, 0, 7);
+    let p = json!({"find": "red", "change": "blue", "scope": "selection"});
+    let mut change = p.clone();
+    change["found"] = json!(true);
+    scope_hit(&mut s, &p, sid, 0, 3);
+    assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
+    let text = |s: &Session| s.doc().unwrap().doc.story(sid).unwrap().text.clone();
+    assert_eq!(text(&s), "blue red | red");
+    assert_eq!(s.doc().unwrap().selection.text.unwrap().range(), 0..4, "the changed text stays selected");
+    scope_hit(&mut s, &p, sid, 5, 8);
+    s.execute("find.change", &change).unwrap();
+    assert_eq!(text(&s), "blue blue | red");
+    assert_eq!(s.execute("find.next", &p).unwrap(), serde_json::Value::Null, "the last red is outside the selection searched");
+    // Not a match: nothing changes, no undo step.
+    scope_select(&mut s, sid, 0, 4);
+    let history = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("find.change", &json!({"find": "red", "change": "blue", "found": true})).unwrap()["count"], 0);
+    assert_eq!(s.doc().unwrap().history.undo.len(), history);
+    // A Change Format with nothing in Change to formats the found text only.
+    scope_select(&mut s, sid, 0, 0);
+    let fmt = json!({"find": "red", "change": "", "attrs": {"underline": true}});
+    let hit = s.execute("find.next", &fmt).unwrap();
+    assert_eq!(hit["start"], 12);
+    let mut found = fmt.clone();
+    found["found"] = json!(true);
+    s.execute("find.change", &found).unwrap();
+    assert_eq!(text(&s), "blue blue | red");
+    assert_eq!(s.doc().unwrap().doc.story(sid).unwrap().format_after(12).over.underline, Some(true));
+    assert_eq!(s.doc().unwrap().selection.text.unwrap().range(), 12..15);
+}
+
+/// Change accepts what Find Next selected even when Change All wouldn't match there: the
+/// rest of a Find Format stretch from a caret inside it, and an overlapping match.
+#[test]
+fn change_takes_any_selection_find_next_made() {
+    // A caret inside a bold stretch: Find Next with only a Find Format selects the rest of it.
+    let (mut s, sid) = scope_session("plain bold text");
+    s.execute("style.character.create", &json!({"name": "Strong", "chars": {"fontStyle": "Bold"}})).unwrap();
+    scope_select(&mut s, sid, 6, 10);
+    s.execute("style.character.apply", &json!({"name": "Strong"})).unwrap();
+    scope_select(&mut s, sid, 8, 8);
+    let p = json!({"find": "", "change": "", "findFormat": {"charStyle": "Strong"}, "attrs": {"underline": true}, "scope": "story"});
+    let hit = s.execute("find.next", &p).unwrap();
+    assert_eq!((hit["start"].as_u64(), hit["end"].as_u64()), (Some(8), Some(10)));
+    let mut change = p.clone();
+    change["found"] = json!(true);
+    assert_eq!(s.execute("find.change", &change).unwrap()["count"], 1);
+    let st = s.doc().unwrap().doc.story(sid).unwrap().clone();
+    assert_eq!((st.format_after(7).over.underline, st.format_after(8).over.underline), (None, Some(true)), "only the selected rest");
+    // "aa" in "aaa" from the second a: Find Next selects 1..3, which Change All never finds.
+    for grep in [false, true] {
+        let (mut s, sid) = scope_session("aaa");
+        scope_select(&mut s, sid, 1, 1);
+        let (find, change) = if grep { ("(a)a", "<$1>") } else { ("aa", "b") };
+        let p = json!({"find": find, "change": change, "grep": grep, "scope": "story"});
+        let hit = s.execute("find.next", &p).unwrap();
+        assert_eq!((hit["start"].as_u64(), hit["end"].as_u64()), (Some(1), Some(3)));
+        let mut found = p.clone();
+        found["found"] = json!(true);
+        assert_eq!(s.execute("find.change", &found).unwrap()["count"], 1, "grep: {grep}");
+        assert_eq!(s.doc().unwrap().doc.story(sid).unwrap().text, if grep { "a<a>" } else { "ab" });
+    }
 }

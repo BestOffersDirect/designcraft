@@ -1647,6 +1647,15 @@ fn dialog_frame(app: &mut DesignApp, ctx: &egui::Context, screen: egui::Rect, ev
     labels
 }
 
+/// What Find/Change's Search list shows for a scope.
+fn scope_label(scope: &str) -> &'static str {
+    match scope {
+        "story" => "Story",
+        "selection" => "Selection",
+        _ => "Document",
+    }
+}
+
 fn visible_label(labels: &[(String, egui::Rect, egui::Rect)], screen: egui::Rect, expected: &str) -> egui::Rect {
     let (_, rect, clip) = labels.iter().find(|(text, _, _)| text.trim() == expected).unwrap_or_else(|| panic!("{expected} is painted"));
     assert!(screen.contains_rect(*rect), "{expected} must stay on screen: {rect:?}");
@@ -1730,8 +1739,8 @@ fn scope_dialog_with_tool(text: &str, end: usize, tool: Option<&str>) -> (Design
     for _ in 0..3 {
         dialog_frame(&mut app, &ctx, screen, vec![]);
     }
-    scope_click(&mut app, &ctx, screen, "document");
-    scope_click(&mut app, &ctx, screen, "selection");
+    scope_click(&mut app, &ctx, screen, "Document");
+    scope_click(&mut app, &ctx, screen, "Selection");
     assert_eq!(app.ui.dialog.as_ref().unwrap().s("scope"), "selection");
     (app, ctx, screen, sid)
 }
@@ -1806,8 +1815,8 @@ fn find_scope_dialog_explicit_story_ignored_scope_preserves_grep_cursor() {
                 let cur = app.ui.dialog.as_ref().unwrap().s("scope");
                 let next = if cur == "selection" { "document" } else { "selection" };
                 if physical {
-                    scope_click(&mut app, &ctx, screen, &cur);
-                    scope_click(&mut app, &ctx, screen, next);
+                    scope_click(&mut app, &ctx, screen, scope_label(&cur));
+                    scope_click(&mut app, &ctx, screen, scope_label(next));
                 } else {
                     scope_control(&mut app, &ctx, "ui.dialog.set", json!({"field": "scope", "value": next}));
                 }
@@ -1824,8 +1833,8 @@ fn find_scope_dialog_explicit_story_ignored_scope_preserves_grep_cursor() {
             let cur = app.ui.dialog.as_ref().unwrap().s("scope");
             let next = if cur == "selection" { "document" } else { "selection" };
             if physical {
-                scope_click(&mut app, &ctx, screen, &cur);
-                scope_click(&mut app, &ctx, screen, next);
+                scope_click(&mut app, &ctx, screen, scope_label(&cur));
+                scope_click(&mut app, &ctx, screen, scope_label(next));
             } else {
                 scope_control(&mut app, &ctx, "ui.dialog.set", json!({"field": "scope", "value": next}));
             }
@@ -4399,4 +4408,50 @@ fn on_a_page_without_a_section_the_window_is_new_section() {
     let labels = (0..4).map(|_| dialog_frame(&mut app, &ctx, screen, vec![])).last().unwrap();
     visible_label(&labels, screen, "Numbering & Section Options");
     assert!(!labels.iter().any(|(t, _, _)| t == "New Section"));
+}
+
+/// Find/Change's Change and Change/Find, as InDesign's: Find Next selects a match, Change/Find
+/// changes it and selects the next, Change changes that one and keeps it selected. With no
+/// text selected they're off.
+#[test]
+fn change_and_change_find_change_the_found_text() {
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let f = app.run("frame.create", json!({"rect": [36, 36, 400, 300], "content": "text", "text": "red red | red"})).unwrap();
+    let sid = designcraft_doc::StoryId(f["story"].as_u64().unwrap());
+    app.run("text.select", json!({"story": sid.0, "anchor": 0, "focus": 0})).unwrap();
+    app.run("app.findChange", json!({})).unwrap();
+    if let Some(d) = app.ui.dialog.as_mut() {
+        d.fields.insert("find".into(), json!("red"));
+        d.fields.insert("change".into(), json!("blue"));
+    }
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::unique("change_find_test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    assert!(h.query_by_value("Document").is_some(), "the Search choices are InDesign's");
+    assert!(h.get_by_label("Change").accesskit_node().is_disabled(), "nothing found yet");
+    let text = |h: &Harness<'_, DesignApp>| h.state().session.doc().unwrap().doc.story(sid).unwrap().text.clone();
+    let selected = |h: &Harness<'_, DesignApp>| h.state().session.doc().unwrap().selection.text.unwrap().range();
+    h.get_by_label("Find Next").click();
+    h.run_steps(3);
+    assert_eq!(selected(&h), 0..3);
+    h.get_by_label("Change/Find").click();
+    h.run_steps(3);
+    assert_eq!((text(&h), selected(&h)), ("blue red | red".to_string(), 5..8));
+    h.get_by_label("Change").click();
+    h.run_steps(3);
+    assert_eq!((text(&h), selected(&h)), ("blue blue | red".to_string(), 5..9));
+    assert_eq!(h.state().ui.dialog.as_ref().unwrap().fields["status"], json!("1 replacement(s) made"));
 }

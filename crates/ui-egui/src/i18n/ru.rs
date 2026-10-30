@@ -43,6 +43,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("[Same style]", "[Тот же стиль]"),
     ("Reset To Base", "Сбросить до основы"),
     ("Apply Style to Selection", "Применить стиль к выделенному"),
+    ("Change/Find", "Заменить/Найти"),
     ("Find Format:", "Найти формат:"),
     ("Find Format Settings", "Параметры поиска формата"),
     ("Specify attributes to find", "Задать атрибуты для поиска"),

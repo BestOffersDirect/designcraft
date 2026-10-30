@@ -988,6 +988,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
     ("Change All", ["Change All", "Tout remplacer", "Change All", "Change All", "全部更改"]),
     ("Change to:", ["Change to:", "Remplacer par :", "Change to:", "Change to:", "更改为："]),
     ("Change Format:", ["Format ersetzen:", "Remplacer le format :", "Cambiar formato:", "置換形式 :", "更改格式："]),
+    ("Change/Find", ["Ersetzen/Suchen", "Remplacer/Rechercher", "Cambiar/Buscar", "置換して検索", "更改/查找"]),
     ("Find Format:", ["Format suchen:", "Rechercher le format :", "Buscar formato:", "検索形式 :", "查找格式："]),
     (
         "Find Format Settings",
@@ -1227,6 +1228,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
     ("Load Styles", ["Formate laden", "Charger les styles", "Cargar estilos", "スタイルを読み込み", "加载样式"]),
     ("New Section", ["Neuer Abschnitt", "Nouvelle section", "Nueva sección", "新規セクション", "新建章节"]),
     ("Cannot be edited", ["Nicht bearbeitbar", "Non modifiable", "No editable", "編集不可", "不可编辑"]),
+    ("Selection", ["Auswahl", "Sélection", "Selección", "選択範囲", "选区"]),
     ("Restart Numbering", ["Nummerierung neu beginnen", "Recommencer la numérotation", "Reiniciar numeración", "番号の振り直し", "重新开始编号"]),
     ("Continue Numbering", ["Nummerierung fortführen", "Poursuivre la numérotation", "Continuar numeración", "番号の継続", "继续编号"]),
     ("Keep Options…", ["Umbruchoptionen …", "Options d'enchaînement…", "Opciones de separación…", "段落分離禁止オプション…", "保持选项…"]),

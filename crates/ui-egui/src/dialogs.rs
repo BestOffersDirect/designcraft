@@ -2676,13 +2676,21 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                 });
                                 text_field_named(ui, &mut d, "change", 260.0, crate::i18n::tr(&app.ui.language, "Change to:"));
                                 ui.end_row();
-                                let scope_name = crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Search:"));
+                                let search_label = crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Search:"));
                                 let cur = d.s("scope");
+                                // InDesign's names for the scopes.
+                                let scope_name = |v: &str| match v {
+                                    "story" => "Story",
+                                    "selection" => "Selection",
+                                    _ => "Document",
+                                };
                                 craft_ui::ComboBox::from_id_salt("fcscope")
-                                    .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, &cur)))
+                                    .selected_text(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, scope_name(&cur))))
                                     .show_ui(ui, |ui| {
                                         for v in ["document", "story", "selection"] {
-                                            if ui.selectable_label(cur == v, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, v))).clicked()
+                                            if ui
+                                                .selectable_label(cur == v, crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, scope_name(v))))
+                                                .clicked()
                                                 && d.set_field("scope", json!(v))
                                             {
                                                 app.session.reset_find_scope();
@@ -2690,7 +2698,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                         }
                                     })
                                     .response
-                                    .labelled_by(scope_name.id);
+                                    .labelled_by(search_label.id);
                                 ui.end_row();
                             });
                             ui.horizontal(|ui| {
@@ -2702,11 +2710,27 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             ui.horizontal(|ui| {
                                 let params0 = find_change_params(&d);
                                 let params = || params0.clone();
+                                // Change and Change/Find act on the text Find Next found.
+                                let mut found = params0.clone();
+                                found["found"] = json!(true);
+                                let selected = app.session.active().and_then(|st| st.selection.text).is_some_and(|t| !t.is_caret());
+                                let next_status = |app: &mut DesignApp, r: Result<Value, String>| match r {
+                                    Ok(Value::Null) => crate::i18n::tr(&app.ui.language, "No matches").to_string(),
+                                    Ok(_) => crate::i18n::tr(&app.ui.language, "Found").to_string(),
+                                    Err(e) => e,
+                                };
                                 if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Find Next"))).clicked() {
                                     let r = app.run("find.next", params());
-                                    let msg = match r {
-                                        Ok(Value::Null) => crate::i18n::tr(&app.ui.language, "No matches").to_string(),
-                                        Ok(_) => crate::i18n::tr(&app.ui.language, "Found").to_string(),
+                                    let msg = next_status(app, r);
+                                    d.fields.insert("status".into(), json!(msg));
+                                }
+                                if ui
+                                    .add_enabled(selected, egui::Button::new(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Change"))))
+                                    .clicked()
+                                {
+                                    let msg = match app.run("find.change", found.clone()) {
+                                        Ok(v) => crate::i18n::tr(&app.ui.language, "{count} replacement(s) made")
+                                            .replace("{count}", &v["count"].to_string()),
                                         Err(e) => e,
                                     };
                                     d.fields.insert("status".into(), json!(msg));
@@ -2717,6 +2741,17 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                                             .replace("{count}", &v["count"].to_string()),
                                         Err(e) => e,
                                     };
+                                    d.fields.insert("status".into(), json!(msg));
+                                }
+                                if ui
+                                    .add_enabled(
+                                        selected,
+                                        egui::Button::new(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Change/Find"))),
+                                    )
+                                    .clicked()
+                                {
+                                    let r = app.run("find.change", found.clone()).and_then(|_| app.run("find.next", params()));
+                                    let msg = next_status(app, r);
                                     d.fields.insert("status".into(), json!(msg));
                                 }
                                 if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Count"))).clicked() {

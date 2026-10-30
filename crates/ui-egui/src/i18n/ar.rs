@@ -39,6 +39,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("[Same style]", "[النمط نفسه]"),
     ("Reset To Base", "إعادة التعيين إلى الأساس"),
     ("Apply Style to Selection", "تطبيق النمط على التحديد"),
+    ("Change/Find", "تغيير/بحث"),
     ("Find Format:", "البحث عن تنسيق:"),
     ("Find Format Settings", "إعدادات البحث عن تنسيق"),
     ("Specify attributes to find", "تحديد السمات المراد البحث عنها"),

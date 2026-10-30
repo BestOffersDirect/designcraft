@@ -40,6 +40,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("[Same style]", "[იგივე სტილი]"),
     ("Reset To Base", "საბაზოზე დაბრუნება"),
     ("Apply Style to Selection", "სტილის გამოყენება მონიშნულზე"),
+    ("Change/Find", "ჩანაცვლება/ძიება"),
     ("Find Format:", "ფორმატის ძიება:"),
     ("Find Format Settings", "ფორმატის ძიების პარამეტრები"),
     ("Specify attributes to find", "საძიებო ატრიბუტების მითითება"),
