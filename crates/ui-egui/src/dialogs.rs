@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::DesignApp;
+use crate::app::file_dialogs::{Bound, with_path};
 use crate::theme::semibold;
 
 mod options;
@@ -2644,18 +2645,9 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                         });
                         check(ui, &mut d, "bpc", crate::i18n::tr(&app.ui.language, "Use Black Point Compensation"));
                         if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Load Profile…"))).clicked()
-                            && let Some(path) = app.services.pick_open.as_mut().and_then(|f| f("icc"))
+                            && let Err(e) = app.ask_open("icc", Bound::App, load_color_profile)
                         {
-                            match app.session.execute("color.loadProfile", &json!({"path": path})) {
-                                Ok(_) => {
-                                    // Replayed in load order at start-up, so the latest load of a path comes last.
-                                    app.ui.color_profiles.retain(|p| p != &path);
-                                    app.ui.color_profiles.push(path);
-                                    let f = app.session.execute("color.settings", &json!({})).unwrap_or_default();
-                                    d.fields.insert("profiles".into(), f["profiles"].clone());
-                                }
-                                Err(e) => app.status_error("Color Settings", e),
-                            }
+                            app.status_error("Color Settings", e);
                         }
                     }
                     "userDictionary" => user_dictionary(app, ui, &mut d),
@@ -3628,17 +3620,27 @@ fn confirm_part3(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             }
             let stem = if title.is_empty() { doc_name } else { title };
             let name = if stem.is_empty() { "Export.pdf".to_string() } else { format!("{stem}.pdf") };
-            match app.pick_save(&name) {
-                Some(path) => {
-                    params["path"] = json!(path);
-                    crate::menus::export_pdf(app, &params)
-                }
-                // The user cancelled the save dialog: export nothing.
-                None => Ok(Value::Null),
-            }
+            app.ask_save(&name, Bound::Document, move |app, path| crate::menus::export_pdf(app, &with_path(&params, "path", path)))
         }
         _ => confirm_part4(app, d),
     }
+}
+
+/// Color Settings › Load Profile…: load the chosen profile and list it in the dialog if it is
+/// still open.
+fn load_color_profile(app: &mut DesignApp, path: String) -> Result<Value, String> {
+    if let Err(e) = app.session.execute("color.loadProfile", &json!({"path": path})) {
+        app.status_error("Color Settings", e);
+        return Ok(Value::Null);
+    }
+    // Replayed in load order at start-up, so the latest load of a path comes last.
+    app.ui.color_profiles.retain(|p| p != &path);
+    app.ui.color_profiles.push(path);
+    let f = app.session.execute("color.settings", &json!({})).unwrap_or_default();
+    if let Some(d) = app.ui.dialog.as_mut().filter(|d| d.id == "colorSettings") {
+        d.fields.insert("profiles".into(), f["profiles"].clone());
+    }
+    Ok(Value::Null)
 }
 
 /// One slice of the dialogs' Apply; later slices take the ids this one doesn't.
@@ -3785,20 +3787,20 @@ fn confirm_part5(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             if d.b("quitting") {
                 return app.confirm_quit_document(uid.ok_or("Missing document in quit confirmation")?, d.b("discard"));
             }
-            let index = |app: &DesignApp| app.session.documents().iter().position(|doc| Some(doc.uid) == uid);
+            let index = move |app: &DesignApp| app.session.documents().iter().position(|doc| Some(doc.uid) == uid);
             let Some(i) = index(app) else { return Ok(Value::Null) };
-            if !d.b("discard") {
-                app.run("file.activate", json!({"index": i}))?;
-                app.run("app.save", json!({}))?;
-                // Still unsaved: the save was cancelled (no file chosen). Keep the document open.
-                if app.session.documents().get(i).is_none_or(|doc| doc.is_dirty()) {
-                    return Ok(Value::Null);
-                }
+            let discard = d.b("discard");
+            // Closes the document once it is saved (or at once, for Don't Save). Still unsaved, the
+            // save failed: the document stays open.
+            let close = move |app: &mut DesignApp| match index(app) {
+                Some(i) if discard || app.session.documents().get(i).is_some_and(|doc| !doc.is_dirty()) => app.run("file.close", json!({"index": i})),
+                _ => Ok(Value::Null),
+            };
+            if discard {
+                return close(app);
             }
-            match index(app) {
-                Some(i) => app.run("file.close", json!({"index": i})),
-                None => Ok(Value::Null),
-            }
+            app.run("file.activate", json!({"index": i}))?;
+            crate::menus::save_then(app, close)
         }
         "loadStyles" => {
             let checked = |key: &str| -> Vec<&str> {

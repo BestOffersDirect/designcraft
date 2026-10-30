@@ -13,6 +13,7 @@ use super::{
 mod clipboard;
 mod commands;
 mod control;
+pub(crate) mod file_dialogs;
 mod files;
 mod frame;
 mod ime;
@@ -34,8 +35,18 @@ impl DesignApp {
         // The app owns the monotonic origin for recovery timing and frame pacing; `now_ms` itself
         // is process-global so screenshot deadlines stay comparable across hosts.
         let now = now_ms() / 1000.0;
+        #[cfg(not(target_arch = "wasm32"))]
+        let dialog_wake = std::sync::Arc::new(std::sync::OnceLock::new());
         DesignApp {
             pending_pdf: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            file_dialogs: file_dialogs::new_dialogs(dialog_wake.clone()),
+            #[cfg(not(target_arch = "wasm32"))]
+            asked: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            held_answers: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            dialog_wake,
             session,
             ui: UiState::default(),
             services,
