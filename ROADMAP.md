@@ -382,6 +382,8 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 ## Progress log
 
+- **2026-10-30** · The Color Picker takes an eyedropper: dragged from the picker onto the page, it takes the colour the canvas shows (proofed under Proof Colors). No readiness percentage change.
+- **2026-10-30** · The Color Picker is laid out as the reference app's: a field and slider for the component chosen, HSB, Lab, RGB and CMYK values, the old colour, and Add CMYK Swatch; Enter and Esc close it once. No readiness percentage change.
 - **2026-10-18** · Table of Contents gains Create PDF Bookmarks: included headings become nested page destinations, regenerated in their existing outline position on update without replacing or moving surrounding manual bookmarks. The setting survives native and IDML files. No readiness percentage change.
 
 Newest first.

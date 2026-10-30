@@ -3485,10 +3485,6 @@ fn guide_counts(app: &DesignApp) -> Vec<usize> {
     (0..doc.page_count()).map(|abs| doc.page(abs).unwrap().guides.len()).collect()
 }
 
-/// The Color Picker laid out as InDesign's: a field and a slider for the component whose radio
-/// is on, the new colour over the old one, and the values in every space.
-/// The course's chapter 23: the Color Picker's eyedropper, dragged from the picker onto the
-/// page and let go there, takes the colour the page shows.
 /// The eyedropper takes the colour the canvas shows: with Proof Colors the proofed colour, and
 /// with the ink-limit preview the warning colour over the limit.
 #[test]
@@ -3531,6 +3527,8 @@ fn the_eyedropper_samples_what_proof_colors_and_the_ink_limit_show() {
     assert_ne!(proofed, plain, "the proof changes this green");
 }
 
+/// The course's chapter 23: the Color Picker's eyedropper, dragged from the picker onto the
+/// page and let go there, takes the colour the page shows.
 #[test]
 fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
     use egui_kittest::{Harness, kittest::Queryable};
@@ -3595,6 +3593,28 @@ fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
     h.drop_at(field);
     h.run_steps(3);
     assert_eq!(h.state().ui.dialog.as_ref().unwrap().s("hex"), hex, "the picker isn't sampled");
+}
+
+/// The Color Picker laid out as InDesign's: a field and a slider for the component whose radio
+/// is on, the new colour over the old one, and the values in every space.
+#[test]
+
+fn the_color_picker_keeps_a_typed_cmyk_value_the_colour_shown_does_not_change_with() {
+    use egui_kittest::kittest::Queryable;
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    app.ui.dialog = Some(Dialog::new("colorPicker", json!({"target": "fill", "cmyk": [0.0, 0.0, 0.0, 100.0], "text": false})));
+    let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
+    h.run_steps(3);
+    // A C typed at 100% K is kept, whether or not the colour shown changes with it.
+    let rgb = h.state().app.ui.dialog.as_ref().unwrap().fields.get("rgb").cloned();
+    h.get_by_label("C").focus();
+    h.run_steps(1);
+    h.event(egui::Event::Text("50".into()));
+    h.run_steps(2);
+    let d = h.state().app.ui.dialog.as_ref().unwrap();
+    assert_eq!(d.fields["cmyk"], json!([50.0, 0.0, 0.0, 100.0]), "rgb {:?} (was {rgb:?})", d.fields.get("rgb"));
+    assert!(d.b("edited"));
 }
 
 #[test]

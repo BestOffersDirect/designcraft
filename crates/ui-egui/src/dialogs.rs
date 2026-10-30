@@ -8521,9 +8521,12 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     if p != before {
         store_picked(d, &p);
-        if let Some(c) = exact_cmyk {
-            d.fields.insert("cmyk".into(), json!(c));
-        }
+    }
+    // Typed C/M/Y/K are kept as typed, even when the colour shown stays the same (at 100% K, a
+    // device conversion is black whatever C, M and Y are).
+    if let Some(c) = exact_cmyk {
+        d.fields.insert("cmyk".into(), json!(c));
+        d.fields.insert("edited".into(), json!(true));
     }
 }
 
@@ -8911,7 +8914,8 @@ mod picker_layout {
     pub const RIGHT: f32 = 457.0;
 }
 
-/// A value field: the text typed stays while it has the focus; a number that parses applies.
+/// A value field, named `name` (its caption): the text typed stays while it has the focus; a
+/// number that parses applies.
 fn picker_field(ui: &mut egui::Ui, d: &mut Dialog, r: egui::Rect, key: &str, name: &str, value: f32, range: (f32, f32)) -> Option<f32> {
     let id = egui::Id::unique(("color_picker_field", key));
     let editing = ui.memory(|m| m.has_focus(id));
