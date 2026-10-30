@@ -3594,13 +3594,13 @@ fn paragraph_border_sides_and_corners_link_as_indesigns() {
     retype_beside(&mut h, "Left:", 0, "10");
     assert_eq!(field(&h, "borderWeights"), json!([3.0, 10.0, 3.0, 3.0]));
     // The corners start the same too: Top Left's size goes to all four.
-    retype_beside(&mut h, "Top Left:", 0, "0p4");
+    retype_beside(&mut h, "Top Left Corner", 0, "0p4");
     let corners = field(&h, "borderCorners");
     assert!((0..4).all(|i| corners[i]["size"] == json!(4.0)), "{corners}");
     // Unlinked, Top Right alone takes 0p8; linked again, all four take Top Left's 4 pt.
     let at = link(&h, 1);
     crate::test_window::click_at(&mut h, at);
-    retype_beside(&mut h, "Top Right:", 0, "0p8");
+    retype_beside(&mut h, "Top Right Corner", 0, "0p8");
     assert_eq!(field(&h, "borderCorners")[1]["size"], json!(8.0));
     assert_eq!(field(&h, "borderCorners")[0]["size"], json!(4.0));
     let at = link(&h, 1);
@@ -3610,6 +3610,57 @@ fn paragraph_border_sides_and_corners_link_as_indesigns() {
     confirm(&mut h.state_mut().app).unwrap();
     let style = h.state().app.session.doc().unwrap().doc.styles.para("Ruled Child").cloned().unwrap();
     assert_eq!(style.para.border_weights, Some([3.0, 10.0, 3.0, 3.0]));
+}
+
+/// The course's chapter 41: Paragraph Shading as InDesign's. The page is headed with its name;
+/// the tint has Overprint beside it; the corners are a two-by-two grid whose shape menus show
+/// the shapes. The lesson rounds the top two corners at 10 pt, unlinked, and moves the
+/// offsets.
+#[test]
+fn paragraph_shading_page_is_laid_out_as_indesigns() {
+    use designcraft_geom::corners::CornerShape;
+    use egui_kittest::kittest::Queryable;
+    let (app, _) = ruled_paragraph();
+    let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
+    h.state_mut().app.ui.dialog =
+        Some(Dialog::new("paragraphStyleOptions", json!({"name": "Ruled Child", "section": "shading", "p.shadingOn": true})));
+    h.run_steps(4);
+    let field = |h: &egui_kittest::Harness<'static, crate::test_window::Window>, key: &str| {
+        h.state().app.ui.dialog.as_ref().and_then(|d| d.fields.get(&format!("p.{key}")).cloned()).unwrap_or_default()
+    };
+    assert!(h.get_all_by_label("Paragraph Shading").count() >= 2, "the section list and the page's heading");
+    h.get_by_label("Overprint").click();
+    h.run_steps(2);
+    assert_eq!(field(&h, "shadingOverprint"), json!(true));
+    // The corners' link (0) and the offsets' (1).
+    let link = |h: &egui_kittest::Harness<'static, crate::test_window::Window>, n: usize| {
+        let links: Vec<egui::Rect> = h.get_all_by_label("Make all settings the same").map(|n| n.rect()).collect();
+        assert_eq!(links.len(), 2, "corners and offsets each have a link");
+        links[n].center()
+    };
+    let at = link(&h, 0);
+    crate::test_window::click_at(&mut h, at);
+    for (corner, nth) in [("Top Left Corner", 0), ("Top Right Corner", 1)] {
+        retype_beside(&mut h, corner, 0, "10 pt");
+        h.get_all_by_label("Corner Shape").nth(nth).unwrap().click();
+        h.run_steps(2);
+        h.get_by_label("Rounded").click();
+        h.run_steps(2);
+    }
+    let corners: [designcraft_geom::corners::Corner; 4] = serde_json::from_value(field(&h, "shadingCorners")).unwrap();
+    assert_eq!(
+        corners.map(|c| (c.shape, c.size)),
+        [(CornerShape::Rounded, 10.0), (CornerShape::Rounded, 10.0), (CornerShape::None, 0.0), (CornerShape::None, 0.0)]
+    );
+    // The offsets, unlinked: Top alone.
+    let at = link(&h, 1);
+    crate::test_window::click_at(&mut h, at);
+    retype_beside(&mut h, "Top:", 0, "3 pt");
+    assert_eq!(field(&h, "shadingOffsets"), json!([3.0, 0.0, 0.0, 0.0]));
+    confirm(&mut h.state_mut().app).unwrap();
+    let style = h.state().app.session.doc().unwrap().doc.styles.para("Ruled Child").cloned().unwrap();
+    assert_eq!((style.para.shading_on, style.para.shading_overprint), (Some(true), Some(true)));
+    assert_eq!(style.para.shading_corners.map(|c| c[1].shape), Some(CornerShape::Rounded));
 }
 
 /// Paragraph Rules › Color offers Text Color above the swatches, so a rule set to a swatch can

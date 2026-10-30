@@ -221,7 +221,7 @@ fn paint_stroke_type(p: &egui::Painter, r: Rect, kind: &str, c: egui::Color32) {
 
 /// A row of a preview dropdown's list, as InDesign's: a small preview of the choice (`preview_w`
 /// wide), then its name. Selected rows are highlighted.
-pub(super) fn preview_row(
+pub(crate) fn preview_row(
     ui: &mut Ui,
     selected: bool,
     label: &str,
@@ -269,7 +269,7 @@ pub(super) fn preview_dropdown(ui: &mut Ui, w: f32, label: &str, paint: impl FnO
 
 /// A corner shape's glyph, as InDesign draws it in its corner lists: the top edge running into the
 /// corner and the right edge leaving it, in a square centred in `r`.
-fn paint_corner_shape(p: &egui::Painter, r: Rect, shape: CornerShape, c: egui::Color32) {
+pub(crate) fn paint_corner_shape(p: &egui::Painter, r: Rect, shape: CornerShape, c: egui::Color32) {
     let side = (r.width() - 3.0).min(r.height() - 3.0).max(4.0);
     let o = pos2(r.center().x - side / 2.0, r.center().y - side / 2.0);
     let at = |x: f32, y: f32| pos2(o.x + x * side, o.y + y * side);

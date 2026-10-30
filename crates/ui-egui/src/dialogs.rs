@@ -5104,8 +5104,13 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
             "openType" => open_type_features(&app.ui.language, ui, d, &CharFields { base: &cv, sparse: false }),
             "underline" => line_options(&app.ui.language, ui, d, &CharFields { base: &cv, sparse: false }, &doc, "underline"),
             "strikethrough" => line_options(&app.ui.language, ui, d, &CharFields { base: &cv, sparse: false }, &doc, "strikethrough"),
-            "border" => border_shading(&app.ui.language, ui, d, &pv, &doc, true),
-            "shading" => border_shading(&app.ui.language, ui, d, &pv, &doc, false),
+            "border" | "shading" => {
+                let border = d.s("section") == "border";
+                let title = if border { "Paragraph Border" } else { "Paragraph Shading" };
+                crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&app.ui.language, title)).size(14.0));
+                ui.add_space(6.0);
+                border_shading(&app.ui.language, ui, d, &pv, &doc, border);
+            }
             "keep" => keep_options(&app.ui.language, ui, d, &pv),
             "span" => span_columns(&app.ui.language, ui, d, &pv, &doc),
             "bullets" => {
@@ -5422,9 +5427,14 @@ fn para_measure(ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &str, unit: 
 
 /// A paragraph attribute chosen from `opts` (serialized value, label).
 fn para_choice(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &str, opts: &[(&str, &str)]) {
+    para_choice_width(lang, ui, d, pv, key, opts, 200.0);
+}
+
+/// [`para_choice`] `width` wide.
+fn para_choice_width(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &str, opts: &[(&str, &str)], width: f32) {
     let cur = para_value(d, pv, key);
     let shown = opts.iter().find(|o| cur == o.0).map_or("", |o| crate::i18n::tr(lang, o.1));
-    craft_ui::ComboBox::from_id_salt(("pschoice", key)).selected_text(crate::rtl::widget(ui, shown)).width(200.0).show_ui(ui, |ui| {
+    craft_ui::ComboBox::from_id_salt(("pschoice", key)).selected_text(crate::rtl::widget(ui, shown)).width(width).show_ui(ui, |ui| {
         for (v, label) in opts {
             if ui.selectable_label(cur == *v, crate::rtl::widget(ui, crate::i18n::tr(lang, label))).clicked() {
                 para_set(d, key, json!(v));
@@ -5560,36 +5570,62 @@ fn border_type_menu(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, d
 }
 
 /// Corner size and shape of a border or shading (`key` holds top left, top right, bottom right,
-/// bottom left); an edited corner stores all four.
+/// bottom left), as InDesign lays them out: Top Left and Top Right over Bottom Left and Bottom
+/// Right, each a corner icon, a size and a shape menu showing the shapes' glyphs, with the link in
+/// the middle. An edited corner stores all four.
 fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &str, units: Unit) {
     use designcraft_geom::corners::{Corner, CornerShape};
     let mut corners: [Corner; 4] = serde_json::from_value(para_value(d, pv, key)).unwrap_or_default();
     let linked = linked(d, key, corners.iter().all(|c| *c == corners[0]));
     let mut changed = None;
     let mut relinked = false;
-    egui::Grid::new(("pscorners", key)).num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
-        for (i, label) in ["Top Left:", "Top Right:", "Bottom Right:", "Bottom Left:"].into_iter().enumerate() {
-            let Some(c) = corners.get_mut(i) else { continue };
-            crate::rtl::label(ui, crate::i18n::tr(lang, label));
-            if let Some(v) = crate::widgets::measure(ui, &format!("ps{key}{i}"), Some(c.size), units, 70.0) {
-                c.size = if v.is_finite() { v.clamp(0.0, 10_000.0) } else { 0.0 };
-                changed = Some(i);
-            }
-            craft_ui::ComboBox::from_id_salt(("pscornershape", key, i))
-                .selected_text(crate::rtl::widget(ui, crate::i18n::tr(lang, c.shape.label())))
-                .width(130.0)
-                .show_ui(ui, |ui| {
-                    for shape in CornerShape::ALL {
-                        if ui.selectable_label(c.shape == shape, crate::rtl::widget(ui, crate::i18n::tr(lang, shape.label()))).clicked() {
-                            c.shape = shape;
-                            changed = Some(i);
-                        }
-                    }
+    let mut corner = |ui: &mut egui::Ui, i: usize, icon: &str, tip: &str, changed: &mut Option<usize>| {
+        let Some(c) = corners.get_mut(i) else { return };
+        let tip = crate::i18n::tr(lang, tip);
+        let (r, resp) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
+        crate::icons::paint(ui.painter(), r, icon, crate::theme::Tokens::get(ui.ctx()).icon);
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, tip));
+        resp.on_hover_text(tip);
+        let id = format!("ps{key}{i}");
+        if let Some(v) = crate::widgets::NumField::measure(&id, Some(c.size), units).width(84.0).spinner().range(0.0, 10_000.0).show(ui) {
+            c.size = if v.is_finite() { v.clamp(0.0, 10_000.0) } else { 0.0 };
+            *changed = Some(i);
+        }
+        let shape_label = crate::i18n::tr(lang, "Corner Shape");
+        let shown = c.shape;
+        let resp = crate::panels::properties::corner_shape_button(ui, shown, 52.0);
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, shape_label));
+        egui::Popup::menu(&resp).show(|ui| {
+            for shape in CornerShape::ALL {
+                let row = crate::panels::properties::preview_row(ui, c.shape == shape, crate::i18n::tr(lang, shape.label()), 22.0, |p, r, ink| {
+                    crate::panels::properties::paint_corner_shape(p, r, shape, ink)
                 });
-            // Linked again, the four take Top Left's size and shape.
-            if i == 0 && link_toggle(lang, ui, d, key, linked) {
-                relinked = true;
+                if row.clicked() {
+                    c.shape = shape;
+                    *changed = Some(i);
+                    ui.close();
+                }
             }
+        });
+    };
+    egui::Grid::new(("pscorners", key)).num_columns(3).spacing([14.0, 6.0]).show(ui, |ui| {
+        for (row, [(li, licon, ltip), (ri, ricon, rtip)]) in [
+            [(0, "corner-tl", "Top Left Corner"), (1, "corner-tr", "Top Right Corner")],
+            [(3, "corner-bl", "Bottom Left Corner"), (2, "corner-br", "Bottom Right Corner")],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            ui.horizontal(|ui| corner(ui, li, licon, ltip, &mut changed));
+            // Linked again, the four take Top Left's size and shape.
+            if row == 0 {
+                if link_toggle(lang, ui, d, key, linked) {
+                    relinked = true;
+                }
+            } else {
+                ui.label("");
+            }
+            ui.horizontal(|ui| corner(ui, ri, ricon, rtip, &mut changed));
             ui.end_row();
         }
     });
@@ -5606,17 +5642,23 @@ fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: 
     }
 }
 
-/// The colour and tint rows of a border, its gap or shading (`keys`: colour, tint), in a grid.
+/// Tint presets (%), as InDesign's tint menus list them.
+const TINTS: &[f64] = &[0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0];
+
+/// The colour and tint rows of a border, its gap or shading (`keys`: colour, tint, overprint), in
+/// a grid; Overprint follows the tint, as InDesign's.
+#[allow(clippy::too_many_arguments)]
 fn para_color_tint(
+    lang: &str,
     ui: &mut egui::Ui,
     d: &mut Dialog,
     pv: &Value,
     doc: &designcraft_doc::Document,
-    keys: (&str, &str),
+    keys: (&str, &str, &str),
     labels: (&str, &str),
     enabled: bool,
 ) {
-    let (color_key, tint_key) = keys;
+    let (color_key, tint_key, overprint_key) = keys;
     crate::rtl::label(ui, labels.0);
     let color = para_value(d, pv, color_key).as_str().unwrap_or("").to_string();
     if let Some(w) = ui.add_enabled_ui(enabled, |ui| swatch_menu(ui, doc, ("pscolor", color_key), &color, 160.0)).inner {
@@ -5624,10 +5666,18 @@ fn para_color_tint(
     }
     ui.end_row();
     crate::rtl::label(ui, labels.1);
-    let tint = para_value(d, pv, tint_key).as_f64().map(|t| t * 100.0);
-    if let Some(v) = ui.add_enabled_ui(enabled, |ui| crate::widgets::number(ui, &format!("ps{tint_key}"), tint, "%", 60.0, 0)).inner {
-        para_set(d, tint_key, json!(if v.is_finite() { (v / 100.0).clamp(0.0, 1.0) } else { 1.0 }));
-    }
+    let tint = para_value(d, pv, tint_key).as_f64().map(|t| (t * 1000.0).round() / 10.0);
+    ui.add_enabled_ui(enabled, |ui| {
+        ui.horizontal(|ui| {
+            let id = format!("ps{tint_key}");
+            let field = crate::widgets::NumField::number(&id, tint, "%", 0).width(96.0).spinner().presets(TINTS).step(10.0).range(0.0, 100.0);
+            if let Some(v) = field.show(ui) {
+                para_set(d, tint_key, json!(if v.is_finite() { (v / 100.0).clamp(0.0, 1.0) } else { 1.0 }));
+            }
+            ui.add_space(8.0);
+            para_check(ui, d, pv, overprint_key, crate::i18n::tr(lang, "Overprint"));
+        });
+    });
     ui.end_row();
 }
 
@@ -5645,12 +5695,17 @@ fn border_shading(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, doc
         crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(lang, t)).font(semibold(12.0)));
     };
     ui.add_space(4.0);
-    egui::ScrollArea::vertical().id_salt(("psbsscroll", border)).max_height(330.0).show(ui, |ui| {
+    egui::ScrollArea::vertical().id_salt(("psbsscroll", border)).max_height(400.0).show(ui, |ui| {
         ui.add_enabled_ui(on, |ui| {
             if border {
                 head(ui, "Stroke");
                 para_sides(lang, ui, d, pv, &key("Weights"), &|ui: &mut egui::Ui, id: &str, v: Option<f64>| {
-                    crate::widgets::number(ui, id, v, " pt", 60.0, 2).map(|w| if w.is_finite() { w.clamp(0.0, 1000.0) } else { 0.0 })
+                    crate::widgets::NumField::number(id, v, " pt", 2)
+                        .width(84.0)
+                        .spinner()
+                        .range(0.0, 1000.0)
+                        .show(ui)
+                        .map(|w| if w.is_finite() { w.clamp(0.0, 1000.0) } else { 0.0 })
                 });
                 ui.add_space(4.0);
             } else {
@@ -5663,12 +5718,12 @@ fn border_shading(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, doc
                     ui.end_row();
                 }
                 let (color, tint) = (crate::i18n::tr(lang, "Color:"), crate::i18n::tr(lang, "Tint:"));
-                para_color_tint(ui, d, pv, doc, (&key("Color"), &key("Tint")), (color, tint), true);
+                para_color_tint(lang, ui, d, pv, doc, (&key("Color"), &key("Tint"), &key("Overprint")), (color, tint), true);
                 if border {
                     // The gap colour shows between the dashes, dots or stripes.
                     let solid = para_value(d, pv, "borderType").get("kind").and_then(Value::as_str).is_none_or(|k| k == "solid");
                     let (gap, gap_tint) = (crate::i18n::tr(lang, "Gap Color:"), crate::i18n::tr(lang, "Gap Tint:"));
-                    para_color_tint(ui, d, pv, doc, ("borderGapColor", "borderGapTint"), (gap, gap_tint), !solid);
+                    para_color_tint(lang, ui, d, pv, doc, ("borderGapColor", "borderGapTint", "borderGapOverprint"), (gap, gap_tint), !solid);
                     crate::rtl::label(ui, crate::i18n::tr(lang, "Cap:"));
                     para_choice(lang, ui, d, pv, "borderCap", &[("butt", "Butt"), ("round", "Round"), ("projecting", "Projecting")]);
                     ui.end_row();
@@ -5679,28 +5734,45 @@ fn border_shading(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, doc
             });
             head(ui, "Corner Size and Shape");
             para_corners(lang, ui, d, pv, &key("Corners"), units);
-            head(ui, "Offsets");
-            para_sides(lang, ui, d, pv, &key("Offsets"), &|ui: &mut egui::Ui, id: &str, v: Option<f64>| {
-                crate::widgets::measure(ui, id, v, units, 60.0)
-            });
-            ui.add_space(4.0);
-            egui::Grid::new(("psbsedges", border)).num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-                crate::rtl::label(ui, crate::i18n::tr(lang, "Top Edge:"));
-                para_choice(
-                    lang,
-                    ui,
-                    d,
-                    pv,
-                    &key("Top"),
-                    &[("ascent", "Ascent"), ("baseline", "Baseline"), ("emBox", "Em Box Top"), ("leading", "Leading")],
-                );
-                ui.end_row();
-                crate::rtl::label(ui, crate::i18n::tr(lang, "Bottom Edge:"));
-                para_choice(lang, ui, d, pv, &key("Bottom"), &[("descent", "Descent"), ("baseline", "Baseline"), ("emBox", "Em Box Bottom")]);
-                ui.end_row();
-                crate::rtl::label(ui, crate::i18n::tr(lang, "Width:"));
-                para_choice(lang, ui, d, pv, &key("Width"), &[("column", "Column"), ("text", "Text")]);
-                ui.end_row();
+            // The offsets, and beside them the edges and width the box follows, as InDesign's.
+            ui.horizontal_top(|ui| {
+                ui.vertical(|ui| {
+                    head(ui, "Offsets");
+                    para_sides(lang, ui, d, pv, &key("Offsets"), &|ui: &mut egui::Ui, id: &str, v: Option<f64>| {
+                        crate::widgets::spin_measure(ui, id, v, units, 72.0)
+                    });
+                });
+                ui.add_space(12.0);
+                ui.vertical(|ui| {
+                    head(ui, "");
+                    egui::Grid::new(("psbsedges", border)).num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
+                        crate::rtl::label(ui, crate::i18n::tr(lang, "Top Edge:"));
+                        para_choice_width(
+                            lang,
+                            ui,
+                            d,
+                            pv,
+                            &key("Top"),
+                            &[("ascent", "Ascent"), ("baseline", "Baseline"), ("emBox", "Em Box Top"), ("leading", "Leading")],
+                            92.0,
+                        );
+                        ui.end_row();
+                        crate::rtl::label(ui, crate::i18n::tr(lang, "Bottom Edge:"));
+                        para_choice_width(
+                            lang,
+                            ui,
+                            d,
+                            pv,
+                            &key("Bottom"),
+                            &[("descent", "Descent"), ("baseline", "Baseline"), ("emBox", "Em Box Bottom")],
+                            92.0,
+                        );
+                        ui.end_row();
+                        crate::rtl::label(ui, crate::i18n::tr(lang, "Width:"));
+                        para_choice_width(lang, ui, d, pv, &key("Width"), &[("column", "Column"), ("text", "Text")], 92.0);
+                        ui.end_row();
+                    });
+                });
             });
             ui.add_space(4.0);
             if border {
