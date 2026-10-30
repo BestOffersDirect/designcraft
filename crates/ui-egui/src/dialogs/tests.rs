@@ -2401,7 +2401,7 @@ fn find_scope_dialog_domain_and_object_changes_release_original_range() {
 #[test]
 fn dialog_title_and_actions_fit_scaled_viewports() {
     for language in ["en", "ar"] {
-        for size in [egui::vec2(1178.0, 814.0), egui::vec2(589.0, 407.0), egui::vec2(392.0, 271.0), egui::vec2(450.0, 280.0)] {
+        for size in [egui::vec2(1178.0, 814.0), egui::vec2(589.0, 407.0), egui::vec2(392.0, 271.0), egui::vec2(360.0, 280.0)] {
             for (command, title, ok, cancel) in
                 [("app.preferences", "Preferences", "OK", "Cancel"), ("app.newDocumentDialog", "New Document", "Create", "Close")]
             {
@@ -2528,7 +2528,7 @@ fn preferences_horizontal_scroll_reaches_clipped_options() {
     let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
     app.run("app.preferences", json!({})).unwrap();
     let ctx = dialog_context("en");
-    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(450.0, 280.0));
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(360.0, 280.0));
     for _ in 0..3 {
         dialog_frame(&mut app, &ctx, screen, vec![]);
     }
@@ -2587,7 +2587,7 @@ fn new_document_vertical_scroll_reaches_every_field_and_preset() {
 
 #[test]
 fn arabic_new_document_fields_remain_reachable_and_editable() {
-    for size in [egui::vec2(392.0, 271.0), egui::vec2(450.0, 280.0), egui::vec2(1178.0, 814.0)] {
+    for size in [egui::vec2(392.0, 271.0), egui::vec2(360.0, 280.0), egui::vec2(1178.0, 814.0)] {
         let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
         app.ui.language = "ar".into();
         app.run("app.newDocumentDialog", json!({})).unwrap();
@@ -4107,4 +4107,38 @@ fn enter_on_the_toc_options_toggle_only_toggles() {
     assert_eq!((d.id.as_str(), d.b("moreOptions")), (TOC, false), "the options are fewer");
     assert_eq!(h.state().session.doc().unwrap().revision, revision, "no table of contents made");
     assert!(h.query_by_label("More Options").is_some());
+}
+
+/// The title stays readable beside the style selector after the grid settles.
+#[test]
+fn toc_title_field_shows_the_whole_default_title() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.newSample", json!({})).unwrap();
+    open_toc(&mut app);
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0));
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    let title_row = |labels: &[(String, egui::Rect, egui::Rect)]| {
+        let y = visible_label(labels, screen, "Title:").center().y;
+        labels.iter().filter(|(_, rect, _)| (rect.center().y - y).abs() < 2.0).cloned().collect::<Vec<_>>()
+    };
+    visible_label(&title_row(&labels), screen, "Contents");
+    app.ui.dialog.as_mut().unwrap().fields.insert("title".into(), json!("Table of Contents"));
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    visible_label(&title_row(&labels), screen, "Table of Contents");
+    // A small window: the title narrows and the style selector beside it stays in view.
+    let small = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(450.0, 280.0));
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, small, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, small, vec![]);
+    let y = visible_label(&labels, small, "Title:").center().y;
+    let row: Vec<_> = labels.iter().filter(|(_, rect, _)| (rect.center().y - y).abs() < 2.0).cloned().collect();
+    let style = visible_label(&row, small, "TOC Title");
+    // The selector is 200 pt wide from just before its text: all of it is in the dialog body.
+    let (_, _, body) = row.iter().find(|(text, _, _)| text == "Style:").unwrap();
+    assert!(style.min.x - 4.0 + 200.0 <= body.max.x, "the style selector fits the dialog: {style:?} in {body:?}");
 }

@@ -7676,9 +7676,18 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let mut sel = d.n("selected").map_or(0, |n| n.max(0.0) as usize);
     let mut other = d.s("other");
     let mut title_style = d.s("titleStyle");
+    // The dialog body's width, less the two labels and the style selector (200 pt) beside the title.
+    let title_room = ui.available_width() - 300.0;
     egui::Grid::new("toc_title").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
         crate::rtl::label(ui, tr("Title:"));
-        text_field_named(ui, d, "title", 200.0, &tr("Title:"));
+        let mut title = d.s("title");
+        // 200 pt, reserved: a desired width alone is squeezed by the grid to a few characters.
+        // Narrower when the dialog is, so the style selector beside it stays in view.
+        let w = 200.0_f32.min(title_room.max(80.0));
+        let field = ui.add_sized([w, ui.spacing().interact_size.y], egui::TextEdit::singleline(&mut title).align(egui::Align2::LEFT_TOP));
+        if field.accessible_name(tr("Title:")).changed() {
+            d.fields.insert("title".into(), json!(title));
+        }
         let name = crate::rtl::label(ui, tr("Style:")).id;
         toc_style_combo(ui, "title", &styles, "TOC Title", &mut title_style, name);
         ui.end_row();
