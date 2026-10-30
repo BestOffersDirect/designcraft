@@ -60,6 +60,9 @@ pub struct Imported {
     /// One line per problem that did not stop the import (a part listed in `designmap.xml` but
     /// absent from the package, …).
     pub warnings: Vec<String>,
+    /// Each story's IDML `Self` → its id in `document`, so a warning that names a story can
+    /// point at it.
+    pub story_ids: HashMap<String, StoryId>,
 }
 
 /// Import with a custom reader for linked files, reporting the problems that did not stop it.
@@ -119,6 +122,7 @@ pub fn import_idml_report_with_previews(
         ));
     }
     warnings.append(&mut im.warnings);
+    let story_ids = im.story_ids.clone();
     let mut document = im.finish(&root).map_err(|e| match e {
         // Without its spread parts there is nothing to open: say which parts were missing.
         IdmlError::Invalid(msg) if !warnings.is_empty() => IdmlError::Invalid(format!("{msg} ({})", warnings.join("; "))),
@@ -126,7 +130,7 @@ pub fn import_idml_report_with_previews(
     })?;
     warnings.extend(document.fix_parent_bases());
     document.check().map_err(|e| IdmlError::Invalid(e.to_string()))?;
-    Ok(Imported { document, warnings })
+    Ok(Imported { document, warnings, story_ids })
 }
 
 struct ItemCtx {
