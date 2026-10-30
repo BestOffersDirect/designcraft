@@ -105,11 +105,29 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 let ended_hold = resp.clicked() && ui.data_mut(|d| d.remove_temp::<bool>(hold_id)).unwrap_or(false);
                                 // Plain click selects the shown tool; Alt/Option-click cycles the flyout
                                 // group (InDesign / Photoshop parity with the letter-key cycle).
-                                let alt = ui.input(|i| i.modifiers.alt);
-                                // egui's double-click ignores modifiers: remember the previous click's
-                                // Alt so dialogs only open for two plain clicks (same as PhotoCraft).
-                                let prev_alt_id = egui::Id::unique(("tool-click-alt", gi));
-                                let prev_alt = ui.data(|d| d.get_temp::<bool>(prev_alt_id)).unwrap_or(false);
+                                // Prefer the primary-release event's modifiers: Alt may already be up
+                                // by the time this frame reads i.modifiers.
+                                let click_mods = ui.input(|i| {
+                                    i.events
+                                        .iter()
+                                        .rev()
+                                        .find_map(|e| match e {
+                                            egui::Event::PointerButton {
+                                                button: egui::PointerButton::Primary,
+                                                pressed: false,
+                                                modifiers,
+                                                ..
+                                            } => Some(*modifiers),
+                                            _ => None,
+                                        })
+                                        .unwrap_or(i.modifiers)
+                                });
+                                let alt = click_mods.alt;
+                                let modified = click_mods.alt || click_mods.shift || click_mods.ctrl || click_mods.command;
+                                // egui's double-click ignores modifiers: remember whether the previous
+                                // click was modified so dialogs only open for two plain clicks.
+                                let prev_mod_id = egui::Id::unique(("tool-click-mod", gi));
+                                let prev_modified = ui.data(|d| d.get_temp::<bool>(prev_mod_id)).unwrap_or(false);
                                 let slot_click = resp.clicked() && !ended_hold;
                                 if slot_click {
                                     chosen = Some(if g.len() > 1 && alt {
@@ -123,8 +141,8 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                     ui.data_mut(|d| d.remove::<bool>(hold_id));
                                 }
                                 // Double-click a polygon tool: Polygon Settings.
-                                // Alt-clicks only cycle the group: exclude them from double-click dialogs.
-                                let plain_double = resp.double_clicked() && !alt && !prev_alt;
+                                // Modified clicks only cycle / select: exclude them from dialogs.
+                                let plain_double = resp.double_clicked() && !modified && !prev_modified;
                                 if plain_double && matches!(shown.id, "polygon" | "polygonFrame") {
                                     let cur = app.session.execute("tool.polygonSettings", &json!({})).unwrap_or_default();
                                     app.ui.dialog = Some(crate::dialogs::Dialog::new("polygonSettings", cur));
@@ -136,7 +154,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                     crate::menus::activate(app, cmd, &Value::Null);
                                 }
                                 if slot_click {
-                                    ui.data_mut(|d| d.insert_temp(prev_alt_id, alt));
+                                    ui.data_mut(|d| d.insert_temp(prev_mod_id, modified));
                                 }
                                 let held =
                                     resp.is_pointer_button_down_on() && ui.input(|i| i.pointer.press_start_time().is_some_and(|s| i.time - s > 0.35));
