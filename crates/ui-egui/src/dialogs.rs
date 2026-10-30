@@ -7385,7 +7385,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             None => text(ui, egui::pos2(x + 28.0, cy), egui::Align2::RIGHT_CENTER, label),
         }
         let fr = egui::Rect::from_min_size(egui::pos2(x + 35.0, cy - 10.5), egui::vec2(44.0, 21.0));
-        if let Some(v) = picker_field(ui, d, fr, key, value, range) {
+        if let Some(v) = picker_field(ui, d, fr, key, label.trim_end_matches(':'), value, range) {
             if matches!(key, "r" | "g" | "bl") {
                 d.fields.insert("model".into(), json!("rgb"));
             }
@@ -7430,6 +7430,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let mut h = if editing { d.s("hexEdit") } else { p.hex().trim_start_matches('#').to_string() };
     if ui
         .put(hr, egui::TextEdit::singleline(&mut h).id(id).font(font).align(egui::Align2::LEFT_CENTER).margin(egui::Margin::symmetric(4, 2)))
+        .accessible_name("Hex".to_owned())
         .changed()
         && (h.len() == 6 || (h.len() == 7 && h.starts_with('#')))
         && let Some(c) = designcraft_color::Color::from_hex(&h)
@@ -7852,20 +7853,22 @@ mod picker_layout {
 }
 
 /// A value field: the text typed stays while it has the focus; a number that parses applies.
-fn picker_field(ui: &mut egui::Ui, d: &mut Dialog, r: egui::Rect, key: &str, value: f32, range: (f32, f32)) -> Option<f32> {
+fn picker_field(ui: &mut egui::Ui, d: &mut Dialog, r: egui::Rect, key: &str, name: &str, value: f32, range: (f32, f32)) -> Option<f32> {
     let id = egui::Id::unique(("color_picker_field", key));
     let editing = ui.memory(|m| m.has_focus(id));
     let shown = format!("{}", value.round() as i64);
     let edit_key = format!("_edit_{key}");
     let mut text = if editing { d.fields.get(&edit_key).and_then(Value::as_str).map(str::to_string).unwrap_or(shown) } else { shown };
-    let resp = ui.put(
-        r,
-        egui::TextEdit::singleline(&mut text)
-            .id(id)
-            .font(egui::FontId::proportional(11.5))
-            .align(egui::Align2::LEFT_CENTER)
-            .margin(egui::Margin::symmetric(4, 2)),
-    );
+    let resp = ui
+        .put(
+            r,
+            egui::TextEdit::singleline(&mut text)
+                .id(id)
+                .font(egui::FontId::proportional(11.5))
+                .align(egui::Align2::LEFT_CENTER)
+                .margin(egui::Margin::symmetric(4, 2)),
+        )
+        .accessible_name(name.to_owned());
     let mut out = None;
     if resp.changed()
         && let Ok(v) = text.trim().parse::<f32>()
