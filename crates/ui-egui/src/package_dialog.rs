@@ -122,21 +122,21 @@ fn summary_lines(lang: &str, d: &Dialog) -> Vec<(String, bool)> {
     let (modified, missing) = (count(&links, &["modified"]), count(&links, &["missing"]));
     vec![
         (
-            tr("Fonts: {used} Fonts Used, {missing} Missing")
+            tr("Fonts: {used} in use, {missing} unavailable")
                 .replace("{used}", &fonts.len().to_string())
                 .replace("{missing}", &missing_fonts.to_string()),
             missing_fonts > 0,
         ),
         (
-            tr("Links and Images: {found} Links Found; {modified} Modified, {missing} Missing")
+            tr("Links and Images: {found} linked, {modified} changed, {missing} not found")
                 .replace("{found}", &links.len().to_string())
                 .replace("{modified}", &modified.to_string())
                 .replace("{missing}", &missing.to_string()),
             modified + missing > 0,
         ),
-        (tr("Images: {embedded} Embedded").replace("{embedded}", &count(&links, &["embedded"]).to_string()), false),
+        (tr("Embedded images: {embedded}").replace("{embedded}", &count(&links, &["embedded"]).to_string()), false),
         (
-            tr("Colors and Inks: {process} Process Inks; {spot} Spot Inks")
+            tr("Colors and Inks: {process} process, {spot} spot")
                 .replace("{process}", &PROCESS_INKS.len().to_string())
                 .replace("{spot}", &rows(d, "spot").len().to_string()),
             false,
@@ -440,10 +440,10 @@ mod tests {
         let mut h = harness(app);
         h.run_steps(3);
         assert!(h.query_by_label("Scope:").is_some());
-        assert!(h.query_by_label("Links and Images: 1 Links Found; 0 Modified, 1 Missing").is_some());
-        assert!(h.query_by_label("Colors and Inks: 4 Process Inks; 0 Spot Inks").is_some());
+        assert!(h.query_by_label("Links and Images: 1 linked, 0 changed, 1 not found").is_some());
+        assert!(h.query_by_label("Colors and Inks: 4 process, 0 spot").is_some());
         let fonts = h.state().ui.dialog.as_ref().unwrap().fields["fonts"].as_array().unwrap().len();
-        assert!(h.query_by_label(&format!("Fonts: {fonts} Fonts Used, 0 Missing")).is_some());
+        assert!(h.query_by_label(&format!("Fonts: {fonts} in use, 0 unavailable")).is_some());
         // Links and Images: the link, missing; Show Problems Only keeps it.
         h.get_by_label("Links and Images").click();
         h.run_steps(2);

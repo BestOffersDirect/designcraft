@@ -157,7 +157,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
     ("Email:", ["E-Mail:", "E-mail :", "Correo electrónico:", "メール:", "电子邮件："]),
     ("Instructions:", ["Anweisungen:", "Instructions :", "Instrucciones:", "指示:", "说明："]),
     (
-        "Fonts: {used} Fonts Used, {missing} Missing",
+        "Fonts: {used} in use, {missing} unavailable",
         [
             "Schriften: {used} verwendet, {missing} fehlen",
             "Polices : {used} utilisées, {missing} manquantes",
@@ -167,7 +167,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     (
-        "Links and Images: {found} Links Found; {modified} Modified, {missing} Missing",
+        "Links and Images: {found} linked, {modified} changed, {missing} not found",
         [
             "Verknüpfungen und Bilder: {found} gefunden; {modified} geändert, {missing} fehlen",
             "Liens et images : {found} liens trouvés ; {modified} modifiés, {missing} manquants",
@@ -177,7 +177,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     (
-        "Images: {embedded} Embedded",
+        "Embedded images: {embedded}",
         [
             "Bilder: {embedded} eingebettet",
             "Images : {embedded} incorporées",
@@ -187,7 +187,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     (
-        "Colors and Inks: {process} Process Inks; {spot} Spot Inks",
+        "Colors and Inks: {process} process, {spot} spot",
         [
             "Farben und Druckfarben: {process} Prozessfarben; {spot} Volltonfarben",
             "Couleurs et encres : {process} encres quadri ; {spot} encres d’accompagnement",
