@@ -4404,7 +4404,7 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                     let _ = crate::widgets::name_combo(combo, crate::i18n::tr(&app.ui.language, "Based On"));
                     ui.end_row();
                     // Next Style: the style of the paragraph that follows when Enter ends this one.
-                    crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Next Style:"));
+                    let next_name = crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Next Style:"));
                     let next = match d.fields.get("nextStyle") {
                         Some(Value::String(n)) => Some(n.clone()),
                         Some(_) => None,
@@ -4424,7 +4424,9 @@ fn paragraph_style_options(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialo
                                 d.fields.insert("nextStyle".into(), json!(n));
                             }
                         }
-                    });
+                    })
+                    .response
+                    .labelled_by(next_name.id);
                     ui.end_row();
                 });
                 // Reset To Base: the style keeps nothing of its own (the edits made here stay).
