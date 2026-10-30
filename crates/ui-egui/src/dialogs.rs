@@ -7451,10 +7451,11 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
     }
-    // Let go over the picker itself it takes nothing, though a page may lie under it.
+    // Let go over the picker itself it takes nothing, though a page may lie under it. (Its modal
+    // backdrop shares the picker's layer and covers the screen: the picker is where it draws.)
     if resp.drag_stopped()
         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
-        && ui.ctx().layer_id_at(pos) != Some(ui.layer_id())
+        && !ui.clip_rect().contains(pos)
         && let Some(c) = crate::canvas::color_at(app, ui.ctx(), pos)
     {
         p = Picked::from_rgb(c.map(|v| f32::from(v) / 255.0), p.hsb[0]);
