@@ -1999,7 +1999,8 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
                     crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Panels")).font(semibold(12.0)));
                     ui.horizontal(|ui| {
                         let name = crate::rtl::label(ui, crate::i18n::tr(&lang, "Tools Panel:"));
-                        translated_combo(&lang, ui, d, "toolsColumns", &[("single", "Single Column"), ("double", "Double Column")]).labelled_by(name.id);
+                        translated_combo(&lang, ui, d, "toolsColumns", &[("single", "Single Column"), ("double", "Double Column")])
+                            .labelled_by(name.id);
                     });
                 }
                 "uiScaling" => {
