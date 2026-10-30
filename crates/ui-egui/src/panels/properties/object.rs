@@ -312,7 +312,8 @@ fn paint_corner_shape(p: &egui::Painter, r: Rect, shape: CornerShape, c: egui::C
 
 /// A corner shape picker's face: the shape's glyph and the dropdown arrow (the menu is the caller's).
 pub(crate) fn corner_shape_button(ui: &mut Ui, shape: CornerShape, width: f32) -> egui::Response {
-    preview_dropdown(ui, width, |p, r| paint_corner_shape(p, r, shape))
+    // The caller names the control (widget_info) once it knows the corner.
+    preview_dropdown(ui, width, "", |p, r| paint_corner_shape(p, r, shape, egui::Color32::BLACK))
 }
 
 pub(crate) fn corner_type_dropdown(app: &mut DesignApp, ui: &mut Ui, shape: CornerShape, size: f64, width: f32) {
