@@ -201,6 +201,65 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// The dialog's chosen table style: none when unset, null or empty (a new table's [Basic Table]).
+fn table_style_field(d: &Dialog) -> Option<String> {
+    d.fields.get("tableStyle").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string)
+}
+
+/// The dialog's `tableStyle` as the table commands take it: null for none, the style's name, or
+/// a value that is neither (set through `ui.dialog.set`) as it is, for the command to refuse.
+fn table_style_value(d: &Dialog) -> Value {
+    match d.fields.get("tableStyle") {
+        None | Some(Value::String(_)) => table_style_field(d).map_or(Value::Null, Value::String),
+        Some(v) => v.clone(),
+    }
+}
+
+/// Table › Insert Table, laid out as InDesign's: Table Dimensions (body rows and columns, then
+/// header and footer rows, each a number with a spinner, labels on the right edge of their
+/// column) and the Table Style to apply.
+fn insert_table_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let lang = &app.ui.language;
+    crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(lang, "Table Dimensions")).font(semibold(12.0)));
+    use designcraft_engine::cmd::table::{MAX_BODY_ROWS, MAX_COLUMNS, MAX_HEADER_FOOTER_ROWS};
+    // `table.insert`'s limits, so the table made is the one the fields show.
+    let rows = [
+        ("bodyRows", crate::i18n::tr(lang, "Body Rows"), 1.0, MAX_BODY_ROWS),
+        ("columns", crate::i18n::tr_context(lang, "Columns", "table"), 1.0, MAX_COLUMNS),
+        ("headerRows", crate::i18n::tr(lang, "Header Rows"), 0.0, MAX_HEADER_FOOTER_ROWS),
+        ("footerRows", crate::i18n::tr(lang, "Footer Rows"), 0.0, MAX_HEADER_FOOTER_ROWS),
+    ];
+    // Body rows and columns, then (after a gap) header and footer rows; one label width for both.
+    for (g, pair) in rows.chunks(2).enumerate() {
+        if g > 0 {
+            ui.add_space(8.0);
+        }
+        egui::Grid::new(("ins_table", g)).num_columns(2).min_col_width(100.0).spacing([8.0, 6.0]).show(ui, |ui| {
+            for (key, label, min, max) in pair {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| crate::rtl::label(ui, format!("{label}:")));
+                let field = crate::widgets::NumField::number(key, d.n(key), "", 0).width(70.0).range(*min, *max as f64).spinner();
+                if let Some(v) = field.show(ui) {
+                    d.fields.insert((*key).into(), json!(v.round()));
+                }
+                ui.end_row();
+            }
+        });
+    }
+    ui.add_space(8.0);
+    let names: Vec<String> = app.session.active().map(|st| st.doc.styles.table.iter().map(|s| s.name.clone()).collect()).unwrap_or_default();
+    let cur = table_style_field(d).unwrap_or_else(|| designcraft_doc::BASIC_TABLE.to_string());
+    ui.horizontal(|ui| {
+        crate::rtl::label(ui, format!("{}:", crate::i18n::tr(lang, "Table Style")));
+        craft_ui::ComboBox::from_id_salt("ins_table_style").selected_text(&cur).width(160.0).show_ui(ui, |ui| {
+            for n in &names {
+                if ui.selectable_label(*n == cur, n).clicked() {
+                    d.fields.insert("tableStyle".into(), json!(n));
+                }
+            }
+        });
+    });
+}
+
 /// Extract once when opened. Cancel is read-only; confirmation adds exactly these colours.
 pub(crate) fn open_color_theme(app: &mut DesignApp, params: Value) {
     match app.run("color.extractTheme", params) {
@@ -2390,7 +2449,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "frameSize" => crate::i18n::tr(&app.ui.language, "Rectangle"),
         "goToPage" => crate::i18n::tr(&app.ui.language, "Go to Page"),
         "insertPages" => crate::i18n::tr(&app.ui.language, "Insert Pages"),
-        "insertTable" => crate::i18n::tr(&app.ui.language, "Create Table"),
+        "insertTable" => crate::i18n::tr(&app.ui.language, "Insert Table…").trim_end_matches('…').trim_end(),
         "cellOptions" => crate::i18n::tr(&app.ui.language, "Cell Options"),
         "createGuides" => crate::i18n::tr(&app.ui.language, "Create Guides"),
         "marginsAndColumns" => crate::i18n::tr(&app.ui.language, "Margins and Columns"),
@@ -2462,7 +2521,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         let available = (ctx.content_rect().size() - frame_margin - egui::vec2(16.0, 16.0)).max(egui::Vec2::splat(1.0));
         let preferred_width: f32 = match d.id.as_str() {
             "alert" => 440.0,
-            "closeDocument" | "updateLink" | "deletePages" | "newWorkspace" | "pagesPanelOptions" => 380.0,
+            "closeDocument" | "updateLink" | "deletePages" | "newWorkspace" | "pagesPanelOptions" | "insertTable" => 380.0,
             "insertPages" => 440.0,
             "newDocument" => 960.0,
             "hyphenation" => 560.0,
@@ -3163,21 +3222,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                         });
                     }
                     "ruby" => style_cjk::ruby_dialog(app, ui, &mut d),
-                    "insertTable" => {
-                        crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&app.ui.language, "Table Dimensions")).font(semibold(12.0)));
-                        egui::Grid::new("ins_table").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
-                            crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Body Rows"));
-                            text_field(ui, &mut d, "bodyRows", 60.0);
-                            crate::rtl::label(ui, crate::i18n::tr_context(&app.ui.language, "Columns", "table"));
-                            text_field(ui, &mut d, "columns", 60.0);
-                            ui.end_row();
-                            crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Header Rows"));
-                            text_field(ui, &mut d, "headerRows", 60.0);
-                            crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Footer Rows"));
-                            text_field(ui, &mut d, "footerRows", 60.0);
-                            ui.end_row();
-                        });
-                    }
+                    "insertTable" => insert_table_dialog(app, ui, &mut d),
                     "cellOptions" => cell_options(app, ui, &mut d),
                     "createGuides" => create_guides_dialog(app, ui, &mut d),
                     "marginsAndColumns" => margins_and_columns_dialog(app, ui, &mut d),
@@ -3743,11 +3788,22 @@ fn confirm_part1(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
                 None => Err(format!("no page \"{typed}\"")),
             }
         }
-        "insertTable" => app.run(
-            "table.insert",
-            json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
-                "headerRows": d.n("headerRows").unwrap_or(0.0).max(0.0) as u64, "footerRows": d.n("footerRows").unwrap_or(0.0).max(0.0) as u64}),
-        ),
+        "insertTable" => {
+            // The table and its style in one step; a style that is gone leaves the document alone,
+            // and the dialog stays open to be corrected.
+            let style = table_style_value(&d);
+            let r = app.run(
+                "table.insert",
+                json!({"rows": d.n("bodyRows").unwrap_or(4.0).max(1.0) as u64, "cols": d.n("columns").unwrap_or(4.0).max(1.0) as u64,
+                    "headerRows": d.n("headerRows").unwrap_or(0.0).max(0.0) as u64, "footerRows": d.n("footerRows").unwrap_or(0.0).max(0.0) as u64,
+                    "tableStyle": style}),
+            );
+            if let Err(e) = &r {
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+            }
+            r
+        }
         "numberingSection" => {
             // On an error the dialog stays open to be corrected.
             let r = crate::section_options::confirm(app, &d);

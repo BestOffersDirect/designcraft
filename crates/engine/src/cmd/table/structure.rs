@@ -1,6 +1,28 @@
 use super::target::{column_width, count, edit_table, in_cell, para_direction, target};
 use super::{CellAddr, Result, RowKind, Selection, Session, Table, TextSel, Value, bad, json, ok, str_param};
 
+/// The most body rows, columns, and header or footer rows `table.insert` makes (the Insert Table
+/// dialog's limits too).
+pub const MAX_BODY_ROWS: u64 = 500;
+pub const MAX_COLUMNS: u64 = 200;
+pub const MAX_HEADER_FOOTER_ROWS: u64 = 100;
+
+/// A command's `tableStyle`: none for an absent one or [Basic Table] (a new table's look), else the
+/// resolved style and the cell styles it names. Anything but an existing style's name is an error.
+fn table_style_param(s: &Session, p: &Value, cmd: &str) -> Result<Option<(designcraft_doc::TableStyle, Vec<designcraft_doc::CellStyle>)>> {
+    let name = match p.get("tableStyle") {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::String(n)) if n == designcraft_doc::BASIC_TABLE => return Ok(None),
+        Some(Value::String(n)) => n,
+        Some(_) => return Err(bad(cmd, "`tableStyle` must be a table style's name")),
+    };
+    let styles = &s.doc()?.doc.styles;
+    if !styles.table.iter().any(|x| x.name == *name) {
+        return Err(bad(cmd, format!("no table style `{name}`")));
+    }
+    Ok(Some((styles.resolve_table_style(name), styles.cell.clone())))
+}
+
 pub(super) fn insert(s: &mut Session, p: &Value) -> Result<Value> {
     let t = s.doc()?.selection.text.ok_or_else(|| bad("table.insert", "no insertion point"))?;
     if t.cell.is_some() {
@@ -20,10 +42,11 @@ pub(super) fn insert(s: &mut Session, p: &Value) -> Result<Value> {
             },
         }
     };
-    let rows = given("rows", None, 4, 1..=500)?;
-    let cols = given("cols", Some("columns"), 4, 1..=200)?;
-    let header = given("headerRows", None, 0, 0..=100)?;
-    let footer = given("footerRows", None, 0, 0..=100)?;
+    let rows = given("rows", None, 4, 1..=MAX_BODY_ROWS)?;
+    let cols = given("cols", Some("columns"), 4, 1..=MAX_COLUMNS)?;
+    let header = given("headerRows", None, 0, 0..=MAX_HEADER_FOOTER_ROWS)?;
+    let footer = given("footerRows", None, 0, 0..=MAX_HEADER_FOOTER_ROWS)?;
+    let style = table_style_param(s, p, "table.insert")?;
     let width = p.get("width").and_then(Value::as_f64).unwrap_or_else(|| column_width(s, &t));
     s.edit(|d, sel| {
         let id = d.alloc();
@@ -36,6 +59,9 @@ pub(super) fn insert(s: &mut Session, p: &Value) -> Result<Value> {
         for c in &mut table.cells {
             c.text.paras[0] = designcraft_doc::ParaFormat { table: None, ..pf.clone() };
             c.text.chars[0].format = cf.clone();
+        }
+        if let Some((ts, cells)) = &style {
+            ts.apply_to(&mut table, cells);
         }
         let r = t.range();
         st.delete(r.clone());

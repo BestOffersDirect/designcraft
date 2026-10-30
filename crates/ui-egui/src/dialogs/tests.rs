@@ -3372,7 +3372,7 @@ fn dragging_the_title_moves_the_dialog_and_dragging_the_body_does_not() {
     assert!((centred.center() - egui::pos2(600.0, 400.0)).length() < 1.0, "{centred:?}");
     assert!(centred.width() < 1000.0 && centred.height() < 700.0, "the area is the dialog, not the backdrop: {centred:?}");
 
-    let title = h.get_by_label("Create Table").rect().center();
+    let title = h.get_by_label("Insert Table").rect().center();
     drag(&mut h, title, title + vec2(100.0, 60.0));
     let moved = rect(&h);
     assert!((moved.min - centred.min - vec2(100.0, 60.0)).length() < 2.0, "{centred:?} -> {moved:?}");
@@ -3382,7 +3382,7 @@ fn dragging_the_title_moves_the_dialog_and_dragging_the_body_does_not() {
     assert_eq!(rect(&h), moved, "a drag in the body leaves the dialog in place");
 
     // The title row stays inside the top edge.
-    let title = h.get_by_label("Create Table").rect().center();
+    let title = h.get_by_label("Insert Table").rect().center();
     drag(&mut h, title, title - vec2(0.0, 1000.0));
     assert!(rect(&h).top().abs() < 1.0, "{:?}", rect(&h));
 
@@ -3394,7 +3394,7 @@ fn dragging_the_title_moves_the_dialog_and_dragging_the_body_does_not() {
     assert!((rect(&h).center() - centred.center()).length() < 1.0, "{:?}", rect(&h));
 
     // Past the left edge, about 100 px of the title row stays inside.
-    let title = h.get_by_label("Create Table").rect().center();
+    let title = h.get_by_label("Insert Table").rect().center();
     drag(&mut h, title, title - vec2(900.0, 0.0));
     assert!((rect(&h).right() - 100.0).abs() < 2.0, "{:?}", rect(&h));
 }
@@ -4335,4 +4335,50 @@ fn on_a_page_without_a_section_the_window_is_new_section() {
     let labels = (0..4).map(|_| dialog_frame(&mut app, &ctx, screen, vec![])).last().unwrap();
     visible_label(&labels, screen, "Numbering & Section Options");
     assert!(!labels.iter().any(|(t, _, _)| t == "New Section"));
+}
+
+/// Insert Table: the dimensions as typed, and the Table Style chosen is applied to the new
+/// table; [Basic Table] (the default) leaves it unstyled.
+#[test]
+fn insert_table_applies_its_dimensions_and_table_style() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    app.run("style.table.create", json!({"name": "Grid"})).unwrap();
+    for (style, expected) in [("Grid", "Grid"), (designcraft_doc::BASIC_TABLE, "")] {
+        app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+        assert_eq!(app.run("app.insertTableDialog", json!({})).unwrap(), Value::Null);
+        for (field, value) in [("bodyRows", json!(5)), ("columns", json!(3)), ("headerRows", json!(1)), ("tableStyle", json!(style))] {
+            ctl(&mut app, "ui.dialog.set", json!({"field": field, "value": value}));
+        }
+        assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+        let t = app.run("table.get", json!({})).unwrap();
+        let len = |k: &str| t[k].as_array().map_or(0, Vec::len);
+        assert_eq!((len("rows"), len("columns"), t["headerRows"].as_u64()), (6, 3, Some(1)), "{t}");
+        assert_eq!(t["style"].as_str().unwrap_or(""), expected, "{t}");
+        // One Insert Table, one undo.
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.run("table.get", json!({})).is_err(), "the table is gone");
+    }
+    // A null style is no style: the table is made, unstyled.
+    app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+    app.run("app.insertTableDialog", json!({})).unwrap();
+    ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": null}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+    assert_eq!(app.run("table.get", json!({})).unwrap()["style"].as_str().unwrap_or(""), "");
+    app.run("edit.undo", json!({})).unwrap();
+    // A style that no longer exists changes nothing.
+    let tables = |app: &DesignApp| app.session.active().unwrap().doc.stories.values().map(|s| s.tables.len()).sum::<usize>();
+    app.run("frame.create", json!({"rect": [72, 72, 372, 372], "content": "text"})).unwrap();
+    app.run("app.insertTableDialog", json!({})).unwrap();
+    ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": "Gone"}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+    assert_eq!(tables(&app), 0);
+    let d = app.ui.dialog.as_ref().expect("the dialog stays open to be corrected");
+    assert_eq!((d.id.as_str(), d.s("tableStyle")), ("insertTable", "Gone".to_string()));
+    // So does a style that isn't a name: the command refuses it, rather than making the table
+    // unstyled.
+    ctl(&mut app, "ui.dialog.set", json!({"field": "tableStyle", "value": 42}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], false);
+    assert_eq!(tables(&app), 0);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("insertTable"), "the dialog stays open");
 }
