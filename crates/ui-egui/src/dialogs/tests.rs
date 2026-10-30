@@ -3588,7 +3588,7 @@ fn a_new_character_style_starts_from_the_selected_text() {
     assert!(d.b("apply"));
     let mut h = Harness::builder().with_size(egui::vec2(1000.0, 700.0)).build_ui_state(
         |ui, app: &mut DesignApp| {
-            let key = egui::Id::new("new_character_style_test_fonts");
+            let key = egui::Id::unique("new_character_style_test_fonts");
             if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
                 crate::theme::install_fonts(ui.ctx(), "");
                 ui.data_mut(|d| d.insert_temp(key, true));
