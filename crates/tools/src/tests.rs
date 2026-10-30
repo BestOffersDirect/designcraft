@@ -2069,3 +2069,16 @@ fn loaded_text_cursor_threads_into_a_frame_inside_a_group() {
     assert_eq!(cx2.hit_text_frame(q).map(|(_, i)| i), None, "no text frame in that group");
     assert_eq!(t2.cursor(&cx2, q, Mods::default()), Cursor::NotAllowed);
 }
+
+#[test]
+fn direct_selection_click_on_one_of_several_selected_frames_selects_only_it() {
+    let mut d = Document::new(&NewDocument::default());
+    let a = add_rect(&mut d, Rect::new(100.0, 100.0, 200.0, 200.0));
+    let b = add_rect(&mut d, Rect::new(300.0, 100.0, 400.0, 200.0));
+    let (s, c, l) = (Selection::items(vec![a, b]), Cache::new(), CanvasLayout::new(&d, false));
+    let cx = ctx(&d, &s, &c, &l);
+    let p = spread_pt(&l, 150.0, 150.0);
+    let mut t = create("directSelection");
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, p.x, p.y));
+    assert_eq!(acts, vec![Action::Exec("selection.set".into(), serde_json::json!({"ids": [a.0], "content": true}))]);
+}

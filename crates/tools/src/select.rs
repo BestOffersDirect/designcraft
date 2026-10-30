@@ -789,8 +789,11 @@ impl SelectionTool {
                     } else {
                         out.push(Action::Exec("selection.toggle".into(), json!({"id": id.0})));
                     }
-                } else if !cx.selection.contains(id) || (self.direct && !cx.selection.content && cx.doc.item(id).is_some_and(holds_content)) {
-                    // Direct Selection on a selected frame selects its content (a graphic or pasted-in items).
+                } else if !cx.selection.contains(id)
+                    || (self.direct && !cx.selection.content && (cx.selection.items.len() > 1 || cx.doc.item(id).is_some_and(holds_content)))
+                {
+                    // Direct Selection on a selected frame selects its content (a graphic or pasted-in items),
+                    // and on one of several selected objects just that object.
                     out.push(Action::Exec("selection.set".into(), json!({"ids": [id.0], "content": self.direct})));
                 } else if !self.direct && cx.selection.items.len() > 1 {
                     // InDesign: a click on one of several selected objects makes it the
