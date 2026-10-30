@@ -437,6 +437,13 @@ pub(super) fn create_para(s: &mut Session, p: &Value) -> Result<Value> {
         {
             return Err(bad("style.paragraph.create", format!("no style `{b}`")));
         }
+        // Next Style: a style of the document, or this one.
+        if let Some(n) = &next
+            && *n != name
+            && d.styles.para(n).is_none()
+        {
+            return Err(bad("style.paragraph.create", format!("no style `{n}`")));
+        }
         d.styles_mut().paragraph.push(ParagraphStyle { name: name.clone(), based_on, next_style: next, para, chars, shortcut: String::new() });
         Ok(json!({"name": name}))
     })
@@ -499,11 +506,41 @@ pub(super) fn edit_para(s: &mut Session, p: &Value) -> Result<Value> {
     crate::cmd::text::validate_char_fill(&s.doc()?.doc, &chars, "style.paragraph.edit")?;
     let rename = str_param(p, "rename").map(str::trim).filter(|n| *n != name).map(str::to_string);
     let based = p.get("basedOn").cloned();
+    let next = p.get("nextStyle").cloned();
+    let reset = p.get("resetToBase").and_then(Value::as_bool).unwrap_or(false);
+    for (key, v) in [("basedOn", &based), ("nextStyle", &next)] {
+        if v.as_ref().is_some_and(|v| !v.is_string() && !v.is_null()) {
+            return Err(bad("style.paragraph.edit", format!("`{key}` must be a style name or null")));
+        }
+    }
     s.edit(|d, _| {
-        if let Some(Value::String(b)) = &based
-            && d.styles.para_based_on_cycles(&name, b)
+        if let Some(Value::String(b)) = &based {
+            if d.styles.para(b).is_none() {
+                return Err(bad("style.paragraph.edit", format!("no style `{b}`")));
+            }
+            if d.styles.para_based_on_cycles(&name, b) {
+                return Err(bad("style.paragraph.edit", "based-on would create a cycle"));
+            }
+        }
+        if let Some(Value::String(n)) = &next
+            && d.styles.para(n).is_none()
         {
-            return Err(bad("style.paragraph.edit", "based-on would create a cycle"));
+            return Err(bad("style.paragraph.edit", format!("no style `{n}`")));
+        }
+        // Reset To Base: what the style set of its own goes before the edits apply.
+        if reset {
+            let st = d.styles_mut().para_mut(&name).ok_or_else(|| bad("style.paragraph.edit", format!("no style `{name}`")))?;
+            st.para = ParaAttrs::default();
+            st.chars = CharAttrs::default();
+        }
+        // A new Based On first, so the fields below resolve over the new parent.
+        if based.is_some() {
+            let st = d.styles_mut().para_mut(&name).ok_or_else(|| bad("style.paragraph.edit", format!("no style `{name}`")))?;
+            match &based {
+                Some(Value::String(b)) => st.based_on = Some(b.clone()),
+                Some(Value::Null) => st.based_on = None,
+                _ => {}
+            }
         }
         if let Some(n) = &rename {
             if n.is_empty() || n.starts_with('[') {
@@ -522,9 +559,9 @@ pub(super) fn edit_para(s: &mut Session, p: &Value) -> Result<Value> {
         let st = d.styles_mut().para_mut(&name).ok_or_else(|| bad("style.paragraph.edit", format!("no style `{name}`")))?;
         st.para.merge(&para);
         st.chars.merge(&chars);
-        match based {
-            Some(Value::String(b)) => st.based_on = Some(b),
-            Some(Value::Null) => st.based_on = None,
+        match next {
+            Some(Value::String(n)) => st.next_style = Some(n),
+            Some(Value::Null) => st.next_style = None,
             _ => {}
         }
         if let Some(n) = rename.clone() {
