@@ -7640,21 +7640,26 @@ fn toc_params(app: &DesignApp, d: &Dialog) -> Value {
 
 /// A style menu whose first choice, stored as "", is `auto` (the generated paragraph style, or
 /// [None] for a character style).
-fn toc_style_combo(ui: &mut egui::Ui, salt: &str, styles: &[String], auto: &str, cur: &mut String) -> bool {
+fn toc_style_combo(ui: &mut egui::Ui, salt: &str, styles: &[String], auto: &str, cur: &mut String, name: egui::Id) -> bool {
     let shown = if cur.is_empty() { auto.to_string() } else { cur.clone() };
     let mut changed = false;
-    craft_ui::ComboBox::from_id_salt(("toc_style", salt)).selected_text(shown).width(200.0).show_ui(ui, |ui| {
-        if ui.selectable_label(cur.is_empty(), auto).clicked() {
-            cur.clear();
-            changed = true;
-        }
-        for n in styles.iter().filter(|n| *n != auto) {
-            if ui.selectable_label(cur == n, n.as_str()).clicked() {
-                *cur = n.clone();
+    craft_ui::ComboBox::from_id_salt(("toc_style", salt))
+        .selected_text(shown)
+        .width(200.0)
+        .show_ui(ui, |ui| {
+            if ui.selectable_label(cur.is_empty(), auto).clicked() {
+                cur.clear();
                 changed = true;
             }
-        }
-    });
+            for n in styles.iter().filter(|n| *n != auto) {
+                if ui.selectable_label(cur == n, n.as_str()).clicked() {
+                    *cur = n.clone();
+                    changed = true;
+                }
+            }
+        })
+        .response
+        .labelled_by(name);
     changed
 }
 
@@ -7666,19 +7671,31 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     let tr = |s: &str| crate::i18n::tr(&lang, s).to_string();
     let styles: Vec<String> = d.fields.get("styles").cloned().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
     let char_styles: Vec<String> = d.fields.get("charStyles").cloned().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    let mut expanded = d.fields.get("moreOptions").and_then(Value::as_bool).unwrap_or(true);
     let mut rows = toc_rows(d);
     let mut sel = d.n("selected").map_or(0, |n| n.max(0.0) as usize);
     let mut other = d.s("other");
     let mut title_style = d.s("titleStyle");
     egui::Grid::new("toc_title").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
         crate::rtl::label(ui, tr("Title:"));
-        text_field(ui, d, "title", 200.0);
-        crate::rtl::label(ui, tr("Style:"));
-        toc_style_combo(ui, "title", &styles, "TOC Title", &mut title_style);
+        text_field_named(ui, d, "title", 200.0, &tr("Title:"));
+        let name = crate::rtl::label(ui, tr("Style:")).id;
+        toc_style_combo(ui, "title", &styles, "TOC Title", &mut title_style, name);
         ui.end_row();
     });
     ui.add_space(8.0);
-    crate::rtl::label(ui, egui::RichText::new(tr("Styles in Table of Contents")).font(semibold(12.0)));
+    ui.horizontal(|ui| {
+        crate::rtl::label(ui, egui::RichText::new(tr("Styles in Table of Contents")).font(semibold(12.0)));
+        let toggle = ui.button(tr(if expanded { "Fewer Options" } else { "More Options" }));
+        // Enter on the focused toggle toggles it (egui activates a focused button with Enter):
+        // the footer drawn after it mustn't take that Enter for OK too.
+        if toggle.has_focus() {
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+        }
+        if toggle.clicked() {
+            expanded = !expanded;
+        }
+    });
     let others: Vec<&String> = styles.iter().filter(|n| !rows.iter().any(|r| &r.style == *n)).collect();
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
@@ -7727,39 +7744,52 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         crate::rtl::label(ui, egui::RichText::new(format!("{} {}", tr("Style:"), r.style)).font(semibold(12.0)));
         let none = designcraft_doc::NO_CHAR_STYLE;
         egui::Grid::new("toc_entry").num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
-            crate::rtl::label(ui, tr("Entry Style:"));
+            let name = crate::rtl::label(ui, tr("Entry Style:")).id;
             let auto = format!("TOC Level {}", r.level.clamp(1, 9));
-            toc_style_combo(ui, "entry", &styles, &auto, &mut r.entry_style);
+            toc_style_combo(ui, "entry", &styles, &auto, &mut r.entry_style, name);
             ui.end_row();
-            crate::rtl::label(ui, tr("Page Number:"));
+            if !expanded {
+                return;
+            }
+            let page_number = crate::rtl::label(ui, tr("Page Number:")).id;
             let choices = [("after", "After Entry"), ("before", "Before Entry"), ("none", "No Page Number")];
             let cur = choices.iter().find(|(v, _)| *v == r.page_number).map_or("After Entry", |(_, l)| l);
-            craft_ui::ComboBox::from_id_salt("toc_page_number").selected_text(tr(cur)).width(200.0).show_ui(ui, |ui| {
-                for (v, l) in choices {
-                    if ui.selectable_label(r.page_number == v, tr(l)).clicked() {
-                        r.page_number = v.into();
+            craft_ui::ComboBox::from_id_salt("toc_page_number")
+                .selected_text(tr(cur))
+                .width(200.0)
+                .show_ui(ui, |ui| {
+                    for (v, l) in choices {
+                        if ui.selectable_label(r.page_number == v, tr(l)).clicked() {
+                            r.page_number = v.into();
+                        }
                     }
-                }
-            });
-            crate::rtl::label(ui, tr("Style:"));
-            toc_style_combo(ui, "page_number", &char_styles, none, &mut r.page_number_style);
+                })
+                .response
+                .labelled_by(page_number);
+            let name = crate::rtl::label(ui, tr("Style:")).id;
+            toc_style_combo(ui, "page_number", &char_styles, none, &mut r.page_number_style, name);
             ui.end_row();
-            crate::rtl::label(ui, tr("Between Entry and Number:"));
-            ui.add(egui::TextEdit::singleline(&mut r.separator).desired_width(80.0).align(egui::Align2::LEFT_TOP));
-            crate::rtl::label(ui, tr("Style:"));
-            toc_style_combo(ui, "separator", &char_styles, none, &mut r.separator_style);
+            let between = crate::rtl::label(ui, tr("Between Entry and Number:")).id;
+            ui.add(egui::TextEdit::singleline(&mut r.separator).desired_width(80.0).align(egui::Align2::LEFT_TOP)).labelled_by(between);
+            let name = crate::rtl::label(ui, tr("Style:")).id;
+            toc_style_combo(ui, "separator", &char_styles, none, &mut r.separator_style, name);
             ui.end_row();
             crate::rtl::label(ui, "");
             ui.checkbox(&mut r.sort, tr("Sort Entries in Alphabetical Order"));
             ui.end_row();
-            crate::rtl::label(ui, tr("Level:"));
-            craft_ui::ComboBox::from_id_salt("toc_level").selected_text(r.level.to_string()).width(60.0).show_ui(ui, |ui| {
-                for l in 1..=9u8 {
-                    if ui.selectable_label(r.level == l, l.to_string()).clicked() {
-                        r.level = l;
+            let level = crate::rtl::label(ui, tr("Level:")).id;
+            craft_ui::ComboBox::from_id_salt("toc_level")
+                .selected_text(r.level.to_string())
+                .width(60.0)
+                .show_ui(ui, |ui| {
+                    for l in 1..=9u8 {
+                        if ui.selectable_label(r.level == l, l.to_string()).clicked() {
+                            r.level = l;
+                        }
                     }
-                }
-            });
+                })
+                .response
+                .labelled_by(level);
             ui.end_row();
         });
     }
@@ -7771,6 +7801,7 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.add_space(6.0);
         crate::rtl::label(ui, egui::RichText::new(st).color(crate::theme::Tokens::get(ui.ctx()).text_dim));
     }
+    d.fields.insert("moreOptions".into(), json!(expanded));
     d.fields.insert("included".into(), json!(rows));
     d.fields.insert("selected".into(), json!(sel));
     d.fields.insert("other".into(), json!(other));

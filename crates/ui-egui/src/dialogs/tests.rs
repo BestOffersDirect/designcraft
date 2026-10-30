@@ -4039,3 +4039,72 @@ fn file_handling_shows_the_recent_items_count_as_a_whole_number() {
     visible_label(&labels, screen, &format!("{count}"));
     assert!(!labels.iter().any(|(t, _, _)| t.trim() == format!("{count:.1}")), "no decimal shown");
 }
+
+/// Collapsing advanced TOC controls changes visibility without discarding their values.
+#[test]
+fn toc_more_options_preserves_hidden_settings() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.newSample", json!({})).unwrap();
+    open_toc(&mut app);
+    app.ui.dialog.as_mut().unwrap().fields.insert(
+        "included".into(),
+        json!([{
+            "style": "Headline", "level": 3, "separator": " ^t", "pageNumber": "before",
+            "pageNumberStyle": "Accent", "separatorStyle": "Emphasis", "sort": true
+        }]),
+    );
+    let before = toc_params(&app, app.ui.dialog.as_ref().unwrap());
+    let revision = app.session.doc().unwrap().revision;
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1440.0, 900.0));
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    visible_label(&labels, screen, "Between Entry and Number:");
+    click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "Fewer Options").center());
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert!(!labels.iter().any(|(text, _, _)| text == "Between Entry and Number:"));
+    visible_label(&labels, screen, "Entry Style:");
+    assert_eq!(toc_params(&app, app.ui.dialog.as_ref().unwrap()), before);
+    click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "More Options").center());
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    visible_label(&labels, screen, "Between Entry and Number:");
+    assert_eq!(toc_params(&app, app.ui.dialog.as_ref().unwrap()), before);
+    assert_eq!(app.session.doc().unwrap().revision, revision);
+}
+
+/// Enter on the focused Fewer Options / More Options button toggles the options; it doesn't
+/// also make the table of contents.
+#[test]
+fn enter_on_the_toc_options_toggle_only_toggles() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.newSample", json!({})).unwrap();
+    open_toc(&mut app);
+    let revision = app.session.doc().unwrap().revision;
+    let mut h = Harness::builder().with_size(egui::vec2(1440.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::unique("toc_toggle_test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    h.get_by_label("Fewer Options").focus();
+    h.run_steps(2);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    let d = h.state().ui.dialog.as_ref().expect("the dialog stays open");
+    assert_eq!((d.id.as_str(), d.b("moreOptions")), (TOC, false), "the options are fewer");
+    assert_eq!(h.state().session.doc().unwrap().revision, revision, "no table of contents made");
+    assert!(h.query_by_label("More Options").is_some());
+}
