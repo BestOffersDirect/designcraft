@@ -73,6 +73,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Nuova sezione"),
     ("Clear Frame Fitting Options", "Cancella opzioni di adattamento cornice"),
     ("Cannot be edited", "Non modificabile"),
+    ("Maximum:", "Massimo:"),
+    ("Paragraph Spacing Limit:", "Limite spaziatura paragrafo:"),
     ("Restart Numbering", "Riavvia numerazione"),
     ("Continue Numbering", "Continua numerazione"),
     ("Keep Options…", "Opzioni di separazione…"),

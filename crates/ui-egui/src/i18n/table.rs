@@ -24,6 +24,15 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
             "Borrar opciones de encaje de marco",
             "フレーム調整オプションを消去",
             "清除框架适合选项",
+    ("Maximum:", ["Maximum:", "Maximum :", "Máximo:", "最大 :", "最大值："]),
+    (
+        "Paragraph Spacing Limit:",
+        [
+            "Abstandsgrenze für Absätze:",
+            "Limite d'espacement des paragraphes :",
+            "Límite de espaciado de párrafo:",
+            "段落スペース最大値 :",
+            "段落间距限制：",
         ],
     ),
     (

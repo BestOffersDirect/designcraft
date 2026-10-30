@@ -73,6 +73,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "ახალი სექცია"),
     ("Clear Frame Fitting Options", "ჩარჩოს მორგების პარამეტრების გასუფთავება"),
     ("Cannot be edited", "რედაქტირება შეუძლებელია"),
+    ("Maximum:", "მაქსიმუმი:"),
+    ("Paragraph Spacing Limit:", "აბზაცებს შორის ინტერვალის ზღვარი:"),
     ("Restart Numbering", "ნუმერაციის თავიდან დაწყება"),
     ("Continue Numbering", "ნუმერაციის გაგრძელება"),
     ("Keep Options…", "შენარჩუნების პარამეტრები…"),

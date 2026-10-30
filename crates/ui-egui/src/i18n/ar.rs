@@ -74,6 +74,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "قسم جديد"),
     ("Clear Frame Fitting Options", "مسح خيارات ملاءمة الإطار"),
     ("Cannot be edited", "غير قابل للتحرير"),
+    ("Maximum:", "الحد الأقصى:"),
+    ("Paragraph Spacing Limit:", "حد تباعد الفقرات:"),
     ("Restart Numbering", "إعادة الترقيم"),
     ("Continue Numbering", "متابعة الترقيم"),
     ("Keep Options…", "خيارات الإبقاء…"),

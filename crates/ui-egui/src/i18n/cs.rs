@@ -79,6 +79,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Nový oddíl"),
     ("Clear Frame Fitting Options", "Vymazat volby přizpůsobení rámečku"),
     ("Cannot be edited", "Nelze upravit"),
+    ("Maximum:", "Maximum:"),
+    ("Paragraph Spacing Limit:", "Limit mezer mezi odstavci:"),
     ("Restart Numbering", "Začít číslování znovu"),
     ("Continue Numbering", "Pokračovat v číslování"),
     ("Keep Options…", "Volby zachování…"),

@@ -74,6 +74,8 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("New Section", "Новий розділ"),
     ("Clear Frame Fitting Options", "Очистити параметри припасування фрейму"),
     ("Cannot be edited", "Не можна змінити"),
+    ("Maximum:", "Максимум:"),
+    ("Paragraph Spacing Limit:", "Межа інтервалу абзаців:"),
     ("Restart Numbering", "Почати нумерацію знову"),
     ("Continue Numbering", "Продовжити нумерацію"),
     ("Keep Options…", "Параметри утримання…"),
