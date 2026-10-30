@@ -406,4 +406,7 @@ fn alt_click_cycles_the_tool_flyout_group() {
     assert!(h.state().app.ui.flyout.is_none(), "Alt-click must not open the flyout");
     click(&mut h, alt);
     assert_eq!(h.state().app.session.tool_id(), "polygonFrame");
+    click(&mut h, alt);
+    assert_eq!(h.state().app.session.tool_id(), "rectangleFrame", "Alt-click after the last group tool wraps to the first");
+    assert!(h.state().app.ui.flyout.is_none(), "wrap-around Alt-click must not open the flyout");
 }
