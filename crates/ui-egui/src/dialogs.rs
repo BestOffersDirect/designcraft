@@ -1728,6 +1728,7 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
         &[
             ("general", "General"),
             ("interface", "Interface"),
+            ("uiScaling", "UI Scaling"),
             ("type", "Type"),
             ("advancedType", "Advanced Type"),
             ("composition", "Composition"),
@@ -1748,6 +1749,7 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
         &[
             ("general", "General"),
             ("interface", "Interface"),
+            ("uiScaling", "UI Scaling"),
             ("type", "Type"),
             ("composition", "Composition"),
             ("spelling", "Spelling"),
@@ -1967,6 +1969,41 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
                     }
                 }
                 "interface" => {
+                    let lang = app.ui.language.clone();
+                    let t = crate::theme::Tokens::get(ui.ctx());
+                    crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Appearance")).font(semibold(12.0)));
+                    // Color Theme: a swatch per theme, as InDesign's. A click shows it at once;
+                    // Cancel goes back to the theme Preferences opened with.
+                    ui.horizontal(|ui| {
+                        crate::rtl::label(ui, crate::i18n::tr(&lang, "Color Theme:"));
+                        let cur = d.s("brightness");
+                        for b in crate::theme::Brightness::ALL {
+                            let (r, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+                            let on = cur == b.id();
+                            let swatch = r.shrink(4.0);
+                            ui.painter().rect_filled(swatch, 1.0, crate::theme::Tokens::for_brightness(b).panel);
+                            ui.painter().rect_stroke(swatch, 1.0, egui::Stroke::new(1.0, t.field_border), egui::StrokeKind::Inside);
+                            if on || resp.hovered() {
+                                let ring = if on { t.accent_strong } else { t.field_border };
+                                ui.painter().rect_stroke(r.shrink(1.0), 2.0, egui::Stroke::new(2.0, ring), egui::StrokeKind::Inside);
+                            }
+                            let name = crate::i18n::tr(&lang, b.label()).to_string();
+                            resp.widget_info(|| egui::WidgetInfo::selected(egui::Role::RadioButton, true, on, &name));
+                            if resp.on_hover_text(&name).clicked() && !on {
+                                d.fields.insert("brightness".into(), json!(b.id()));
+                                d.fields.insert("applyBrightness".into(), json!(b.id()));
+                            }
+                        }
+                    });
+                    ui.add_space(8.0);
+                    crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&lang, "Panels")).font(semibold(12.0)));
+                    ui.horizontal(|ui| {
+                        let name = crate::rtl::label(ui, crate::i18n::tr(&lang, "Tools Panel:"));
+                        translated_combo(&lang, ui, d, "toolsColumns", &[("single", "Single Column"), ("double", "Double Column")])
+                            .labelled_by(name.id);
+                    });
+                }
+                "uiScaling" => {
                     crate::rtl::label(ui, egui::RichText::new(crate::i18n::tr(&app.ui.language, "UI Scaling")).font(semibold(12.0)));
                     ui.horizontal(|ui| {
                         crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "UI Size:"));
@@ -3083,6 +3120,12 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
     {
         d.fields.insert("status".into(), json!(e));
     }
+    // So does Preferences › Interface › Color Theme, as InDesign's.
+    if let Some(b) = d.fields.remove("applyBrightness")
+        && let Err(e) = app.run("window.brightness", json!({"brightness": b}))
+    {
+        d.fields.insert("status".into(), json!(e));
+    }
     if d.id == "newDocument" && result.is_none() {
         crate::new_document::preview(app, &mut d, ctx);
     }
@@ -3232,10 +3275,18 @@ pub fn cancel(app: &mut DesignApp) {
     app.cancel_pdf_import();
     if let Some(d) = d
         && d.id == "preferences"
-        && let Some(lang) = d.fields.get("openedLanguage").and_then(Value::as_str)
-        && lang != app.ui.language
     {
-        let _ = app.run("app.language", json!({"lang": lang}));
+        if let Some(lang) = d.fields.get("openedLanguage").and_then(Value::as_str)
+            && lang != app.ui.language
+        {
+            let _ = app.run("app.language", json!({"lang": lang}));
+        }
+        // The Color Theme shown while choosing goes back too.
+        if let Some(b) = d.fields.get("openedBrightness").and_then(Value::as_str)
+            && b != app.ui.brightness.id()
+        {
+            let _ = app.run("window.brightness", json!({"brightness": b}));
+        }
     }
 }
 
@@ -3914,6 +3965,13 @@ fn confirm_part4(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             };
             app.run(view, json!({}))?;
             app.run("window.richBlack", json!({"on": d.b("richBlack")}))?;
+            // Interface: the theme (already showing, unless set without a click) and the Tools panel.
+            if let Some(b) = d.fields.get("brightness").and_then(Value::as_str).filter(|b| *b != app.ui.brightness.id()) {
+                app.run("window.brightness", json!({"brightness": b}))?;
+            }
+            if d.fields.contains_key("toolsColumns") {
+                app.run("window.toolsDoubleColumn", json!({"on": d.s("toolsColumns") == "double"}))?;
+            }
             if let Some(v) = d.n("uiScale") {
                 app.run("window.uiScale", json!({"scale": v / 100.0}))?;
             }
@@ -6522,22 +6580,26 @@ fn delete_character_style(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog
         });
 }
 
-fn combo(ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) {
+fn combo(ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) -> egui::Response {
     let cur = d.s(key);
     let shown = opts.iter().find(|o| o.0 == cur).map_or(cur.as_str(), |o| o.1).to_string();
-    craft_ui::ComboBox::from_id_salt(key).selected_text(crate::rtl::widget(ui, &shown)).width(170.0).show_ui(ui, |ui| {
-        for (v, label) in opts {
-            if ui.selectable_label(cur == *v, crate::rtl::widget(ui, *label)).clicked() {
-                d.fields.insert(key.into(), json!(v));
+    craft_ui::ComboBox::from_id_salt(key)
+        .selected_text(crate::rtl::widget(ui, &shown))
+        .width(170.0)
+        .show_ui(ui, |ui| {
+            for (v, label) in opts {
+                if ui.selectable_label(cur == *v, crate::rtl::widget(ui, *label)).clicked() {
+                    d.fields.insert(key.into(), json!(v));
+                }
             }
-        }
-    });
+        })
+        .response
 }
 
 /// Translate enum captions without changing serialized values or user-defined names.
-fn translated_combo(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) {
+fn translated_combo(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, opts: &[(&str, &str)]) -> egui::Response {
     let opts: Vec<_> = opts.iter().map(|(value, label)| (*value, crate::i18n::tr(lang, label))).collect();
-    combo(ui, d, key, &opts);
+    combo(ui, d, key, &opts)
 }
 
 /// Style name picker (paragraph or character styles of the active document).
