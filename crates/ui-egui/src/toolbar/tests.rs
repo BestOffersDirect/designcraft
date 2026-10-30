@@ -390,23 +390,36 @@ fn alt_click_cycles_the_tool_flyout_group() {
     h.run_steps(2);
     let at = h.get_by_label("Rectangle Frame Tool (F)").rect().center();
     let alt = Modifiers { alt: true, ..Default::default() };
-    let click = |h: &mut egui_kittest::Harness<'static, crate::test_window::Window>, modifiers: Modifiers| {
-        h.input_mut().events.push(Event::ModifiersChanged(modifiers));
+    // Clear i.modifiers before the release while keeping Alt on the release event, so a
+    // regression that only reads i.modifiers (and ignores the pointer-release modifiers) fails.
+    let click = |h: &mut egui_kittest::Harness<'static, crate::test_window::Window>, press_modifiers: Modifiers, current_modifiers: Modifiers| {
+        h.input_mut().events.push(Event::ModifiersChanged(press_modifiers));
         h.input_mut().events.push(Event::PointerMoved(at));
-        for pressed in [true, false] {
-            h.input_mut().events.push(Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers });
-        }
+        h.input_mut().events.push(Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed: true,
+            modifiers: press_modifiers,
+        });
+        h.input_mut().events.push(Event::ModifiersChanged(current_modifiers));
+        h.input_mut().events.push(Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed: false,
+            modifiers: press_modifiers,
+        });
         h.run_steps(3);
     };
-    click(&mut h, Modifiers::NONE);
+    click(&mut h, Modifiers::NONE, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "rectangleFrame");
     assert!(h.state().app.ui.flyout.is_none());
-    click(&mut h, alt);
+    click(&mut h, alt, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "ellipseFrame", "Alt-click advances the frame group");
     assert!(h.state().app.ui.flyout.is_none(), "Alt-click must not open the flyout");
-    click(&mut h, alt);
+    click(&mut h, alt, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "polygonFrame");
-    click(&mut h, alt);
+    assert!(h.state().app.ui.dialog.is_none(), "modified double-click must not open a dialog");
+    click(&mut h, alt, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "rectangleFrame", "Alt-click after the last group tool wraps to the first");
     assert!(h.state().app.ui.flyout.is_none(), "wrap-around Alt-click must not open the flyout");
 }

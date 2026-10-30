@@ -107,17 +107,20 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 // group (InDesign / Photoshop parity with the letter-key cycle).
                                 // Prefer the primary-release event's modifiers: Alt may already be up
                                 // by the time this frame reads i.modifiers.
+                                // Only a release on this slot: the frame's event list is shared,
+                                // so a later release elsewhere must not steer Alt-cycle / dialogs.
                                 let click_mods = ui.input(|i| {
                                     i.events
                                         .iter()
                                         .rev()
                                         .find_map(|e| match e {
                                             egui::Event::PointerButton {
+                                                pos,
                                                 button: egui::PointerButton::Primary,
                                                 pressed: false,
                                                 modifiers,
                                                 ..
-                                            } => Some(*modifiers),
+                                            } if resp.rect.contains(*pos) => Some(*modifiers),
                                             _ => None,
                                         })
                                         .unwrap_or(i.modifiers)
