@@ -328,7 +328,7 @@ fn apply_para_in_story(
             f.chars.retain_differences(style_chars);
         }
     });
-    for (pi, range) in st.para_ranges().into_iter().enumerate().take(last.saturating_add(1)).skip(first) {
+    for (pi, range) in st.paras_touching(r.clone()).into_iter().filter(|(pi, _)| (first..=last).contains(pi)) {
         let Some(pf) = st.paras.get(pi) else { continue };
         let (_, base) = styles.resolve_para(pf);
         let end = range.end.saturating_add(1).min(st.len());
@@ -343,6 +343,13 @@ fn apply_para_in_story(
             }
         });
     }
+}
+
+/// Paragraph style `name` applied to the paragraphs of `r` in `st`: the paragraphs' and their
+/// text's overrides that the style now gives go (all of them with `clear`).
+pub(crate) fn apply_para_style(st: &mut designcraft_doc::Story, styles: &Styles, name: &str, r: &std::ops::Range<usize>, clear: bool) {
+    let (style_para, style_chars) = styles.resolve_para_style(name);
+    apply_para_in_story(st, r, name, clear, (&style_para, &style_chars), styles);
 }
 
 pub(super) fn apply_para(s: &mut Session, p: &Value) -> Result<Value> {
@@ -374,23 +381,29 @@ pub(super) fn apply_char(s: &mut Session, p: &Value) -> Result<Value> {
         let styles = d.styles.clone();
         for t in &targets {
             if let Some(st) = d.text_story_mut(t.story, t.cell) {
-                for (pi, range) in st.para_ranges().into_iter().enumerate() {
-                    let range = range.start.max(t.range.start)..range.end.saturating_add(1).min(st.len()).min(t.range.end);
-                    if range.is_empty() {
-                        continue;
-                    }
-                    let Some(pf) = st.paras.get(pi) else { continue };
-                    let (_, mut inherited) = styles.resolve_para(pf);
-                    inherited.apply(&styles.char_style_attrs(&name));
-                    st.format_chars(range, |f| {
-                        f.style = name.clone();
-                        f.over.retain_differences(&inherited);
-                    });
-                }
+                apply_char_style(st, &styles, &name, &t.range);
             }
         }
         ok()
     })
+}
+
+/// Character style `name` applied to `r` in `st`: the text's overrides that the style (over its
+/// paragraph) now gives go.
+pub(crate) fn apply_char_style(st: &mut designcraft_doc::Story, styles: &Styles, name: &str, r: &std::ops::Range<usize>) {
+    for (pi, range) in st.paras_touching(r.clone()) {
+        let range = range.start.max(r.start)..range.end.saturating_add(1).min(st.len()).min(r.end);
+        if range.is_empty() {
+            continue;
+        }
+        let Some(pf) = st.paras.get(pi) else { continue };
+        let (_, mut inherited) = styles.resolve_para(pf);
+        inherited.apply(&styles.char_style_attrs(name));
+        st.format_chars(range, |f| {
+            f.style = name.to_string();
+            f.over.retain_differences(&inherited);
+        });
+    }
 }
 
 /// In a style, `startAt: null` is Continue from Previous Number: it is stored as an explicit

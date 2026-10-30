@@ -3813,3 +3813,90 @@ fn reset_to_base_checks_and_previews_against_the_base() {
     assert_eq!(size, json!(12.0), "the page shows the style reset to its base");
     app.session.cancel_interaction();
 }
+
+/// The course's chapter 22: Find/Change › Change Format. "eggs", case sensitive, nothing in
+/// Change to; Change Format Settings › Style Options sets Character Style "eggs", and the box
+/// shows it (with Change to's ⓘ). Escape leaves the settings, not Find/Change. Change All
+/// gives every lowercase "eggs" the style and keeps the words; the trash clears the format.
+#[test]
+fn find_change_gives_the_found_text_a_change_format() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let text = "Poached Eggs\nBreak eggs; cook until eggs are set.";
+    let f = app.run("frame.create", json!({"rect": [36, 36, 400, 300], "content": "text", "text": text})).unwrap();
+    let sid = designcraft_doc::StoryId(f["story"].as_u64().unwrap());
+    app.run("style.character.create", json!({"name": "eggs", "chars": {"fontStyle": "Bold"}})).unwrap();
+    app.run("app.findChange", json!({})).unwrap();
+    if let Some(d) = app.ui.dialog.as_mut() {
+        d.fields.insert("find".into(), json!("eggs"));
+        d.fields.insert("caseSensitive".into(), json!(true));
+    }
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::unique("change_format_test_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(4);
+    const TIP: &str = "With a Change Format and nothing in Change to, the found text stays and is only formatted";
+    assert!(h.query_by_label("Change Format:").is_some());
+    assert!(h.query_by_label(TIP).is_none(), "no ⓘ without a Change Format");
+    h.get_by_label("Specify attributes to change").click();
+    h.run_steps(3);
+    // Style Options is the section's name in the list and its heading.
+    for l in ["Change Format Settings", "Style Options", "Basic Character Formats", "Character Color"] {
+        assert!(h.query_all_by_label(l).next().is_some(), "{l}");
+    }
+    // Style Options › Character Style: eggs.
+    h.get_all_by_value("[Any Style]").next().unwrap().click();
+    h.run_steps(3);
+    h.get_by_label("eggs").click();
+    h.run_steps(3);
+    h.get_all_by_label("  OK  ").last().unwrap().click();
+    h.run_steps(3);
+    let field = |h: &Harness<'_, DesignApp>, k: &str| h.state().ui.dialog.as_ref().unwrap().fields.get(k).cloned();
+    assert_eq!((field(&h, CHANGE_FORMAT), field(&h, FORMAT_EDIT)), (Some(json!({"charStyle": "eggs"})), None));
+    assert!(h.query_by_label("Character Style: eggs").is_some(), "the box shows it");
+    assert!(h.query_by_label(TIP).is_some(), "Change to's ⓘ");
+    // Escape closes Change Format Settings only, and keeps the Change Format.
+    h.get_by_label("Specify attributes to change").click();
+    h.run_steps(3);
+    h.key_press(egui::Key::Escape);
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.id.as_str()), Some("findChange"));
+    assert_eq!((field(&h, CHANGE_FORMAT), field(&h, FORMAT_EDIT)), (Some(json!({"charStyle": "eggs"})), None));
+    // Change All: the words stay, every lowercase "eggs" has the style.
+    h.get_by_label("Change All").click();
+    h.run_steps(3);
+    assert_eq!(field(&h, "status"), Some(json!("2 replacement(s) made")));
+    let story = h.state().session.doc().unwrap().doc.story(sid).cloned().unwrap();
+    assert_eq!(story.text, text);
+    assert_eq!(
+        [8, 19, 36].map(|at| story.format_after(at).style.clone()),
+        [designcraft_doc::NO_CHAR_STYLE.to_string(), "eggs".into(), "eggs".into()]
+    );
+    // The trash clears it.
+    h.get_by_label("Clear specified attributes").click();
+    h.run_steps(3);
+    assert_eq!(field(&h, CHANGE_FORMAT), None);
+    assert!(h.query_by_label(TIP).is_none());
+}
+
+/// What Change Format Settings sets goes to find.change: a paragraph style and character
+/// attributes as well as a character style; the box sums them up.
+#[test]
+fn a_change_format_goes_with_change_all() {
+    let mut d = Dialog::new("findChange", json!({"find": "cook"}));
+    d.fields.insert(CHANGE_FORMAT.into(), json!({"charStyle": "eggs", "paraStyle": "Method", "chars": {"underline": true}}));
+    let p = find_change_params(&d);
+    assert_eq!((p["charStyle"].clone(), p["paraStyle"].clone(), p["attrs"].clone()), (json!("eggs"), json!("Method"), json!({"underline": true})));
+    assert_eq!(change_format_summary("en", d.fields.get(CHANGE_FORMAT)), "Character Style: eggs + Paragraph Style: Method + Underline: on");
+    assert!(find_change_params(&Dialog::new("findChange", json!({"find": "cook"}))).get("attrs").is_none());
+}

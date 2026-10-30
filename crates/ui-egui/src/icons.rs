@@ -1178,6 +1178,17 @@ fn paint_text(pen: &mut Pen, name: &str) -> bool {
             pen.rect(3.0, 4.0, 17.0, 16.0);
             pen.line(&[(3.0, 7.0), (17.0, 7.0)]);
         }
+        // Find/Change's Specify Attributes: a letter under a magnifier.
+        "find-format" => {
+            pen.text(7.5, 8.5, "A", 12.0);
+            pen.circle(13.0, 13.0, 3.2);
+            pen.line(&[(15.3, 15.3), (18.0, 18.0)]);
+        }
+        "info" => {
+            pen.circle(10.0, 10.0, 7.0);
+            pen.fcircle(10.0, 6.6, 1.0);
+            pen.line(&[(10.0, 9.0), (10.0, 14.2)]);
+        }
         _ => return false,
     }
     true
