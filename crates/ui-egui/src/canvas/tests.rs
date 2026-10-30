@@ -2869,3 +2869,17 @@ fn table_cells_show_their_hidden_characters() {
     let last = marks.last().unwrap();
     assert_eq!((last.0, last.1), (designcraft_geom::Point::new(frag.rect.x1 + 1.0, frag.rect.y1), "¶"));
 }
+
+#[test]
+fn leaving_parent_editing_for_the_left_page_of_a_spread_keeps_that_page_selected() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"pages": 4, "facingPages": true})).unwrap();
+    let mut h = harness(app);
+    h.state_mut().run("layout.parents.edit", json!({"on": true, "parent": "A-Parent"})).unwrap();
+    h.run_steps(2);
+    let b = page_box(h.state()).unwrap();
+    // Page 2 is the left page of the second spread.
+    page_box_go(h.state_mut(), &b, 1);
+    h.run_steps(3);
+    assert_eq!(current_page(h.state()), Some(1));
+}
