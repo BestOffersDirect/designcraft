@@ -1857,7 +1857,10 @@ fn preferences(app: &crate::DesignApp, ui: &mut egui::Ui, d: &mut Dialog, max_he
                     ui.horizontal(|ui| {
                         crate::rtl::label(ui, crate::i18n::tr(&app.ui.language, "Number of Recent Items to Display:"));
                         let mut v = d.n("recentFilesMax").unwrap_or(20.0);
-                        if ui.add(egui::DragValue::new(&mut v).range(0.0..=f64::from(designcraft_engine::MAX_RECENT_FILES)).speed(0.2)).changed() {
+                        // A count: a whole number ("20", not "20.0").
+                        let field =
+                            egui::DragValue::new(&mut v).range(0.0..=f64::from(designcraft_engine::MAX_RECENT_FILES)).speed(0.2).fixed_decimals(0);
+                        if ui.add(field).changed() {
                             d.fields.insert("recentFilesMax".into(), json!(v.round()));
                         }
                     });
