@@ -176,6 +176,12 @@ fn escape_toggles_text_and_cell_selection() {
     let sel = s.doc().unwrap().selection.clone();
     assert!(sel.cells.is_none());
     assert_eq!(sel.text.unwrap().range(), 3..3);
+    // Moving the caret leaves the cell selection: typing inserts at the caret, not over the cell.
+    s.execute("table.toggleSelection", &json!({})).unwrap();
+    s.execute("text.move", &json!({"dir": "right"})).unwrap();
+    assert!(s.doc().unwrap().selection.cells.is_none());
+    s.execute("text.insert", &json!({"text": "!"})).unwrap();
+    assert_eq!(s.execute("table.get", &json!({"table": tid})).unwrap()["cells"][1]["text"], "F!ax");
     // A selection that starts inside a merged cell goes back to the merged cell's text.
     s.execute("table.select", &json!({"rows": [0, 1], "cols": [0, 0]})).unwrap();
     s.execute("table.merge", &json!({})).unwrap();
