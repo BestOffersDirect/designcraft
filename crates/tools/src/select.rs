@@ -1095,7 +1095,9 @@ impl SelectionTool {
                     }
                     self.guides = hit.guides;
                 }
-                let mut params = json!({"id": id, "anchors": [[si, ai]], "dx": dx, "dy": dy});
+                // path.moveAnchors takes a spread-space delta.
+                let delta = at.map_or(Vec2::new(dx, dy), |(spread, _)| cx.layout.delta_to_spread(spread, Vec2::new(dx, dy)));
+                let mut params = json!({"id": id, "anchors": [[si, ai]], "dx": delta.x, "dy": delta.y});
                 if let Some(h) = handle {
                     params["handle"] = json!(h);
                 }

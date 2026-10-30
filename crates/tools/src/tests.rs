@@ -2097,3 +2097,22 @@ fn pulling_a_corner_of_an_unselected_frame_selects_the_frame_not_its_content() {
         vec![Action::Exec("selection.set".into(), serde_json::json!({"ids": [a.0], "content": false})), Action::Begin("Move Anchor".into())]
     );
 }
+
+#[test]
+fn anchor_drag_on_a_rotated_spread_sends_a_spread_space_delta() {
+    let mut d = Document::new(&NewDocument::default());
+    let a = add_rect(&mut d, Rect::new(100.0, 100.0, 200.0, 200.0));
+    Arc::make_mut(&mut d.spreads[0]).pages[0].view_rotation = 1;
+    let (s, c, l) = (Selection::items(vec![a]), Cache::new(), CanvasLayout::new(&d, false));
+    let cx = ctx(&d, &s, &c, &l);
+    let p = l.to_canvas(SpreadRef::Doc(0), Point::new(200.0, 100.0));
+    let mut t = create("directSelection");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, p.x, p.y));
+    let acts = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, p.x + 50.0, p.y));
+    let [Action::Preview(cmd, params)] = acts.as_slice() else { panic!("{acts:?}") };
+    assert_eq!(cmd, "path.moveAnchors");
+    let want = l.delta_to_spread(SpreadRef::Doc(0), Vec2::new(50.0, 0.0));
+    assert!(want.y.abs() > 1.0, "the view rotation turns a canvas x move into a spread y move: {want:?}");
+    let (dx, dy) = (params["dx"].as_f64().unwrap(), params["dy"].as_f64().unwrap());
+    assert!((dx - want.x).abs() < 1e-6 && (dy - want.y).abs() < 1e-6, "{params} want {want:?}");
+}
