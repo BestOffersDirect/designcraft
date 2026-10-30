@@ -356,8 +356,11 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
     let attrs = p.get("attrs").cloned();
     let over = char_overrides(attrs.as_ref())?;
     // A null attribute clears that override on the found text.
-    let cleared: Vec<String> =
-        attrs.as_ref().and_then(Value::as_object).map(|o| o.iter().filter(|(_, v)| v.is_null()).map(|(k, _)| k.clone()).collect()).unwrap_or_default();
+    let cleared: Vec<String> = attrs
+        .as_ref()
+        .and_then(Value::as_object)
+        .map(|o| o.iter().filter(|(_, v)| v.is_null()).map(|(k, _)| k.clone()).collect())
+        .unwrap_or_default();
     super::text::validate_char_fill(&s.doc()?.doc, &over, "find.change")?;
     let char_style = str_param(p, "charStyle").map(str::to_string);
     let para_style = str_param(p, "paraStyle").map(str::to_string);
@@ -369,7 +372,8 @@ fn change(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("find.change", format!("no paragraph style `{n}`")));
     }
     // InDesign: with a Change Format and nothing in Change to, the found text is only formatted.
-    let format_only = str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty() || !cleared.is_empty());
+    let format_only =
+        str_param(p, "change").unwrap_or("").is_empty() && (char_style.is_some() || para_style.is_some() || !over.is_empty() || !cleared.is_empty());
     let targets = scope(s, p)?.targets;
     s.edit(|d, sel| {
         let styles = d.styles.clone();
