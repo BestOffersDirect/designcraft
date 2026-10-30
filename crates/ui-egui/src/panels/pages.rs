@@ -821,7 +821,7 @@ mod spread_label_tests {
     #[test]
     fn spreads_are_labelled_as_indesign_labels_them() {
         // Chris Nielsen's "Numbering Page Sections": sections starting at 1 on pages 3 and 7,
-        // the second in letters, label their spreads "2, 1" and "6, A".
+        // the second in letters, label their spreads "2, 1" and "4, A".
         let mut app = app();
         assert_eq!(labels(&app), ["1", "2–3", "4–5", "6–7", "8–9"]);
         app.run("layout.section", json!({"page": 3, "startNumber": 1})).unwrap();
