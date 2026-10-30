@@ -786,7 +786,7 @@ fn gradient_stop(app: &mut DesignApp, ui: &mut egui::Ui, g: &designcraft_color::
     }
     if let Some(c) = new {
         let mut stops = stops_json(g);
-        set_stop(&mut stops, i, "color", color_json(&c));
+        set_stop_color(&mut stops, i, color_json(&c));
         let _ = app.run("object.gradient", json!({"stops": stops, "target": target}));
     }
 }
@@ -840,6 +840,19 @@ fn color_json(c: &designcraft_color::Color) -> serde_json::Value {
         Color::Cmyk { c, m, y, k } => json!({"model": "cmyk", "c": c, "m": m, "y": y, "k": k}),
         Color::Gray { k } => json!({"model": "gray", "k": k}),
         Color::Rgb { .. } => json!(c.to_hex()),
+    }
+}
+
+#[cfg(test)]
+mod stop_color_tests {
+    use super::*;
+
+    #[test]
+    fn a_new_stop_colour_drops_the_stops_swatch() {
+        let mut stops = vec![json!({"location": 0, "color": "#000000", "swatch": "Gold"})];
+        set_stop_color(&mut stops, 0, json!("#ff0000"));
+        assert_eq!(stops[0]["color"], "#ff0000");
+        assert!(stops[0].get("swatch").is_none());
     }
 }
 
@@ -1050,6 +1063,14 @@ fn live_drag(d: Option<RampDrag>, n: usize) -> Option<RampDrag> {
 }
 
 /// Sets `key` of stop `i` in `object.gradient` stops; nothing if there's no such stop.
+/// A new colour replaces the stop's swatch (`object.gradient` gives `swatch` precedence).
+fn set_stop_color(stops: &mut [serde_json::Value], i: usize, color: serde_json::Value) {
+    if let Some(o) = stops.get_mut(i).and_then(serde_json::Value::as_object_mut) {
+        o.remove("swatch");
+    }
+    set_stop(stops, i, "color", color);
+}
+
 fn set_stop(stops: &mut [serde_json::Value], i: usize, key: &str, v: serde_json::Value) {
     if let Some(o) = stops.get_mut(i).and_then(serde_json::Value::as_object_mut) {
         o.insert(key.to_string(), v);
@@ -1239,11 +1260,7 @@ pub fn gradient_panel(app: &mut DesignApp, ui: &mut egui::Ui) {
                     let mut rgb = [(r * 255.0) as u8, (gg * 255.0) as u8, (bb * 255.0) as u8];
                     if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).changed() {
                         let mut stops = stops_json(&g);
-                        // A picked color replaces the stop's swatch.
-                        if let Some(o) = stops.get_mut(i).and_then(serde_json::Value::as_object_mut) {
-                            o.remove("swatch");
-                        }
-                        set_stop(&mut stops, i, "color", json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
+                        set_stop_color(&mut stops, i, json!(format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])));
                         send = Some(json!({"stops": stops}));
                     }
                 });
