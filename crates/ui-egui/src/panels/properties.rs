@@ -202,7 +202,21 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                         let _ = app.run("object.fit", json!({"mode": mode}));
                     }
                 }
+                // Frame Fitting Options…, as InDesign's Options button beside the fitting buttons.
+                if outline_button(ui, crate::i18n::tr(&app.ui.language, "Options"), 64.0).clicked() {
+                    crate::menus::activate(app, "app.fittingOptions", &Value::Null);
+                }
             });
+            // Auto-Fit: the graphic is refitted whenever its frame is resized.
+            let mut auto = app
+                .session
+                .active()
+                .and_then(|st| st.selection.items.first().and_then(|id| st.doc.item(*id)))
+                .and_then(|it| it.graphic())
+                .is_some_and(|g| g.auto_fit != designcraft_doc::Fitting::None);
+            if widgets::checkbox(ui, &mut auto, crate::i18n::tr(&app.ui.language, "Auto-Fit")).changed() {
+                let _ = app.run("object.fittingOptions", json!({"autoFit": auto}));
+            }
             divider(ui);
         }
         section(ui, crate::i18n::tr(&app.ui.language, "Text Wrap"), true);
