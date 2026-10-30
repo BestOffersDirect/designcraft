@@ -1953,7 +1953,7 @@ fn searched_ui_commands_run_without_parameters_and_keep_preferences() {
     let mut scratch = designcraft_engine::Session::new();
     scratch.execute("file.new", &json!({})).unwrap();
     let pdf = scratch.execute("file.exportPdf", &json!({})).unwrap()["base64"].clone();
-    let contexts = ["nothing selected", "text insertion point", "text frame selected", "table cell", "placed PDF selected"];
+    let contexts = ["nothing selected", "text insertion point", "text frame selected", "table cell", "placed PDF selected", "text selected"];
     // A two-page document, a saved workspace and non-default preferences, a host with window
     // controls, and file dialogs that are dismissed.
     let setup = |context: usize| {
@@ -1986,6 +1986,11 @@ fn searched_ui_commands_run_without_parameters_and_keep_preferences() {
                 let f = app.run("frame.create", json!({"rect": [72, 72, 400, 400]})).unwrap()["id"].clone();
                 app.run("file.place", json!({"base64": pdf, "name": "a.pdf", "frame": f})).unwrap();
                 app.run("selection.set", json!({"ids": [f]})).unwrap();
+            }
+            // Convert Text to Table needs text selected.
+            5 => {
+                let f = app.run("frame.create", json!({"rect": [72, 72, 400, 400], "content": "text", "text": "One Two"})).unwrap();
+                app.run("text.select", json!({"story": f["story"], "anchor": 0, "focus": 7})).unwrap();
             }
             _ => {}
         }
