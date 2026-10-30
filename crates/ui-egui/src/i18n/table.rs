@@ -17,6 +17,16 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     (
+        "Clear Frame Fitting Options",
+        [
+            "Rahmeneinpassungsoptionen löschen",
+            "Effacer les options d’ajustement du bloc",
+            "Borrar opciones de encaje de marco",
+            "フレーム調整オプションを消去",
+            "清除框架适合选项",
+        ],
+    ),
+    (
         "Character Formatting Controls",
         [
             "Steuerelemente für Zeichenformatierung",
@@ -137,6 +147,14 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
     ("Cut", ["Ausschneiden", "Couper", "Cortar", "カット", "剪切"]),
     ("Copy", ["Kopieren", "Copier", "Copiar", "コピー", "复制"]),
     ("Paste", ["Einfügen", "Coller", "Pegar", "ペースト", "粘贴"]),
+    ("Stroke Type", ["Stroke Type", "Type de contour", "Tipo de trazo", "Stroke Type", "描边类型"]),
+    ("Corner Shape", ["Corner Shape", "Forme d'angle", "Forma de esquina", "Corner Shape", "角形状"]),
+    (
+        "Corner Size and Shape:",
+        ["Eckengröße und -form:", "Taille et forme des angles:", "Tamaño y forma de esquinas:", "角のサイズとシェイプ:", "角大小和形状："],
+    ),
+    ("Join", ["Join", "Joindre", "Unir", "Join", "连接"]),
+    ("Convert Point", ["Convert Point", "Convertir le point", "Convertir punto", "Convert Point", "转换点"]),
     ("Hide Rulers", ["Lineale ausblenden", "Masquer les règles", "Ocultar reglas", "定規を隠す", "隐藏标尺"]),
     ("Inches Decimal", ["Zoll dezimal", "Pouces décimaux", "Pulgadas decimales", "インチ（10 進）", "十进制英寸"]),
     (
@@ -1181,6 +1199,7 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
         ],
     ),
     ("Load Styles", ["Formate laden", "Charger les styles", "Cargar estilos", "スタイルを読み込み", "加载样式"]),
+    ("New Section", ["Neuer Abschnitt", "Nouvelle section", "Nueva sección", "新規セクション", "新建章节"]),
     ("Restart Numbering", ["Nummerierung neu beginnen", "Recommencer la numérotation", "Reiniciar numeración", "番号の振り直し", "重新开始编号"]),
     ("Continue Numbering", ["Nummerierung fortführen", "Poursuivre la numérotation", "Continuar numeración", "番号の継続", "继续编号"]),
     ("Keep Options…", ["Umbruchoptionen …", "Options d'enchaînement…", "Opciones de separación…", "段落分離禁止オプション…", "保持选项…"]),

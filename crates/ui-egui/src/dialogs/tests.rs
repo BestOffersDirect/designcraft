@@ -3472,18 +3472,20 @@ fn guide_counts(app: &DesignApp) -> Vec<usize> {
 }
 
 #[test]
-fn create_guides_dialog_targets_the_page_in_view() {
+fn create_guides_dialog_covers_the_spread_in_view() {
     let mut app = facing_app(6);
+    // As in InDesign, both pages of the facing spread in view get the guides.
+    crate::canvas::go_to_page(&mut app, 1);
+    crate::menus::activate(&mut app, "layout.createGuides", &Value::Null);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().s("target"), "spread");
+    ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": "2"}));
+    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
+    assert_eq!(guide_counts(&app), vec![0, 2, 2, 0, 0, 0]);
+    // "This page" narrows them to the page in view.
     crate::canvas::go_to_page(&mut app, 4);
     crate::menus::activate(&mut app, "layout.createGuides", &Value::Null);
     ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": "3"}));
-    assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
-    assert_eq!(guide_counts(&app), vec![0, 0, 0, 0, 4, 0]);
-    // "Both pages of the spread" covers the facing pair.
-    crate::canvas::go_to_page(&mut app, 1);
-    crate::menus::activate(&mut app, "layout.createGuides", &Value::Null);
-    ctl(&mut app, "ui.dialog.set", json!({"field": "columns", "value": "2"}));
-    ctl(&mut app, "ui.dialog.set", json!({"field": "target", "value": "spread"}));
+    ctl(&mut app, "ui.dialog.set", json!({"field": "target", "value": "page"}));
     assert_eq!(ctl(&mut app, "ui.dialog.confirm", json!({}))["ok"], true);
     assert_eq!(guide_counts(&app), vec![0, 2, 2, 0, 4, 0]);
 }
@@ -4171,4 +4173,164 @@ fn toc_bookmarks_checkbox_sets_and_reopens_the_persisted_option() {
     assert!(app.session.doc().unwrap().doc.bookmarks.is_empty());
     open_toc(&mut app);
     assert!(!app.ui.dialog.as_ref().unwrap().b("createBookmarks"));
+#[test]
+fn corner_options_dialog_sets_each_corner_with_preview_and_one_undo_step() {
+    use designcraft_geom::corners::CornerShape;
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [72, 72, 360, 360]})).unwrap()["id"].as_u64().unwrap();
+    app.run("selection.set", json!({"ids": [id]})).unwrap();
+    let corners = |app: &DesignApp| app.session.doc().unwrap().doc.item(designcraft_doc::ItemId(id)).unwrap().corners.corners;
+    let undo = |app: &DesignApp| app.session.doc().unwrap().history.undo.len();
+    let set = |app: &mut DesignApp, k: &str, v: Value| {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    };
+    let u0 = undo(&app);
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    // Object › Corner Options… opens InDesign's dialog, not a form of the command's params.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some(CORNER_OPTIONS));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    for expected in ["Corner Options", "Corner Size and Shape:", "Preview", "OK", "Cancel"] {
+        visible_label(&labels, screen, expected);
+    }
+    assert!(!labels.iter().any(|(t, _, _)| t.trim() == "Ids"), "no raw command fields");
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.s("size1"), d.s("shape1"), d.b("link")), ("0p0".into(), "none".into(), true), "seeded from the frame, linked");
+    // Linked: a corner changed is all four.
+    set(&mut app, "size0", json!("1p0"));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert_eq!(app.ui.dialog.as_ref().unwrap().s("size2"), "1p0");
+    // Unlinked, only the top-right corner rounds, as in the tutorial.
+    set(&mut app, "link", json!(false));
+    for k in 0..4 {
+        set(&mut app, &format!("size{k}"), json!("0"));
+    }
+    set(&mut app, "size1", json!("3 cm"));
+    set(&mut app, "shape1", json!("rounded"));
+    set(&mut app, "preview", json!(true));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert_eq!(corners(&app)[1].shape, CornerShape::Rounded, "Preview shows it");
+    assert_eq!(undo(&app), u0, "without an undo step");
+    set(&mut app, "preview", json!(false));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    assert_eq!(corners(&app)[1].shape, CornerShape::None, "Preview off puts it back");
+    set(&mut app, "preview", json!(true));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    confirm(&mut app).unwrap();
+    let c = corners(&app);
+    assert_eq!(c.map(|c| c.shape), [CornerShape::None, CornerShape::Rounded, CornerShape::None, CornerShape::None]);
+    assert!((c[1].size - 3.0 / 2.54 * 72.0).abs() < 1e-6, "{}", c[1].size);
+    assert_eq!(undo(&app), u0 + 1, "one undo step");
+    // Reopened, it shows the frame's corners, no longer linked.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.s("shape1"), d.s("shape0"), d.b("link")), ("rounded".into(), "none".into(), false));
+    // A size that does not parse keeps the dialog open with the error; so does a shape the
+    // dialog doesn't offer (rather than another shape taking its place).
+    set(&mut app, "size0", json!("abc"));
+    assert!(confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    set(&mut app, "size0", json!("0"));
+    set(&mut app, "shape0", json!("spiky"));
+    assert!(confirm(&mut app).is_err());
+    assert!(app.ui.dialog.is_some());
+    cancel(&mut app);
+    assert_eq!(corners(&app), c);
+}
+
+/// Several objects: the dialog shows the first one's corners, and OK sets only the corners
+/// edited; the others keep each object's own. A linked edit sets all four.
+#[test]
+fn corner_options_keep_each_objects_untouched_corners() {
+    use designcraft_geom::corners::CornerShape;
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let a = app.run("frame.create", json!({"rect": [72, 72, 200, 200]})).unwrap()["id"].as_u64().unwrap();
+    let b = app.run("frame.create", json!({"rect": [272, 72, 400, 200]})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.cornerOptions", json!({"ids": [b], "shape": "bevel", "size": 12})).unwrap();
+    app.run("selection.set", json!({"ids": [a, b]})).unwrap();
+    let corners = |app: &DesignApp, id: u64| app.session.doc().unwrap().doc.item(designcraft_doc::ItemId(id)).unwrap().corners.corners;
+    let set = |app: &mut DesignApp, k: &str, v: Value| {
+        app.ui.dialog.as_mut().unwrap().fields.insert(k.into(), v);
+    };
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
+    let b0 = corners(&app, b);
+    // Unlinked: only the top-right corner rounds, on both.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    set(&mut app, "link", json!(false));
+    set(&mut app, "size1", json!("1p0"));
+    set(&mut app, "shape1", json!("rounded"));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    confirm(&mut app).unwrap();
+    let (ca, cb) = (corners(&app, a), corners(&app, b));
+    assert_eq!(ca.map(|c| c.shape), [CornerShape::None, CornerShape::Rounded, CornerShape::None, CornerShape::None]);
+    assert_eq!(cb.map(|c| c.shape), [CornerShape::Bevel, CornerShape::Rounded, CornerShape::Bevel, CornerShape::Bevel], "b keeps its others");
+    assert_eq!((cb[0], cb[2], cb[3]), (b0[0], b0[2], b0[3]));
+    assert_eq!(ca[1], cb[1]);
+    // Linked: a corner set to the first object's own value still sets all four, on both.
+    crate::menus::activate(&mut app, "object.cornerOptions", &Value::Null);
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    set(&mut app, "link", json!(true));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    set(&mut app, "size0", json!("0p6"));
+    dialog_frame(&mut app, &ctx, screen, vec![]);
+    confirm(&mut app).unwrap();
+    let (ca, cb) = (corners(&app, a), corners(&app, b));
+    assert_eq!(ca, cb, "all four, on both");
+    assert!(ca.iter().all(|c| c.shape == CornerShape::None && (c.size - 6.0).abs() < 1e-6), "{ca:?}");
+}
+
+#[test]
+fn on_a_page_without_a_section_the_window_is_new_section() {
+    // Chris Nielsen's "Numbering Page Sections" (4:43): page 3 selected, the Pages panel menu's
+    // Numbering & Section Options opens New Section with Start Section on and 1 offered.
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({"pages": 6, "facingPages": true})).unwrap();
+    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 800.0)));
+    crate::canvas::go_to_page(&mut app, 2);
+    crate::menus::activate(&mut app, "layout.section", &Value::Null);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!(
+        (d.n("page"), d.b("newSection"), d.b("startSection"), d.b("automatic"), d.s("startNumber")),
+        (Some(3.0), true, true, true, "1".into())
+    );
+    let ctx = dialog_context("en");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1178.0, 814.0));
+    for _ in 0..3 {
+        dialog_frame(&mut app, &ctx, screen, vec![]);
+    }
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    visible_label(&labels, screen, "New Section");
+    // Typing a number in the field chooses Start Page Numbering at; OK: page 3 is page 5 (odd,
+    // so a facing page stays on the right).
+    let field = visible_label(&labels, screen, "1");
+    click_dialog(&mut app, &ctx, screen, field.center());
+    dialog_frame(
+        &mut app,
+        &ctx,
+        screen,
+        vec![
+            egui::Event::Key { key: egui::Key::End, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE },
+            egui::Event::Key { key: egui::Key::Backspace, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE },
+            egui::Event::Text("5".into()),
+        ],
+    );
+    assert!(!app.ui.dialog.as_ref().unwrap().b("automatic"), "typing chose Start Page Numbering at");
+    let labels = dialog_frame(&mut app, &ctx, screen, vec![]);
+    click_dialog(&mut app, &ctx, screen, visible_label(&labels, screen, "OK").center());
+    assert!(app.ui.dialog.is_none());
+    assert_eq!(app.session.active().unwrap().doc.page_name(2), "5");
+    // Opened again on that page, it is Numbering & Section Options, showing the section.
+    crate::menus::activate(&mut app, "layout.section", &Value::Null);
+    let d = app.ui.dialog.as_ref().unwrap();
+    assert_eq!((d.b("newSection"), d.b("startSection"), d.b("automatic"), d.s("startNumber")), (false, true, false, "5".into()));
+    let labels = (0..4).map(|_| dialog_frame(&mut app, &ctx, screen, vec![])).last().unwrap();
+    visible_label(&labels, screen, "Numbering & Section Options");
+    assert!(!labels.iter().any(|(t, _, _)| t == "New Section"));
 }
