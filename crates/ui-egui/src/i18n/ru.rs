@@ -4,6 +4,7 @@
 //! category before the number ("страниц: 5"), see `count_label`.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "Меньше параметров"),
+    ("Tab Character", "Символ табуляции"),
     ("File", "Файл"),
     ("Edit", "Редактирование"),
     ("Can't Open the File", "Не удалось открыть файл"),

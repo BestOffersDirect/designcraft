@@ -4,6 +4,7 @@
 //! table is carried over and stays the fallback for keys added there after this table.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "Weniger Optionen"),
+    ("Tab Character", "Tabulatorzeichen"),
     ("File", "Datei"),
     ("Edit", "Bearbeiten"),
     ("Layout", "Layout"),

@@ -3,6 +3,7 @@
 //! (rozkładówka, łam, strona wzorcowa, obszar informacyjny) and the sibling ArtCraft catalogs.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "Mniej opcji"),
+    ("Tab Character", "Znak tabulacji"),
     ("File", "Plik"),
     ("Edit", "Edycja"),
     ("Layout", "Układ"),

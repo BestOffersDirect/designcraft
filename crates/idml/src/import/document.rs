@@ -313,10 +313,12 @@ impl<'r> Importer<'r> {
             let story = top.iter().find(|e| e.local() == "Story" && e.get("AppliedTOCStyle") == Some(id))?;
             Some((ts, *self.story_ids.get(story.get("Self")?)?))
         })?;
-        let known = |r: Option<&str>| r.map(|r| self.para_style_ref(r)).filter(|n| self.styles.para(n).is_some());
+        // Property children are element text: formatting whitespace around a reference is dropped
+        // unless the reference as written names a style.
+        let known = |r: Option<&str>| r.map(|r| self.listed_para_style_ref(r)).filter(|n| self.styles.para(n).is_some());
         // Character styles the document has; [None] is stored as no style.
         let known_chars = |r: Option<&str>| {
-            r.map(|r| self.char_style_ref(r)).filter(|n| n != designcraft_doc::NO_CHAR_STYLE && self.styles.char_style(n).is_some())
+            r.map(|r| self.listed_char_style_ref(r)).filter(|n| n != designcraft_doc::NO_CHAR_STYLE && self.styles.char_style(n).is_some())
         };
         let entries: Vec<TocEntry> = ts
             .elements()

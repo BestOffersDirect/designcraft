@@ -4,6 +4,7 @@
 //! the ArtCraft siblings (VectorCraft, PhotoCraft) are kept identical; see ASSETS.md for sources.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "Méně možností"),
+    ("Tab Character", "Znak tabulátoru"),
     ("File", "Soubor"),
     ("Edit", "Úpravy"),
     ("Layout", "Rozvržení"),

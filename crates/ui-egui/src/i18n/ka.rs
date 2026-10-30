@@ -5,6 +5,7 @@
 //! the code or the command table use.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "ნაკლები პარამეტრი"),
+    ("Tab Character", "ტაბულაციის სიმბოლო"),
     ("File", "ფაილი"),
     ("Edit", "რედაქტირება"),
     ("Layout", "განლაგება"),

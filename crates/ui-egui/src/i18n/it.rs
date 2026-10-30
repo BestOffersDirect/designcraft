@@ -2,6 +2,10 @@
 //! using ordinary Italian desktop-publishing vocabulary.
 pub(super) const TABLE: &[(&str, &str)] = &[
     ("Fewer Options", "Meno opzioni"),
+    ("Tab Character", "Carattere di tabulazione"),
+    ("Right Indent Tab", "Tabulazione rientro destro"),
+    ("Em Space", "Spazio em"),
+    ("En Space", "Spazio en"),
     ("File", "File"),
     ("Edit", "Modifica"),
     ("Layout", "Layout"),
