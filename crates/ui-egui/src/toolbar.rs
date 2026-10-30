@@ -106,7 +106,12 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 // Plain click selects the shown tool; Alt/Option-click cycles the flyout
                                 // group (InDesign / Photoshop parity with the letter-key cycle).
                                 let alt = ui.input(|i| i.modifiers.alt);
-                                if resp.clicked() && !ended_hold {
+                                // egui's double-click ignores modifiers: remember the previous click's
+                                // Alt so dialogs only open for two plain clicks (same as PhotoCraft).
+                                let prev_alt_id = egui::Id::unique(("tool-click-alt", gi));
+                                let prev_alt = ui.data(|d| d.get_temp::<bool>(prev_alt_id)).unwrap_or(false);
+                                let slot_click = resp.clicked() && !ended_hold;
+                                if slot_click {
                                     chosen = Some(if g.len() > 1 && alt {
                                         let from = g.iter().position(|tl| tl.id == current).unwrap_or(0);
                                         g[(from + 1) % g.len()].id
@@ -119,16 +124,19 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 }
                                 // Double-click a polygon tool: Polygon Settings.
                                 // Alt-clicks only cycle the group: exclude them from double-click dialogs.
-                                if resp.double_clicked() && !alt && matches!(shown.id, "polygon" | "polygonFrame") {
+                                let plain_double = resp.double_clicked() && !alt && !prev_alt;
+                                if plain_double && matches!(shown.id, "polygon" | "polygonFrame") {
                                     let cur = app.session.execute("tool.polygonSettings", &json!({})).unwrap_or_default();
                                     app.ui.dialog = Some(crate::dialogs::Dialog::new("polygonSettings", cur));
                                 }
                                 // Double-click a transform tool: its Object › Transform dialog.
-                                if resp.double_clicked()
-                                    && !alt
+                                if plain_double
                                     && let Some(cmd) = transform_dialog_of(shown.id)
                                 {
                                     crate::menus::activate(app, cmd, &Value::Null);
+                                }
+                                if slot_click {
+                                    ui.data_mut(|d| d.insert_temp(prev_alt_id, alt));
                                 }
                                 let held =
                                     resp.is_pointer_button_down_on() && ui.input(|i| i.pointer.press_start_time().is_some_and(|s| i.time - s > 0.35));
