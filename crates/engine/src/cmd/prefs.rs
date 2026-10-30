@@ -102,6 +102,9 @@ fn merge(cmd: &str, mut cur: Value, p: &Value, allowed: Option<&[&str]>) -> Resu
         match (c.get_mut(k), v) {
             (Some(Value::Object(old)), Value::Object(v)) => {
                 for (k2, v2) in v {
+                    if !old.is_empty() && !old.contains_key(k2) {
+                        return Err(bad(cmd, format!("unknown preference {k}.{k2}")));
+                    }
                     old.insert(k2.clone(), v2.clone());
                 }
             }
@@ -129,6 +132,7 @@ mod tests {
         s.execute("prefs.set", &json!({"showFontNamesInEnglish": true})).unwrap();
         assert!(s.prefs.show_font_names_in_english);
         assert!(s.execute("prefs.set", &json!({"nope": 1})).is_err());
+        assert!(s.execute("prefs.set", &json!({"defaultUnits": {"horizontalUnit": "inches"}})).is_err());
         s.execute("file.new", &json!({})).unwrap();
         let r = s
             .execute("document.preferences", &json!({"horizontalUnits": "millimeters", "keyboardIncrement": 2.5, "grid": {"subdivisions": 4}}))
