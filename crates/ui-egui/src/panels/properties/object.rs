@@ -573,11 +573,72 @@ pub(super) fn wrap_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
         let enabled = i.wrap != "none";
         let r = ui.add_enabled_ui(enabled, |ui| widgets::checkbox(ui, &mut inv, crate::i18n::tr(&app.ui.language, "Invert"))).inner;
         if r.changed() {
-            let _ = app.run("object.textWrap", json!({"mode": i.wrap, "invert": inv}));
+            // Each object keeps its own mode.
+            let _ = app.run("object.textWrap", json!({"mode": null, "invert": inv}));
         }
     });
+    wrap_offsets(app, ui, i);
     if more_options(ui, &app.ui.language).clicked() {
         show_panel(app, "textWrap");
+    }
+}
+
+/// The wrap offsets under the wrap buttons, as InDesign's Properties panel shows them: Top and
+/// Bottom, the link that makes all four the same, then Left and Right. Greyed with no wrap.
+fn wrap_offsets(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) {
+    let t = Tokens::get(ui.ctx());
+    let lang = app.ui.language.clone();
+    let tr = |s: &str| crate::i18n::tr(&lang, s).to_string();
+    let u = units(app);
+    let enabled = i.wrap != "none";
+    let offsets = i.wrap_offsets;
+    ui.add_space(4.0);
+    let b = block(ui, 2.0 * FIELD_H + 5.0);
+    let mut set = None;
+    // The link's state belongs to the selection: another selection starts linked again when its
+    // four offsets are the same.
+    let selected: Vec<u64> = app.session.active().map(|st| st.selection.items.iter().map(|i| i.0).collect()).unwrap_or_default();
+    let link_id = egui::Id::unique(("prop_wrap_linked", selected));
+    ui.add_enabled_ui(enabled, |ui| {
+        // Linked while the four are the same, until the link is clicked.
+        let same = offsets.iter().all(|v| (v - offsets[0]).abs() < 1e-9);
+        let linked = ui.data(|d| d.get_temp::<bool>(link_id)).unwrap_or(same);
+        // Offsets are [top, left, bottom, right].
+        for (k, key, icon, tip, x, y) in [
+            (0, "wrapTop", "margin-top", "Top", 0.0, 0.0),
+            (2, "wrapBottom", "margin-bottom", "Bottom", 0.0, FIELD_H + 5.0),
+            (1, "wrapLeft", "margin-inside", "Left", 140.0, 0.0),
+            (3, "wrapRight", "margin-outside", "Right", 140.0, FIELD_H + 5.0),
+        ] {
+            let ir = sub(b, x, y + 2.0, 17.0, 17.0);
+            icons::paint(ui.painter(), ir, icon, if enabled { t.icon } else { t.text_dim });
+            ui.interact(ir, ui.scope_id().with(("prop_wrap_off", k)), Sense::hover()).on_hover_ui(|ui| {
+                crate::rtl::label(ui, tr(tip));
+            });
+            let nv = place(ui, sub(b, x + 20.0, y, 76.0, FIELD_H), |ui| {
+                NumField::measure(key, Some(offsets[k]), u).width(76.0).spinner().range(-8000.0, 8000.0).enabled(enabled).show(ui)
+            });
+            if let Some(v) = nv {
+                // Linked, all four; else this side alone, each object keeping its other offsets.
+                let mut o = [None; 4];
+                if linked {
+                    o = [Some(v); 4];
+                } else {
+                    o[k] = Some(v);
+                }
+                set = Some(o);
+            }
+        }
+        if place(ui, sub(b, 106.0, (FIELD_H + 5.0) / 2.0, 22.0, FIELD_H), |ui| {
+            widgets::icon_toggle_sized(ui, if linked { "link" } else { "link-broken" }, linked, &tr("Make all settings the same"), vec2(22.0, 21.0))
+                .clicked()
+        }) {
+            ui.data_mut(|d| d.insert_temp(link_id, !linked));
+        }
+    });
+    if let Some(o) = set {
+        // Each object keeps its own mode: only the offsets change.
+        let _ = app.run("object.textWrap", json!({"mode": null, "offset": o}));
     }
 }
 

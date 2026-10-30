@@ -854,6 +854,71 @@ fn properties_frame_fitting_sets_auto_fit_and_opens_its_options() {
     assert!(h.state().ui.dialog.is_some(), "Frame Fitting Options opens");
 }
 
+/// Properties › Text Wrap shows the four offsets under the wrap buttons, as InDesign's
+/// Properties panel does: linked at first, so one value sets all four; unlinked, one side.
+#[test]
+fn properties_text_wrap_shows_and_sets_the_offsets() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [72, 72, 300, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+    app.run("selection.set", json!({"ids": [id]})).unwrap();
+    app.run("object.textWrap", json!({"mode": "boundingBox", "offset": 0})).unwrap();
+    let offsets = |app: &DesignApp| app.session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().wrap.offsets;
+    let mut h = panel(app);
+    // The fields between the Text Wrap heading and Quick Actions: Top, Left, Bottom, Right.
+    let fields = |h: &Harness<'_, DesignApp>| {
+        let (top, bottom) = (h.get_by_label("Text Wrap").rect().bottom(), h.get_by_label("Quick Actions").rect().top());
+        let mut v: Vec<egui::Rect> =
+            h.get_all_by_role(egui::accesskit::Role::TextInput).map(|n| n.rect()).filter(|r| r.center().y > top && r.center().y < bottom).collect();
+        v.sort_by(|a, b| (a.top(), a.left()).partial_cmp(&(b.top(), b.left())).unwrap());
+        v
+    };
+    let f = fields(&h);
+    assert_eq!(f.len(), 4, "four offsets: {f:?}");
+    let type_in = |h: &mut Harness<'_, DesignApp>, at: egui::Rect, text: &str| {
+        h.hover_at(at.center());
+        h.drag_at(at.center());
+        h.drop_at(at.center());
+        h.run_steps(2);
+        h.event(egui::Event::Key { key: egui::Key::A, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND });
+        h.event(egui::Event::Text(text.into()));
+        h.key_press(egui::Key::Enter);
+        h.run_steps(3);
+    };
+    // Linked: the top offset sets all four.
+    type_in(&mut h, f[0], "12pt");
+    assert_eq!(offsets(h.state()), [12.0; 4]);
+    // Unlinked: the bottom one alone.
+    let (top, bottom) = (h.get_by_label("Text Wrap").rect().bottom(), h.get_by_label("Quick Actions").rect().top());
+    h.get_all_by_label("Make all settings the same").find(|n| n.rect().center().y > top && n.rect().center().y < bottom).unwrap().click();
+    h.run_steps(2);
+    let f = fields(&h);
+    type_in(&mut h, f[2], "6pt");
+    assert_eq!(offsets(h.state()), [12.0, 12.0, 6.0, 12.0], "[top, left, bottom, right]");
+    // Two objects with different offsets: a side typed in changes that side on each, and
+    // each keeps its other three.
+    let other = h.state_mut().run("frame.create", json!({"rect": [72, 300, 300, 400], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+    h.state_mut().run("object.textWrap", json!({"mode": "contour", "offset": [3, 4, 5, 6], "ids": [other]})).unwrap();
+    let of =
+        |h: &Harness<'_, DesignApp>, id: u64| h.state().session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().wrap.offsets;
+    h.state_mut().run("selection.set", json!({"ids": [id, other]})).unwrap();
+    h.run_steps(3);
+    let f = fields(&h);
+    type_in(&mut h, f[0], "9pt");
+    assert_eq!((of(&h, id), of(&h, other)), ([9.0, 12.0, 6.0, 12.0], [9.0, 4.0, 5.0, 6.0]), "the top alone, on each");
+    let mode =
+        |h: &Harness<'_, DesignApp>, id: u64| h.state().session.active().unwrap().doc.item(designcraft_doc::ids::ItemId(id)).unwrap().wrap.mode;
+    assert_eq!((mode(&h, id), mode(&h, other)), (designcraft_doc::WrapMode::BoundingBox, designcraft_doc::WrapMode::Contour), "each keeps its mode");
+    // An object whose offsets are the same starts linked, though the link was off before.
+    let third = h.state_mut().run("frame.create", json!({"rect": [320, 72, 500, 200], "shape": "rectangle"})).unwrap()["id"].as_u64().unwrap();
+    h.state_mut().run("object.textWrap", json!({"mode": "boundingBox", "offset": 4, "ids": [third]})).unwrap();
+    h.state_mut().run("selection.set", json!({"ids": [third]})).unwrap();
+    h.run_steps(3);
+    let f = fields(&h);
+    type_in(&mut h, f[2], "8pt");
+    assert_eq!(of(&h, third), [8.0; 4], "linked again for this selection");
+}
+
 const CYAN: &str = "C=100 M=0 Y=0 K=0";
 
 #[test]
