@@ -289,6 +289,9 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
     ));
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Fill swatch"));
     swatch_menu(app, &resp, &doc, &i.fill, false, i.is_text && i.count == 1, false);
+    if resp.double_clicked() {
+        open_color_picker(app, &doc, &i.fill, false, false);
+    }
     crate::rtl::paint(
         ui.painter(),
         b.min + vec2(34.0, FIELD_H / 2.0),
@@ -311,6 +314,9 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
     ));
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, "Stroke swatch"));
     swatch_menu(app, &resp, &doc, &i.stroke, true, i.is_text && i.count == 1, false);
+    if resp.double_clicked() {
+        open_color_picker(app, &doc, &i.stroke, true, false);
+    }
     if place(ui, sub(b, 34.0, 0.0, 56.0, FIELD_H), |ui| link_label(ui, crate::i18n::tr(&app.ui.language, "Stroke"), 56.0)).clicked() {
         show_panel(app, "stroke");
     }
@@ -368,6 +374,14 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
             let _ = app.run("object.dropShadow", json!({"on": !i.shadow}));
         }
     });
+}
+
+/// The Color Picker for a Fill or Stroke chip (a double-click on it, as in InDesign), with the
+/// chip's colour: the objects', or with `text` the selected text's.
+pub(super) fn open_color_picker(app: &mut DesignApp, doc: &designcraft_doc::Document, swatch: &str, stroke: bool, text: bool) {
+    let mut fields = crate::panels::swatches::picker_fields(doc.resolve_color(swatch, 1.0), stroke);
+    fields["text"] = json!(text);
+    app.ui.dialog = Some(crate::dialogs::Dialog::new("colorPicker", fields));
 }
 
 /// The Fill (or Stroke) popup of Properties › Appearance, as InDesign's: Apply To (a text frame's
