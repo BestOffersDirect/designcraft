@@ -7599,6 +7599,7 @@ pub fn open_toc(app: &mut DesignApp) {
         "charStyles": char_styles,
         "hasToc": toc.is_some(),
         "replace": toc.is_some(),
+        "createBookmarks": toc.is_none_or(|t| t.create_bookmarks),
     });
     app.ui.dialog = Some(Dialog::new(TOC, fields));
 }
@@ -7627,7 +7628,7 @@ fn toc_params(app: &DesignApp, d: &Dialog) -> Value {
             e
         })
         .collect();
-    let mut p = json!({"title": d.s("title"), "entries": entries, "replace": d.b("replace")});
+    let mut p = json!({"title": d.s("title"), "entries": entries, "replace": d.b("replace"), "createBookmarks": d.b("createBookmarks")});
     let title_style = d.s("titleStyle");
     if !title_style.is_empty() {
         p["titleStyle"] = json!(title_style);
@@ -7804,6 +7805,7 @@ fn toc_dialog(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     }
     ui.add_space(8.0);
     crate::rtl::label(ui, egui::RichText::new(tr("Options")).font(semibold(12.0)));
+    check(ui, d, "createBookmarks", &tr("Create PDF Bookmarks"));
     let has_toc = d.b("hasToc");
     ui.add_enabled_ui(has_toc, |ui| check(ui, d, "replace", &tr("Replace Existing Table of Contents")));
     if let Some(st) = d.fields.get("status").and_then(Value::as_str) {

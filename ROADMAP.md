@@ -383,6 +383,8 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 ## Progress log
 
+- **2026-10-18** · Table of Contents gains Create PDF Bookmarks: included headings become nested page destinations, regenerated in their existing outline position on update without replacing or moving surrounding manual bookmarks. The setting survives native and IDML files. No readiness percentage change.
+
 Newest first.
 
 - **2026-10-29** · Inserting text with many returns no longer takes time that grows with their square (part of #1588): each return copied its paragraph's format with its own insert, moving every format after it. Splitting 20,000 returns into paragraphs took 15.8 s; placing a text file of them now takes 0.2 s, and one of a million returns 5.5 s. No readiness percentage change.
