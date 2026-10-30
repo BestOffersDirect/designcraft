@@ -385,7 +385,9 @@ fn alt_click_cycles_the_tool_flyout_group() {
     use egui::{Event, Modifiers, PointerButton};
     use egui_kittest::kittest::Queryable;
     let app = crate::DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
-    let mut h = crate::test_window::open(app, vec2(1400.0, 900.0));
+    // 1 ms frames so an Alt-click and a following plain click can form a real double-click
+    // (default open() spaces frames by 0.25 s, outside egui's double-click window).
+    let mut h = crate::test_window::open_stepped(app, vec2(1400.0, 900.0), 1.0, 0.001);
     h.state_mut().app.select_tool("rectangleFrame");
     h.run_steps(2);
     let at = h.get_by_label("Rectangle Frame Tool (F)").rect().center();
@@ -410,16 +412,30 @@ fn alt_click_cycles_the_tool_flyout_group() {
         });
         h.run_steps(3);
     };
+    // Break the double-click window between independent clicks (~0.4 s at 1 ms/step).
+    let settle = |h: &mut egui_kittest::Harness<'static, crate::test_window::Window>| h.run_steps(400);
     click(&mut h, Modifiers::NONE, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "rectangleFrame");
     assert!(h.state().app.ui.flyout.is_none());
+    settle(&mut h);
     click(&mut h, alt, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "ellipseFrame", "Alt-click advances the frame group");
     assert!(h.state().app.ui.flyout.is_none(), "Alt-click must not open the flyout");
+    settle(&mut h);
     click(&mut h, alt, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "polygonFrame");
-    assert!(h.state().app.ui.dialog.is_none(), "modified double-click must not open a dialog");
+    settle(&mut h);
     click(&mut h, alt, Modifiers::NONE);
     assert_eq!(h.state().app.session.tool_id(), "rectangleFrame", "Alt-click after the last group tool wraps to the first");
     assert!(h.state().app.ui.flyout.is_none(), "wrap-around Alt-click must not open the flyout");
+    settle(&mut h);
+    // Alt-click onto polygonFrame, then a plain click inside the double-click window: egui
+    // reports double_clicked, but prev_modified must keep Polygon Settings closed.
+    h.state_mut().app.select_tool("ellipseFrame");
+    h.run_steps(2);
+    click(&mut h, alt, Modifiers::NONE);
+    assert_eq!(h.state().app.session.tool_id(), "polygonFrame");
+    click(&mut h, Modifiers::NONE, Modifiers::NONE);
+    assert!(h.state().app.ui.dialog.is_none(), "plain click after Alt-click must not open Polygon Settings");
+    assert_eq!(h.state().app.session.tool_id(), "polygonFrame");
 }
