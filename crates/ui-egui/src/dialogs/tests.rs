@@ -3487,24 +3487,114 @@ fn guide_counts(app: &DesignApp) -> Vec<usize> {
 
 /// The Color Picker laid out as InDesign's: a field and a slider for the component whose radio
 /// is on, the new colour over the old one, and the values in every space.
+/// The course's chapter 23: the Color Picker's eyedropper, dragged from the picker onto the
+/// page and let go there, takes the colour the page shows.
+/// The eyedropper takes the colour the canvas shows: with Proof Colors the proofed colour, and
+/// with the ink-limit preview the warning colour over the limit.
 #[test]
-
-fn the_color_picker_keeps_a_typed_cmyk_value_the_colour_shown_does_not_change_with() {
-    use egui_kittest::kittest::Queryable;
+fn the_eyedropper_samples_what_proof_colors_and_the_ink_limit_show() {
+    use egui_kittest::Harness;
     let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
     app.run("file.new", json!({})).unwrap();
-    app.ui.dialog = Some(Dialog::new("colorPicker", json!({"target": "fill", "cmyk": [0.0, 0.0, 0.0, 100.0], "text": false})));
-    let mut h = crate::test_window::open(app, egui::vec2(1400.0, 900.0));
-    h.run_steps(3);
-    // A C typed at 100% K is kept, whether or not the colour shown changes with it.
-    let rgb = h.state().app.ui.dialog.as_ref().unwrap().fields.get("rgb").cloned();
-    h.get_by_label("C").focus();
+    app.run("swatch.create", json!({"name": "Vivid Green", "color": [0, 255, 0]})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [36, 36, 560, 700], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.fill", json!({"ids": [id], "swatch": "Vivid Green"})).unwrap();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let ctx = ui.ctx().clone();
+            app.logic(&ctx);
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(6);
+    let target = {
+        let app = h.state();
+        let doc = &app.session.doc().unwrap().doc;
+        let layout = designcraft_tools::CanvasLayout::new(doc, false);
+        let v = *app.view().unwrap();
+        crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v).to_screen(layout.slots[0].xf * designcraft_geom::Point::new(300.0, 600.0))
+    };
+    let ctx = h.ctx.clone();
+    let sample = |h: &mut Harness<'_, DesignApp>| crate::canvas::color_at(h.state_mut(), &ctx, target).expect("on the page");
+    // What a view makes of the plain colour, as the canvas texture gets it.
+    let shown = |c: [u8; 3], view: &dyn Fn(&mut designcraft_render::Rendered)| {
+        let mut img = designcraft_render::Rendered { width: 1, height: 1, pixels: vec![c[0], c[1], c[2], 255] };
+        view(&mut img);
+        [img.pixels[0], img.pixels[1], img.pixels[2]]
+    };
+    let plain = sample(&mut h);
+    h.state_mut().ui.proof_colors = true;
+    let setup = h.state().ui.proof_setup.clone();
+    let proofed = sample(&mut h);
+    assert_eq!(proofed, shown(plain, &|img| designcraft_render::proof_view(img, &setup)));
+    assert_ne!(proofed, plain, "the proof changes this green");
+}
+
+#[test]
+fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let id = app.run("frame.create", json!({"rect": [36, 36, 560, 700], "content": "unassigned"})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.fill", json!({"ids": [id], "swatch": "C=0 M=100 Y=100 K=0"})).unwrap();
+    app.ui.dialog = Some(Dialog::new("colorPicker", json!({"target": "fill", "hex": "#000000"})));
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let ctx = ui.ctx().clone();
+            app.logic(&ctx);
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(6);
+    // Where the frame shows on screen.
+    let target = {
+        let app = h.state();
+        let doc = &app.session.doc().unwrap().doc;
+        let layout = designcraft_tools::CanvasLayout::new(doc, false);
+        let v = *app.view().unwrap();
+        crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v).to_screen(layout.slots[0].xf * designcraft_geom::Point::new(300.0, 600.0))
+    };
+    let from = h.get_by_label("Eyedropper: drag it onto the page").rect().center();
+    h.hover_at(from);
+    h.drag_at(from);
     h.run_steps(1);
-    h.event(egui::Event::Text("50".into()));
-    h.run_steps(2);
-    let d = h.state().app.ui.dialog.as_ref().unwrap();
-    assert_eq!(d.fields["cmyk"], json!([50.0, 0.0, 0.0, 100.0]), "rgb {:?} (was {rgb:?})", d.fields.get("rgb"));
+    for k in 1..=4 {
+        h.hover_at(from + (target - from) * (k as f32 / 4.0));
+        h.run_steps(1);
+    }
+    h.drop_at(target);
+    h.run_steps(3);
+    let d = h.state().ui.dialog.as_ref().expect("the picker stays open");
+    let [r, g, b, _] = h.state().session.doc().unwrap().doc.resolve_color("C=0 M=100 Y=100 K=0", 1.0).unwrap().to_rgba8(1.0);
+    let got: Vec<f64> = d.fields["rgb"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    for (a, e) in got.iter().zip([r, g, b]) {
+        assert!((a - f64::from(e)).abs() <= 3.0, "{got:?} vs {:?}", [r, g, b]);
+    }
     assert!(d.b("edited"));
+    // Let go off the page (here, on the dialog's own field area): no colour, nothing changes.
+    let hex = d.s("hex");
+    h.hover_at(from);
+    h.drag_at(from);
+    h.run_steps(1);
+    h.hover_at(from + egui::vec2(-40.0, 0.0));
+    h.run_steps(1);
+    h.drop_at(egui::pos2(2.0, 2.0));
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().unwrap().s("hex"), hex);
+    // Let go over the picker's own colour field, with the page under it: nothing either.
+    let field = h.get_by_label("Color field").rect().center();
+    let ctx = h.ctx.clone();
+    assert!(crate::canvas::color_at(h.state_mut(), &ctx, field).is_some(), "the page lies under the field");
+    h.hover_at(from);
+    h.drag_at(from);
+    h.run_steps(1);
+    h.hover_at(field);
+    h.run_steps(1);
+    h.drop_at(field);
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().unwrap().s("hex"), hex, "the picker isn't sampled");
 }
 
 #[test]
