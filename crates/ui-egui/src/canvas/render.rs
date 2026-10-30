@@ -25,7 +25,7 @@ pub fn color_at(app: &mut DesignApp, ctx: &egui::Context, pos: Pos2) -> Option<[
     let ppp = ctx.pixels_per_point() as f64;
     let view = Affine::scale(ppp) * Affine::scale(xf.zoom) * Affine::translate((-at.x, -at.y));
     let opts = screen_options(app, &layout, app.ui.screen_mode != ScreenMode::Normal, ppp);
-    let mut img = app.canvas.patcher.render(&doc, &app.session.cache, &placed, 1, 1, view, &opts);
+    let mut img = app.canvas.patcher.render(&doc, &app.session.cache, &placed, (1, 1), view, &opts);
     // The colour as the canvas shows it (proofed).
     screen_post(app, &mut img);
     let [r, g, b, a] = <[u8; 4]>::try_from(img.pixels.get(..4)?).ok()?;
