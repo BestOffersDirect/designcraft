@@ -4919,3 +4919,4 @@ fn epub_split_document_round_trips() {
         assert_eq!(d.settings.epub_split, want, "{attrs}");
         assert_eq!(import_idml(&export_idml(&d)).unwrap().settings.epub_split, want, "{attrs}");
     }
+}

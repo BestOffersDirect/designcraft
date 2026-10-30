@@ -200,6 +200,9 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
         ui.end_row();
     });
 }
+/// The temporary-data key a dialog sets, each frame, while one of its multi-line fields has focus:
+/// Enter then makes a new line there, and the footer doesn't take it for OK.
+pub(crate) const MULTILINE_FOCUS: &str = "dialog_multiline_focus";
 
 /// Extract once when opened. Cancel is read-only; confirmation adds exactly these colours.
 pub(crate) fn open_color_theme(app: &mut DesignApp, params: Value) {
@@ -2483,6 +2486,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "colorGroupOptions" => crate::i18n::tr(&app.ui.language, "Color Group Options"),
         "layerSettings" => crate::i18n::tr(&app.ui.language, "Layer Options"),
         crate::effects_dialog::ID => crate::i18n::tr(&app.ui.language, "Effects"),
+        crate::package_dialog::ID => crate::i18n::tr(&app.ui.language, "Package"),
+        crate::package_dialog::INSTRUCTIONS => crate::i18n::tr(&app.ui.language, "Printing Instructions"),
         id => match id.strip_prefix("cmd:").and_then(designcraft_engine::find_command) {
             Some(c) => crate::i18n::tr(&app.ui.language, c.label.trim_end_matches('…')),
             None => crate::i18n::tr(&app.ui.language, "Dialog"),
@@ -2502,6 +2507,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             "hyphenation" => 560.0,
             "numberingSection" => 560.0,
             crate::effects_dialog::ID => 720.0,
+            crate::package_dialog::ID => 720.0,
+            crate::package_dialog::INSTRUCTIONS => 520.0,
             _ => 640.0,
         };
         let width = preferred_width.min(available.x);
@@ -2790,6 +2797,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                     "colorGroupOptions" => options::color_group_options(app, ui, &mut d),
                     "layerSettings" => options::layer_options(app, ui, &mut d),
                     crate::effects_dialog::ID => crate::effects_dialog::show(app, ui, &mut d),
+                    crate::package_dialog::ID => crate::package_dialog::show(app, ui, &mut d),
+                    crate::package_dialog::INSTRUCTIONS => crate::package_dialog::show_instructions(app, ui, &mut d),
                     "preferences" => preferences(app, ui, &mut d, body_height),
                     "print" => print_dialog(app, ui, &mut d),
                     "pdfImport" => {
@@ -3252,6 +3261,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             "updateLink" => crate::i18n::tr(&app.ui.language, "  Update  ").to_string(),
             "findFont" => crate::i18n::tr(&app.ui.language, "Replace All").to_string(),
             "newDocument" => format!("  {}  ", crate::i18n::tr(&app.ui.language, "Create")),
+            crate::package_dialog::ID => crate::i18n::tr(&app.ui.language, "Package…").to_string(),
+            crate::package_dialog::INSTRUCTIONS => crate::i18n::tr(&app.ui.language, "Continue").to_string(),
             _ => crate::i18n::tr(&app.ui.language, "  OK  ").to_string(),
         };
         let cancel_label = match d.id.as_str() {
@@ -3265,6 +3276,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                 app.ui.style_preview = d.b("preview");
                 style_options_preview(app, &mut d);
             }
+            // A multi-line field with focus (set by the dialog this frame) takes Enter as a new line.
+            let multiline = ui.ctx().data_mut(|m| m.remove_temp::<bool>(egui::Id::unique(MULTILINE_FOCUS))).unwrap_or(false);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .add(
@@ -3272,7 +3285,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             .fill(crate::theme::Tokens::get(ui.ctx()).accent_strong),
                     )
                     .clicked()
-                    || (!popup_open && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    || (!popup_open && !multiline && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                 {
                     result = Some(true);
                 }
@@ -4408,6 +4421,22 @@ fn confirm_part6(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
         }
         "alert" => Ok(Value::Null),
         crate::effects_dialog::ID => crate::effects_dialog::confirm(app, &d),
+        crate::package_dialog::ID | crate::package_dialog::INSTRUCTIONS => {
+            let r = if d.id == crate::package_dialog::ID {
+                crate::package_dialog::confirm(app, &d)
+            } else {
+                crate::package_dialog::confirm_instructions(app, &d)
+            };
+            // Packaging failed: the dialog stays open with its options and instructions, and the
+            // status line says why.
+            if let Err(e) = &r
+                && app.ui.dialog.is_none()
+            {
+                app.status(e.clone());
+                app.ui.dialog = Some(d);
+            }
+            r
+        }
         "findChange" => {
             let result = if d.b("objectMode") { Ok(Value::Null) } else { app.run("find.change", find_change_params(&d)) };
             // Confirmation consumes retained bounds before closing, even on an error.
