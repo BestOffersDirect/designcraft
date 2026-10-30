@@ -327,7 +327,7 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
     let b = block(ui, FIELD_H);
     icons::paint(ui.painter(), sub(b, 3.0, 1.0, 19.0, 19.0), "corner", t.accent);
     if place(ui, sub(b, 34.0, 0.0, 56.0, FIELD_H), |ui| link_label(ui, crate::i18n::tr(&app.ui.language, "Corner"), 56.0)).clicked() {
-        app.ui.dialog = Some(crate::dialogs::Dialog::new("frameSize", json!({})));
+        app.ui.dialog = Some(crate::dialogs::frame_size_dialog(app, json!({})));
     }
     let (shape, size) = i.corner;
     if let Some(v) = place(ui, sub(b, 96.0, 0.0, 69.0, FIELD_H), |ui| {

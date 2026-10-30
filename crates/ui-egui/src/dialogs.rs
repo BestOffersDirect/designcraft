@@ -79,13 +79,6 @@ impl Dialog {
         if id == "ruby" {
             fields.entry("section".to_string()).or_insert(json!("cjk.rubyPlacement"));
         }
-        if id == "frameSize" {
-            for k in ["width", "height"] {
-                if let Some(v) = fields.get(k).and_then(Value::as_f64) {
-                    fields.insert(k.into(), json!(format_measure(v, Unit::Picas)));
-                }
-            }
-        }
         Dialog { id: id.into(), fields, unit: Unit::Picas }
     }
     /// Set a field and report a genuine Find domain/mode transition to the caller.
@@ -106,9 +99,13 @@ impl Dialog {
         }
     }
     fn m(&self, k: &str) -> Option<f64> {
+        self.m_in(k, self.unit)
+    }
+    /// A measure where a bare number is in `unit`.
+    fn m_in(&self, k: &str, unit: Unit) -> Option<f64> {
         match self.fields.get(k) {
             Some(Value::Number(n)) => n.as_f64(),
-            Some(Value::String(s)) => parse_measure(s, self.unit).ok(),
+            Some(Value::String(s)) => parse_measure(s, unit).ok(),
             _ => None,
         }
     }
@@ -932,6 +929,25 @@ fn confirm_text_frame_options(app: &mut DesignApp, d: &mut Dialog) -> Result<Val
 /// The active document's ruler unit (picas without a document).
 fn doc_unit(app: &DesignApp) -> Unit {
     app.session.active().map(|s| s.doc.settings.horizontal_units).unwrap_or(Unit::Picas)
+}
+
+/// The document's vertical ruler unit: what a bare number means in a height field.
+fn doc_vertical_unit(app: &DesignApp) -> Unit {
+    app.session.active().map(|s| s.doc.settings.vertical_units).unwrap_or(Unit::Picas)
+}
+
+/// The Rectangle dialog a click with a frame tool opens: the width (points in `params`) shown in
+/// the horizontal ruler unit, the height in the vertical one, as Preferences › Units &
+/// Increments and the rulers' menus set them (#1964).
+pub fn frame_size_dialog(app: &DesignApp, params: Value) -> Dialog {
+    let mut d = Dialog::new("frameSize", params);
+    for (k, unit) in [("width", doc_unit(app)), ("height", doc_vertical_unit(app))] {
+        if let Some(v) = d.fields.get(k).and_then(Value::as_f64) {
+            d.fields.insert(k.into(), json!(format_measure(v, unit)));
+        }
+    }
+    d.unit = doc_unit(app);
+    d
 }
 
 /// Layout › Create Guides…: guides go on the page in view (or the parent page being edited), not
@@ -3277,7 +3293,7 @@ fn confirm_part1(app: &mut DesignApp, d: Dialog) -> Result<Value, String> {
             let x = d.fields.get("x").and_then(Value::as_f64).unwrap_or(0.0);
             let y = d.fields.get("y").and_then(Value::as_f64).unwrap_or(0.0);
             let w = d.m("width").unwrap_or(72.0);
-            let h = d.m("height").unwrap_or(72.0);
+            let h = d.m_in("height", doc_vertical_unit(app)).unwrap_or(72.0);
             app.run(
                 "frame.create",
                 json!({"spread": d.fields.get("spread").cloned().unwrap_or(json!(0)), "shape": d.s("shape"), "content": d.s("content"), "rect": [x, y, x + w, y + h]}),
