@@ -4575,24 +4575,55 @@ fn para_choice(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &
 /// edited side stores the whole array.
 fn para_sides(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &str, field: &dyn Fn(&mut egui::Ui, &str, Option<f64>) -> Option<f64>) {
     let mut sides: [f64; 4] = serde_json::from_value(para_value(d, pv, key)).unwrap_or_default();
+    let linked = linked(d, key, sides.iter().all(|v| (v - sides[0]).abs() < 1e-9));
     let mut changed = false;
-    egui::Grid::new(("pssides", key)).num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
+    // As InDesign's: Top and Bottom, the link, Left and Right.
+    egui::Grid::new(("pssides", key)).num_columns(5).spacing([8.0, 6.0]).show(ui, |ui| {
         for (i, label) in ["Top:", "Left:", "Bottom:", "Right:"].into_iter().enumerate() {
             crate::rtl::label(ui, crate::i18n::tr(lang, label));
-            if let Some(side) = sides.get_mut(i)
-                && let Some(v) = field(ui, &format!("ps{key}{i}"), Some(*side))
-            {
-                *side = v;
+            if let Some(v) = field(ui, &format!("ps{key}{i}"), sides.get(i).copied()) {
+                // Linked, a side typed in sets all four.
+                if linked {
+                    sides = [v; 4];
+                } else if let Some(side) = sides.get_mut(i) {
+                    *side = v;
+                }
                 changed = true;
             }
-            if i % 2 == 1 {
-                ui.end_row();
+            match i {
+                // Linked again, the four take Top's value.
+                0 if link_toggle(lang, ui, d, key, linked) => {
+                    sides = [sides[0]; 4];
+                    changed = true;
+                }
+                0 => {}
+                2 => {
+                    ui.label("");
+                }
+                _ => ui.end_row(),
             }
         }
     });
     if changed {
         para_set(d, key, json!(sides));
     }
+}
+
+/// Whether the four values of `key` are linked ("Make all settings the same"): as the user left
+/// the link, else when the four are the same, as InDesign starts it.
+fn linked(d: &Dialog, key: &str, same: bool) -> bool {
+    d.fields.get(&format!("_linked.{key}")).and_then(Value::as_bool).unwrap_or(same)
+}
+
+/// The link button between a border's or shading's four sides or corners; true when it was
+/// clicked to link them, and the caller makes the four the same.
+fn link_toggle(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, key: &str, linked: bool) -> bool {
+    let tip = crate::i18n::tr(lang, "Make all settings the same");
+    let clicked = crate::widgets::icon_toggle_sized(ui, if linked { "link" } else { "link-broken" }, linked, tip, egui::vec2(22.0, 21.0)).clicked();
+    if clicked {
+        d.fields.insert(format!("_linked.{key}"), json!(!linked));
+    }
+    clicked && !linked
 }
 
 /// A swatch menu with a colour chip per swatch (hidden swatches left out); returns the swatch
@@ -4649,14 +4680,16 @@ fn border_type_menu(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, d
 fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: &str, units: Unit) {
     use designcraft_geom::corners::{Corner, CornerShape};
     let mut corners: [Corner; 4] = serde_json::from_value(para_value(d, pv, key)).unwrap_or_default();
-    let mut changed = false;
-    egui::Grid::new(("pscorners", key)).num_columns(3).spacing([8.0, 6.0]).show(ui, |ui| {
+    let linked = linked(d, key, corners.iter().all(|c| *c == corners[0]));
+    let mut changed = None;
+    let mut relinked = false;
+    egui::Grid::new(("pscorners", key)).num_columns(4).spacing([8.0, 6.0]).show(ui, |ui| {
         for (i, label) in ["Top Left:", "Top Right:", "Bottom Right:", "Bottom Left:"].into_iter().enumerate() {
             let Some(c) = corners.get_mut(i) else { continue };
             crate::rtl::label(ui, crate::i18n::tr(lang, label));
             if let Some(v) = crate::widgets::measure(ui, &format!("ps{key}{i}"), Some(c.size), units, 70.0) {
                 c.size = if v.is_finite() { v.clamp(0.0, 10_000.0) } else { 0.0 };
-                changed = true;
+                changed = Some(i);
             }
             craft_ui::ComboBox::from_id_salt(("pscornershape", key, i))
                 .selected_text(crate::rtl::widget(ui, crate::i18n::tr(lang, c.shape.label())))
@@ -4665,14 +4698,26 @@ fn para_corners(lang: &str, ui: &mut egui::Ui, d: &mut Dialog, pv: &Value, key: 
                     for shape in CornerShape::ALL {
                         if ui.selectable_label(c.shape == shape, crate::rtl::widget(ui, crate::i18n::tr(lang, shape.label()))).clicked() {
                             c.shape = shape;
-                            changed = true;
+                            changed = Some(i);
                         }
                     }
                 });
+            // Linked again, the four take Top Left's size and shape.
+            if i == 0 && link_toggle(lang, ui, d, key, linked) {
+                relinked = true;
+            }
             ui.end_row();
         }
     });
-    if changed {
+    if relinked {
+        corners = [corners[0]; 4];
+        changed = Some(0);
+    }
+    if let Some(i) = changed {
+        // Linked, the corner changed sets all four.
+        if linked {
+            corners = [corners[i]; 4];
+        }
         para_set(d, key, serde_json::to_value(corners).unwrap_or_default());
     }
 }
