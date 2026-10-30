@@ -378,3 +378,32 @@ fn fill_stroke_proxy_keys() {
     press(&mut app, &ctx, Key::X, Modifiers::NONE);
     assert_eq!(app.ui.stroke_front, front, "X while typing leaves the proxy alone");
 }
+
+/// Alt/Option-click cycles a tool group's flyout without opening the menu.
+#[test]
+fn alt_click_cycles_the_tool_flyout_group() {
+    use egui::{Event, Modifiers, PointerButton};
+    use egui_kittest::kittest::Queryable;
+    let app = crate::DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    let mut h = crate::test_window::open(app, vec2(1400.0, 900.0));
+    h.state_mut().app.select_tool("rectangleFrame");
+    h.run_steps(2);
+    let at = h.get_by_label("Rectangle Frame Tool (F)").rect().center();
+    let alt = Modifiers { alt: true, ..Default::default() };
+    let click = |h: &mut egui_kittest::Harness<'static, crate::test_window::Window>, modifiers: Modifiers| {
+        h.input_mut().events.push(Event::ModifiersChanged(modifiers));
+        h.input_mut().events.push(Event::PointerMoved(at));
+        for pressed in [true, false] {
+            h.input_mut().events.push(Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers });
+        }
+        h.run_steps(3);
+    };
+    click(&mut h, Modifiers::NONE);
+    assert_eq!(h.state().app.session.tool_id(), "rectangleFrame");
+    assert!(h.state().app.ui.flyout.is_none());
+    click(&mut h, alt);
+    assert_eq!(h.state().app.session.tool_id(), "ellipseFrame", "Alt-click advances the frame group");
+    assert!(h.state().app.ui.flyout.is_none(), "Alt-click must not open the flyout");
+    click(&mut h, alt);
+    assert_eq!(h.state().app.session.tool_id(), "polygonFrame");
+}

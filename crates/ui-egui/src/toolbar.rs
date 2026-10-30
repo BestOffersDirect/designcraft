@@ -103,19 +103,29 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 // on the tool (egui reports releases within 0.8 s as clicks).
                                 let hold_id = egui::Id::unique(("flyout_hold", gi));
                                 let ended_hold = resp.clicked() && ui.data_mut(|d| d.remove_temp::<bool>(hold_id)).unwrap_or(false);
+                                // Plain click selects the shown tool; Alt/Option-click cycles the flyout
+                                // group (InDesign / Photoshop parity with the letter-key cycle).
+                                let alt = ui.input(|i| i.modifiers.alt);
                                 if resp.clicked() && !ended_hold {
-                                    chosen = Some(shown.id);
+                                    chosen = Some(if g.len() > 1 && alt {
+                                        let from = g.iter().position(|tl| tl.id == current).unwrap_or(0);
+                                        g[(from + 1) % g.len()].id
+                                    } else {
+                                        shown.id
+                                    });
                                 }
                                 if !resp.is_pointer_button_down_on() {
                                     ui.data_mut(|d| d.remove::<bool>(hold_id));
                                 }
                                 // Double-click a polygon tool: Polygon Settings.
-                                if resp.double_clicked() && matches!(shown.id, "polygon" | "polygonFrame") {
+                                // Alt-clicks only cycle the group: exclude them from double-click dialogs.
+                                if resp.double_clicked() && !alt && matches!(shown.id, "polygon" | "polygonFrame") {
                                     let cur = app.session.execute("tool.polygonSettings", &json!({})).unwrap_or_default();
                                     app.ui.dialog = Some(crate::dialogs::Dialog::new("polygonSettings", cur));
                                 }
                                 // Double-click a transform tool: its Object › Transform dialog.
                                 if resp.double_clicked()
+                                    && !alt
                                     && let Some(cmd) = transform_dialog_of(shown.id)
                                 {
                                     crate::menus::activate(app, cmd, &Value::Null);
