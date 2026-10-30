@@ -532,6 +532,9 @@ pub fn is_cmyk_tiff(bytes: &[u8]) -> bool {
 /// over the decoder's 256 MiB limit; [`is_cmyk_tiff`] tells those apart from RGB files.
 pub fn decode_cmyk_tiff(bytes: &[u8]) -> Option<CmykRaster> {
     use tiff::tags::Tag;
+    if too_large_to_decode(bytes) {
+        return None;
+    }
     let mut d = tiff_decoder(bytes)?;
     let has_alpha = match d.colortype().ok()? {
         tiff::ColorType::CMYK(8 | 16) => false,
