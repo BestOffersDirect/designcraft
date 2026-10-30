@@ -3532,8 +3532,9 @@ fn the_color_pickers_eyedropper_takes_a_colour_off_the_page() {
         let layout = designcraft_tools::CanvasLayout::new(doc, false);
         let v = *app.view().unwrap();
         let xf = crate::canvas::Xf::new(app.canvas_rect.unwrap(), &v);
-        [(60.0, 660.0), (60.0, 80.0), (300.0, 600.0), (540.0, 80.0)]
-            .into_iter()
+        // Any point of the frame (36–560 × 36–700 pt) the picker leaves uncovered.
+        (0..27)
+            .flat_map(|i| (0..34).map(move |j| (46.0 + 19.0 * f64::from(i), 46.0 + 19.0 * f64::from(j))))
             .map(|(x, y)| xf.to_screen(layout.slots[0].xf * designcraft_geom::Point::new(x, y)))
             .find(|p| h.ctx.layer_id_at(*p).is_none_or(|l| l.id != egui::Id::unique("dialog")))
             .expect("a point of the frame outside the picker")
