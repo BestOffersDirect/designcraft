@@ -188,7 +188,7 @@ attr_set! {
         bullet_align: ListAlign = ListAlign::Left,
         number_align: ListAlign = ListAlign::Left,
         /// A tab stop for the text after the bullet or number, from the column's left edge.
-        list_tab: Option<f64> = None,
+        list_tab: Option<f64> = None => "deserialize_explicit_value",
         /// Restart Numbers at This Level After: a paragraph at a higher level (0 = any; otherwise
         /// that level) starts this level's numbering again.
         restart_numbers: bool = true,

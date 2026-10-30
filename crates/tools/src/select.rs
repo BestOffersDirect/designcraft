@@ -703,6 +703,19 @@ impl SelectionTool {
             self.drag = Drag::Anchor { id, si, ai, handle, start: p, at };
             return vec![Action::Begin(if handle.is_some() { "Move Direction Handle".into() } else { "Move Anchor".into() })];
         }
+        // As in InDesign, the Direct Selection tool pressed on a corner or anchor of an object
+        // that isn't selected selects it and moves just that point (Chris Nielsen's "The
+        // InDesign Toolbox", 10:10: click outside, then pull a frame's corner).
+        if self.direct
+            && !ev.mods.shift
+            && let Some((_, hit)) = cx.hit(p)
+            && !cx.selection.contains(hit)
+            && let Some((id, si, ai, None)) = anchor_at_in(cx, &[hit], p)
+        {
+            let at = anchor_spread_point(cx, id, si, ai);
+            self.drag = Drag::Anchor { id, si, ai, handle: None, start: p, at };
+            return vec![Action::Exec("selection.set".into(), json!({"ids": [id], "content": true})), Action::Begin("Move Anchor".into())];
+        }
         // A selected placed graphic's own handles resize it inside its frame (the
         // frame's anchors, under Direct Selection, come first).
         if let Some((id, h)) = content_handle_at(cx, p)
@@ -776,7 +789,8 @@ impl SelectionTool {
                     } else {
                         out.push(Action::Exec("selection.toggle".into(), json!({"id": id.0})));
                     }
-                } else if !cx.selection.contains(id) || (self.direct && !cx.selection.content) {
+                } else if !cx.selection.contains(id) || (self.direct && !cx.selection.content && cx.doc.item(id).is_some_and(holds_content)) {
+                    // Direct Selection on a selected frame selects its content (a graphic or pasted-in items).
                     out.push(Action::Exec("selection.set".into(), json!({"ids": [id.0], "content": self.direct})));
                 } else if !self.direct && cx.selection.items.len() > 1 {
                     // InDesign: a click on one of several selected objects makes it the
