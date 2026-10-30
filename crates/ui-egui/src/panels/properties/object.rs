@@ -365,9 +365,8 @@ pub(super) fn appearance_section(app: &mut DesignApp, ui: &mut Ui, i: &SelInfo) 
     let mresp = ui.interact(more, ui.scope_id().with("opmore"), Sense::click());
     ui.painter().rect(more, 0.0, if mresp.hovered() { t.hover } else { t.input }, Stroke::new(1.0, t.field_border), StrokeKind::Inside);
     icons::paint(ui.painter(), more.shrink(4.0), "chevron-right", t.icon);
-    if mresp.clicked() {
-        show_panel(app, "effects");
-    }
+    mresp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, crate::i18n::tr(&app.ui.language, "Opacity")));
+    opacity_slider(app, &mresp, i.opacity);
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
@@ -386,6 +385,46 @@ pub(super) fn open_color_picker(app: &mut DesignApp, doc: &designcraft_doc::Docu
     let mut fields = crate::panels::swatches::picker_fields(doc.resolve_color(swatch, 1.0), stroke);
     fields["text"] = json!(text);
     app.ui.dialog = Some(crate::dialogs::Dialog::new("colorPicker", fields));
+}
+
+/// The Opacity slider that the arrow beside the field opens, as in InDesign: a drag shows the
+/// new opacity live and is one undo step when let go.
+fn opacity_slider(app: &mut DesignApp, resp: &egui::Response, opacity: f64) {
+    let (mut slid, mut held, mut shown) = (None, false, false);
+    egui::Popup::menu(resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        shown = true;
+        // A thin rail and a round knob, as InDesign draws it.
+        ui.spacing_mut().slider_width = 130.0;
+        ui.spacing_mut().slider_rail_height = 2.0;
+        let mut v = (opacity * 100.0).round();
+        let slider = ui.add(
+            egui::Slider::new(&mut v, 0.0..=100.0).integer().show_value(false).handle_shape(egui::style::HandleShape::Circle).trailing_fill(false),
+        );
+        // The slider has no visible caption (the field beside the arrow is the label), so it's
+        // named for assistive technology only.
+        let label = crate::i18n::tr(&app.ui.language, "Opacity");
+        slider.widget_info(|| egui::WidgetInfo::slider(ui.is_enabled(), v, label));
+        // The release frame can move the value too; it stays part of the drag's preview, which
+        // the next frame commits as the one undo step.
+        let pressed = slider.is_pointer_button_down_on() || slider.dragged() || slider.drag_stopped();
+        if slider.changed() {
+            slid = Some((v, pressed));
+        }
+        held = pressed;
+    });
+    match slid {
+        Some((v, true)) => app.live_preview("Opacity", "object.opacity", json!({"opacity": v / 100.0})),
+        Some((v, false)) => {
+            // The keyboard (arrow keys on the focused slider): applied at once.
+            app.end_live_preview();
+            let _ = app.run("object.opacity", json!({"opacity": v / 100.0}));
+        }
+        None if held => app.hold_live_preview(),
+        // Shown but let go without a change (a click outside, Escape): the drag's preview is
+        // committed now, before whatever that click does, so that keeps its own undo step.
+        None if shown => app.end_live_preview(),
+        None => {}
+    }
 }
 
 /// The Fill (or Stroke) popup of Properties › Appearance, as InDesign's: Apply To (a text frame's
