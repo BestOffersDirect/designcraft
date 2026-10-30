@@ -208,7 +208,7 @@ fn table_specs() -> Vec<CommandSpec> {
         cmd!(
             "table.placeGraphic",
             "Convert Cell to Graphic Cell",
-            ["Table", "Convert Cell Type"],
+            ["Table"],
             None,
             "{path? | base64?, name?: with base64, fit?: proportional|fill (default proportional), story?, table?, rows?: [a, b] | row?, cols?: [a, b] | col? (the target cells; default: the selection)} — an image in the target cell (its text is kept but hidden)",
             in_table,
@@ -217,7 +217,7 @@ fn table_specs() -> Vec<CommandSpec> {
         cmd!(
             "table.textCell",
             "Convert Cell to Text Cell",
-            ["Table", "Convert Cell Type"],
+            ["Table"],
             None,
             "{story?, table?, rows?: [a, b] | row?, cols?: [a, b] | col? (the target cells; default: the selection)} — drop the target cells' graphics",
             in_table,
