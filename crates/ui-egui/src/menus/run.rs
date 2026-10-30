@@ -1,6 +1,6 @@
 use super::export::{download_document, export_bytes, export_epub, export_idml, export_pdf, export_png, separations_view};
 use super::invoke::guide_spread;
-use super::state::{is_window_control, window_control_available};
+use super::state::{is_window_control, menu_enabled, window_control_available};
 use super::tables::{CLASSIC_GROUPS, TYPOGRAPHY_GROUPS, workspace_open_panel};
 use super::tree::recent_label;
 use super::{DesignApp, ScreenMode, Value, json};
