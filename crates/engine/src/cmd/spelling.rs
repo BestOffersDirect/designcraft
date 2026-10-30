@@ -206,7 +206,7 @@ pub fn suggest(dict: &Dictionary, w: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut push = |c: Vec<char>| {
         let c: String = c.into_iter().collect();
-        if c != w && !out.contains(&c) && dict.get(&c).is_some() {
+        if c != w && !out.contains(&c) && (dict.get(&c).is_some() || COMMON.binary_search(&c.as_str()).is_ok()) {
             out.push(c);
         }
     };
@@ -316,6 +316,7 @@ mod tests {
         }
         assert!(!known(d, &[], "typograpy"));
         assert!(suggest(d, "typograpy").contains(&"typography".to_string()));
+        assert!(suggest(d, "emial").contains(&"email".to_string()), "words in COMMON are suggested too");
         assert!(known(d, &["designcraft".into()], "designcraft"));
     }
 
