@@ -3,6 +3,57 @@ use egui_kittest::{Harness, kittest::Queryable};
 
 use super::*;
 
+/// A place-cursor drag past its 3-point threshold but short of egui's drag distance previews
+/// a frame, and the release places that frame: what's shown is what lands.
+#[test]
+fn a_short_place_cursor_drag_places_the_frame_it_previews() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let png = designcraft_render::Rendered { width: 40, height: 20, pixels: vec![200; 40 * 20 * 4] }.to_png();
+    app.run("place.load", json!({"base64": designcraft_engine::cmd::base64_encode(&png), "name": "a.png"})).unwrap();
+    let mut h = Harness::builder().with_size(vec2(1400.0, 900.0)).with_step_dt(1.0 / 60.0).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let ctx = ui.ctx().clone();
+            app.logic(&ctx);
+            app.ui(ui);
+        },
+        app,
+    );
+    h.run_steps(6);
+    let (from, slot) = {
+        let app = h.state();
+        let layout = CanvasLayout::new(&app.session.doc().unwrap().doc, false);
+        let xf = Xf::new(app.canvas_rect.unwrap(), app.view().unwrap());
+        (xf.to_screen(layout.slots[0].xf * Point::new(200.0, 200.0)), layout.slots[0].xf)
+    };
+    // About 5.4 points: past the place cursor's 3, short of egui's 6.
+    let to = from + vec2(4.5, 3.0);
+    assert!((to - from).length() < h.ctx.options(|o| o.input_options.max_click_dist));
+    h.hover_at(from);
+    h.event(egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+    h.run_steps(1);
+    h.event(egui::Event::PointerMoved(to));
+    h.run_steps(2);
+    let vi = h.state().view_info();
+    let preview = h
+        .state_mut()
+        .session
+        .overlays(vi)
+        .into_iter()
+        .find_map(|o| match o {
+            designcraft_tools::Overlay::Marquee(r) => Some(r),
+            _ => None,
+        })
+        .expect("the frame is previewed");
+    h.event(egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+    h.run_steps(3);
+    let placed = h.state().session.doc().unwrap().doc.spreads[0].items.last().expect("placed").bounds();
+    let shown = slot.inverse().transform_rect_bbox(preview);
+    for (a, b) in [(placed.x0, shown.x0), (placed.y0, shown.y0), (placed.x1, shown.x1), (placed.y1, shown.y1)] {
+        assert!((a - b).abs() < 0.01, "placed {placed:?}, previewed {shown:?}");
+    }
+}
+
 #[test]
 fn a_press_after_a_drag_is_not_a_double_click() {
     let (delay, dist) = (0.3, 6.0);
@@ -1772,6 +1823,7 @@ fn document_grid_is_drawn_where_points_snap_to_it() {
         snap: SnapView { snap_to_document_grid: true, zone_px: 20.0, ..SnapView::OFF },
         unit: Unit::Points,
         stroke_in_front: false,
+        loaded: None,
     };
     let (snapped, _) = designcraft_tools::snap::snap_point(&cx, sr, Point::new(page.x0 + 31.3, page.y0 + 47.9));
     assert_eq!((snapped.x - page.x0, snapped.y - page.y0), (27.0, 45.0));
