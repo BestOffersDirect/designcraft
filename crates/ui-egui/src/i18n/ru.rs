@@ -42,6 +42,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Plain", "Простая"),
     ("Symmetrical", "Симметричная"),
     ("New Section", "Новый раздел"),
+    ("Clear Frame Fitting Options", "Очистить параметры подгонки фрейма"),
     ("Restart Numbering", "Начать нумерацию заново"),
     ("Continue Numbering", "Продолжить нумерацию"),
     ("Keep Options…", "Параметры удержания…"),

@@ -37,6 +37,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Join", "وصل"),
     ("Convert Point", "تحويل النقطة"),
     ("New Section", "قسم جديد"),
+    ("Clear Frame Fitting Options", "مسح خيارات ملاءمة الإطار"),
     ("Restart Numbering", "إعادة الترقيم"),
     ("Continue Numbering", "متابعة الترقيم"),
     ("Keep Options…", "خيارات الإبقاء…"),

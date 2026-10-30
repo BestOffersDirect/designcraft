@@ -36,6 +36,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Join", "連結"),
     ("Convert Point", "ポイントを切り換え"),
     ("New Section", "新規セクション"),
+    ("Clear Frame Fitting Options", "フレーム調整オプションを消去"),
     ("Restart Numbering", "番号の振り直し"),
     ("Continue Numbering", "番号の継続"),
     ("Keep Options…", "段落分離禁止オプション…"),

@@ -36,6 +36,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Join", "Зʼєднати"),
     ("Convert Point", "Перетворити точку"),
     ("New Section", "Новий розділ"),
+    ("Clear Frame Fitting Options", "Очистити параметри припасування фрейму"),
     ("Restart Numbering", "Почати нумерацію знову"),
     ("Continue Numbering", "Продовжити нумерацію"),
     ("Keep Options…", "Параметри утримання…"),

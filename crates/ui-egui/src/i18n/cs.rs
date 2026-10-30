@@ -40,6 +40,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Plain", "Obyčejný"),
     ("Symmetrical", "Symetrický"),
     ("New Section", "Nový oddíl"),
+    ("Clear Frame Fitting Options", "Vymazat volby přizpůsobení rámečku"),
     ("Restart Numbering", "Začít číslování znovu"),
     ("Continue Numbering", "Pokračovat v číslování"),
     ("Keep Options…", "Volby zachování…"),
