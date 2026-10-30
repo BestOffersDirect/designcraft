@@ -179,18 +179,18 @@ fn insert_pages_dialog(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
             // The page, by name: At Start and At End need none.
             ui.add_enabled_ui(matches!(d.s("insert").as_str(), "after" | "before"), |ui| {
                 let cur = (d.n("page").unwrap_or(0.0).max(0.0) as usize).min(pages.len().saturating_sub(1));
-                craft_ui::ComboBox::from_id_salt("insert_page").selected_text(pages.get(cur).cloned().unwrap_or_default()).width(64.0).show_ui(
-                    ui,
-                    |ui| {
+                craft_ui::ComboBox::from_id_salt("insert_page")
+                    .selected_text(pages.get(cur).cloned().unwrap_or_default())
+                    .width(64.0)
+                    .show_ui(ui, |ui| {
                         for (i, name) in pages.iter().enumerate() {
                             if ui.selectable_label(i == cur, name).clicked() {
                                 d.fields.insert("page".into(), json!(i));
                             }
                         }
-                    },
-                )
-                .response
-                .accessible_name(crate::i18n::tr(&lang, "Page").to_owned());
+                    })
+                    .response
+                    .accessible_name(crate::i18n::tr(&lang, "Page").to_owned());
             });
         });
         ui.end_row();
