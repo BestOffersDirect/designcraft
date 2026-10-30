@@ -34,6 +34,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Corner Size and Shape:", "Dimensione e forma angoli:"),
     ("Join", "Unisci"),
     ("Convert Point", "Converti punto"),
+    ("New Section", "Nuova sezione"),
     ("Restart Numbering", "Riavvia numerazione"),
     ("Continue Numbering", "Continua numerazione"),
     ("Keep Options…", "Opzioni di separazione…"),

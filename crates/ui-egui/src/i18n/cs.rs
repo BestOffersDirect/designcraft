@@ -39,6 +39,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Convert Point", "Převést bod"),
     ("Plain", "Obyčejný"),
     ("Symmetrical", "Symetrický"),
+    ("New Section", "Nový oddíl"),
     ("Restart Numbering", "Začít číslování znovu"),
     ("Continue Numbering", "Pokračovat v číslování"),
     ("Keep Options…", "Volby zachování…"),

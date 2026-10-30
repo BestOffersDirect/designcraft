@@ -35,6 +35,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Corner Size and Shape:", "角のサイズとシェイプ:"),
     ("Join", "連結"),
     ("Convert Point", "ポイントを切り換え"),
+    ("New Section", "新規セクション"),
     ("Restart Numbering", "番号の振り直し"),
     ("Continue Numbering", "番号の継続"),
     ("Keep Options…", "段落分離禁止オプション…"),

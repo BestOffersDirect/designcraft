@@ -41,6 +41,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Convert Point", "Преобразовать точку"),
     ("Plain", "Простая"),
     ("Symmetrical", "Симметричная"),
+    ("New Section", "Новый раздел"),
     ("Restart Numbering", "Начать нумерацию заново"),
     ("Continue Numbering", "Продолжить нумерацию"),
     ("Keep Options…", "Параметры удержания…"),

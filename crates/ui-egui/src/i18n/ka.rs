@@ -35,6 +35,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Stroke Type", "კონტურის ტიპი"),
     ("Corner Shape", "კუთხის ფორმა"),
     ("Corner Size and Shape:", "კუთხეების ზომა და ფორმა:"),
+    ("New Section", "ახალი სექცია"),
     ("Restart Numbering", "ნუმერაციის თავიდან დაწყება"),
     ("Continue Numbering", "ნუმერაციის გაგრძელება"),
     ("Keep Options…", "შენარჩუნების პარამეტრები…"),

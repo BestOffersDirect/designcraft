@@ -36,6 +36,7 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Corner Size and Shape:", "حجم الزوايا وشكلها:"),
     ("Join", "وصل"),
     ("Convert Point", "تحويل النقطة"),
+    ("New Section", "قسم جديد"),
     ("Restart Numbering", "إعادة الترقيم"),
     ("Continue Numbering", "متابعة الترقيم"),
     ("Keep Options…", "خيارات الإبقاء…"),

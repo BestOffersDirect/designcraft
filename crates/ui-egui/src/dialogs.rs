@@ -2217,6 +2217,8 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
         "colorTheme" => crate::i18n::tr(&app.ui.language, "Color Theme"),
         "documentSetup" => crate::i18n::tr(&app.ui.language, "Document Setup"),
         "fileInfo" => crate::i18n::tr(&app.ui.language, "File Info"),
+        // On a page that doesn't start a section yet, InDesign titles it New Section.
+        "numberingSection" if d.b("newSection") => crate::i18n::tr(&app.ui.language, "New Section"),
         "numberingSection" => crate::i18n::tr(&app.ui.language, "Numbering & Section Options…").trim_end_matches('…'),
         "findChange" => crate::i18n::tr(&app.ui.language, "Find/Change"),
         "paragraphStyleOptions" => crate::i18n::tr(&app.ui.language, "Paragraph Style Options"),
