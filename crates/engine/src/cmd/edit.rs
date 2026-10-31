@@ -400,6 +400,11 @@ pub fn specs() -> Vec<CommandSpec> {
                 return Ok(json!({"text": text}));
             }
             copy_items(s)?;
+            // The whole objects are on the clipboard, so the whole objects go, not just selected points.
+            if p.get("ids").is_none() {
+                let ids: Vec<u64> = s.doc()?.selection.items.iter().map(|i| i.0).collect();
+                return s.execute("edit.clear", &json!({"ids": ids}));
+            }
             s.execute("edit.clear", p)
         }),
         cmd!(

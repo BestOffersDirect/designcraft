@@ -598,6 +598,10 @@ mod tests {
         s.execute("selection.set", &json!({"anchors": [[a, 0, 0]]})).unwrap();
         s.execute("edit.clear", &json!({})).unwrap();
         assert_eq!(s.doc().unwrap().doc.item(ItemId(a)).unwrap().path.subpaths[0].anchors.len(), 3, "one point gone, the frame stays");
+        // Cut copies whole objects, so it removes whole objects.
+        s.execute("selection.set", &json!({"anchors": [[a, 0, 0]]})).unwrap();
+        s.execute("edit.cut", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc.item(ItemId(a)).is_none(), "the cut object is gone");
     }
 
     /// Shift-adding an object to a point selection drops the points, so Clear deletes the objects.
