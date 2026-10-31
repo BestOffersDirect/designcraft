@@ -171,8 +171,8 @@ pub(super) fn draw_selection(app: &DesignApp, painter: &egui::Painter, xf: &Xf, 
         for poly in path_screen(it, xf, a) {
             painter.add(egui::Shape::line(poly, Stroke::new(1.0, color)));
         }
-        // InDesign draws a 1 pt bounding box around the selection; with the Direct Selection tool,
-        // only the path and its points.
+        // InDesign draws a 1 pt bounding box around the selection; with the Direct Selection and
+        // pen tools, only the path and its points.
         if sel.items.len() == 1 && sel.text.is_none() && !direct {
             painter.rect_stroke(xf.rect(a.transform_rect_bbox(it.bounds())), 0.0, Stroke::new(1.0, color), StrokeKind::Middle);
         } else if sel.key == Some(*id) {
