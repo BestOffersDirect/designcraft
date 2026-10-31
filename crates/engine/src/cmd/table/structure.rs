@@ -135,6 +135,11 @@ pub(super) fn convert_from_text(s: &mut Session, p: &Value) -> Result<Value> {
         if cols * data.len() as u64 > MAX_CONVERTED_CELLS {
             return Err(bad(ID, format!("the text makes more than {MAX_CONVERTED_CELLS} cells")));
         }
+        // `Table::new` would clamp the shape and drop the rows past it, with their text.
+        let (rows, _) = designcraft_doc::clamped_size(data.len(), cols as usize);
+        if rows < data.len() {
+            return Err(bad(ID, format!("the text makes {} rows; a table of {cols} columns has at most {rows}", data.len())));
+        }
         let pf = st.paras[pa].clone();
         let cf = st.format_after(a).clone();
         let mut table = Table::from_strings(id, &data, width, &pf, &cf);

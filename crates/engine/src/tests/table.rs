@@ -586,6 +586,9 @@ fn convert_text_to_table_with_indesigns_separators() {
     let long = vec!["a\tb"; MAX_CONVERTED_CELLS as usize / 2 + 1].join("\n");
     assert!(convert(&mut s, &long, json!({})).is_err(), "more cells than a table can have");
     assert_eq!(s.doc().unwrap().doc.story(designcraft_doc::StoryId(sid)).unwrap().text, format!("{long}\nAfter"));
+    let tall = vec!["a"; designcraft_doc::MAX_TABLE_ROWS + 1].join("\n");
+    assert!(convert(&mut s, &tall, json!({})).is_err(), "more rows than a table can have");
+    assert_eq!(s.doc().unwrap().doc.story(designcraft_doc::StoryId(sid)).unwrap().text, format!("{tall}\nAfter"), "no text is dropped");
     let at_most = vec!["x"; MAX_COLUMNS as usize].join("\t");
     assert!(convert(&mut s, &at_most, json!({})).is_ok(), "a row as wide as a table can be");
     check(&s);
