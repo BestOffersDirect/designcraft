@@ -238,6 +238,7 @@ pub fn hyphen_points_in(word: &str, lim: &Limits, lang: Lang) -> Vec<usize> {
     }
     let min_before = lim.after_first.max(1);
     let min_after = lim.before_last.max(1);
+    let elides = matches!(lang, Lang::Patterns(hypher::Lang::French | hypher::Lang::Italian));
     // Run bounds of each point's letter run (trimmed of apostrophes).
     let run_of = |p: usize| {
         let mut a = p;
@@ -253,6 +254,10 @@ pub fn hyphen_points_in(word: &str, lim: &Limits, lang: Lang) -> Vec<usize> {
         }
         while b > a && is_apostrophe(chars[b - 1]) {
             b -= 1;
+        }
+        // After an elision the word is the part after its last apostrophe: the limits count that.
+        if elides && let Some(ap) = chars[a..b].iter().rposition(|&c| is_apostrophe(c)) {
+            a += ap + 1;
         }
         (a, b)
     };
@@ -536,6 +541,16 @@ mod tests {
         assert_eq!(h("sjøfugl"), "sjø-fugl");
         assert_eq!(h("sirkulasjonen"), "sir-ku-la-sjo-nen");
         assert_eq!(h("beveger"), "be-ve-ger");
+    }
+
+    /// The paragraph limits count the letters of the word after an elision, not the elided prefix.
+    #[test]
+    fn elision_limits_apply_to_the_word_after_it() {
+        let fr = Lang::for_language("French").unwrap();
+        let lim = Limits { min_word: 5, after_first: 3, before_last: 2, capitalized: true };
+        assert_eq!(hyphen_points_in("l'imprimerie", &lim, fr), vec![7, 9]);
+        let lim = Limits { min_word: 11, ..Limits::default() };
+        assert!(hyphen_points_in("l'imprimerie", &lim, fr).is_empty());
     }
 
     /// A word with an elision ("l'", "dell'") hyphenates as the word after it.
