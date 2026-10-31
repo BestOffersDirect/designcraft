@@ -327,6 +327,24 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
     }
     // Cursor.
     if let Some(p) = resp.hover_pos().filter(|p| screen.contains(*p) && !elsewhere) {
+        let c = pointer_cursor(app, ui, &xf, p);
+        let icon = crate::cursors::show(ui.ctx(), &mut app.cursors, c, p);
+        ui.ctx().set_cursor_icon(icon);
+        draw_cursor_badge(&painter, p, c, &t);
+        if c == Cursor::LoadedGraphic {
+            draw_loaded_thumbnail(app, &painter, p, &t);
+        }
+    }
+    // A second viewport has no panels, dialogs or Quick Apply after its canvas: observe here,
+    // once, as the end of its pass. The root viewport observes at the end of `DesignApp::ui`.
+    if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+        ime_observe(app, ui.ctx());
+    }
+}
+
+/// The cursor under the pointer at `p` over the canvas: the navigation hands, then the guide
+/// resize cursors, then the active tool's.
+fn pointer_cursor(app: &mut DesignApp, ui: &egui::Ui, xf: &Xf, p: Pos2) -> Cursor {
         let wants_text = app.session.wants_text();
         let space = navigation_space(app, ui.ctx());
         let zoom = spring_zoom_mode(app, ui.ctx(), space);
@@ -348,7 +366,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
         let column = dragging.or_else(|| {
             let menu_open = context_menu_open(ui.ctx());
             (!space && !zoom && !middle && !alt_hand && !tool_drag && !menu_open && xf.rot == 0)
-                .then(|| column_guide_at(app, &xf, p).map(|h| h.0))
+                .then(|| column_guide_at(app, xf, p).map(|h| h.0))
                 .flatten()
         });
         let c = match column {
@@ -365,18 +383,7 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
             Some(designcraft_doc::Orientation::Vertical) => Cursor::ResizeH,
             None => c,
         };
-        let icon = crate::cursors::show(ui.ctx(), &mut app.cursors, c, p);
-        ui.ctx().set_cursor_icon(icon);
-        draw_cursor_badge(&painter, p, c, &t);
-        if c == Cursor::LoadedGraphic {
-            draw_loaded_thumbnail(app, &painter, p, &t);
-        }
-    }
-    // A second viewport has no panels, dialogs or Quick Apply after its canvas: observe here,
-    // once, as the end of its pass. The root viewport observes at the end of `DesignApp::ui`.
-    if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
-        ime_observe(app, ui.ctx());
-    }
+    c
 }
 
 /// Longest side of the loaded place cursor's thumbnail, in points.

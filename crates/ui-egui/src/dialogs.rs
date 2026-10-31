@@ -8903,7 +8903,7 @@ fn eyedropper(app: &mut DesignApp, ui: &mut egui::Ui, at: egui::Pos2, tip: Strin
     crate::icons::paint(ui.painter(), egui::Rect::from_center_size(er.center(), egui::vec2(15.0, 15.0)), "tool-eyedropper", t.icon);
     // Esc during the drag cancels just the drag (the picker's own Esc/Enter handling stands down
     // while `EYEDROPPER_DRAG` is set), and the release takes nothing.
-    let cancel_id = egui::Id::new("color_picker_eyedropper_cancelled");
+    let cancel_id = egui::Id::unique("color_picker_eyedropper_cancelled");
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
         if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
@@ -8911,7 +8911,7 @@ fn eyedropper(app: &mut DesignApp, ui: &mut egui::Ui, at: egui::Pos2, tip: Strin
         }
         ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
     }
-    ui.data_mut(|d| d.insert_temp(egui::Id::new(EYEDROPPER_DRAG), resp.dragged()));
+    ui.data_mut(|d| d.insert_temp(egui::Id::unique(EYEDROPPER_DRAG), resp.dragged()));
     let cancelled = resp.drag_stopped() && ui.data_mut(|d| d.remove_temp::<bool>(cancel_id)).unwrap_or(false);
     // Let go over the picker itself it takes nothing, though a page may lie under it. (Its modal
     // backdrop shares the picker's layer and covers the screen: the picker is where it draws.)
@@ -8925,6 +8925,25 @@ fn eyedropper(app: &mut DesignApp, ui: &mut egui::Ui, at: egui::Pos2, tip: Strin
     }
     resp.on_hover_text(tip);
     taken
+}
+
+/// Closes the picker for a click on OK or Cancel, else for Enter (OK) or Esc (Cancel) unless an
+/// eyedropper drag is on.
+fn picker_close(ui: &mut egui::Ui, d: &mut Dialog, ok: bool, cancel: bool) {
+    let dragging = ui.data(|d| d.get_temp::<bool>(egui::Id::unique(EYEDROPPER_DRAG))).unwrap_or(false);
+    let (enter, esc) = if dragging {
+        (false, false)
+    } else {
+        (
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)),
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)),
+        )
+    };
+    if ok || cancel {
+        d.fields.insert("_close".into(), json!(if cancel { "cancel" } else { "ok" }));
+    } else if enter || esc {
+        d.fields.insert("_close".into(), json!(if enter { "ok" } else { "cancel" }));
+    }
 }
 
 /// The Color Picker, laid out as InDesign's: the colour space view (a field of two components,
@@ -9042,20 +9061,7 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     // The footer's padded OK key, which every catalog has.
     let ok = pill(ui, 0, tr("  OK  ").trim(), true);
     let cancel = pill(ui, 1, &tr("Cancel"), false);
-    let dragging = ui.data(|d| d.get_temp::<bool>(egui::Id::new(EYEDROPPER_DRAG))).unwrap_or(false);
-    let (enter, esc) = if dragging {
-        (false, false)
-    } else {
-        (
-            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)),
-            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)),
-        )
-    };
-    if ok || cancel {
-        d.fields.insert("_close".into(), json!(if cancel { "cancel" } else { "ok" }));
-    } else if enter || esc {
-        d.fields.insert("_close".into(), json!(if enter { "ok" } else { "cancel" }));
-    }
+    picker_close(ui, d, ok, cancel);
     // The C/M/Y/K the fields show: the percentages typed or given, else the colour converted.
     let cmyk = nums::<4>(d, "cmyk").map(|v| v.map(|x| x as f32)).unwrap_or_else(|| {
         designcraft_color::Color::Rgb { r: p.rgb[0], g: p.rgb[1], b: p.rgb[2] }
