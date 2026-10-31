@@ -2361,6 +2361,13 @@ fn effects_all(s: &mut Session, p: &Value) -> Result<Value> {
             }
             if let Some(patch) = &patch {
                 let mut cur = serde_json::to_value(&it.effects).map_err(|e| bad(ID, e.to_string()))?;
+                // Default effects are left out of the serialized form; a patch without `mode` would
+                // then read the legacy Normal instead of the effect's current (Multiply, Screen) mode.
+                for (key, now) in [("innerShadow", serde_json::to_value(&it.effects.inner_shadow)), ("outerGlow", serde_json::to_value(&it.effects.outer_glow))] {
+                    if let (Some(o), Ok(now)) = (cur.as_object_mut(), now) {
+                        o.entry(key).or_insert(now);
+                    }
+                }
                 merge_json(&mut cur, patch);
                 let mut fx: designcraft_doc::Effects = serde_json::from_value(cur).map_err(|e| bad(ID, format!("effects: {e}")))?;
                 sanitize_effects(&mut fx)?;
@@ -5763,12 +5770,14 @@ mod effects_command_tests {
         let it = st.doc.item(ItemId(id)).unwrap();
         let e = &it.effects;
         assert!(e.inner_shadow.on && e.inner_shadow.angle == 120.0 && e.inner_shadow.size == 7.0);
+        assert_eq!(e.inner_shadow.mode, designcraft_color::BlendMode::Multiply, "a patch without a mode keeps the default");
         assert!(e.drop_shadow.on && e.drop_shadow.distance == 10.0 && e.drop_shadow.size == 9.0, "untouched fields stay");
         assert_eq!((e.feather, it.opacity, it.blend), (4.0, 0.5, designcraft_color::BlendMode::Multiply));
         // Out of range values are kept in range; garbage changes nothing.
         s.execute("object.effects", &json!({"ids": [id], "effects": {"outerGlow": {"on": true, "opacity": 3, "spread": 400, "size": -5}}})).unwrap();
         let og = s.doc().unwrap().doc.item(ItemId(id)).unwrap().effects.outer_glow.clone();
         assert_eq!((og.opacity, og.spread, og.size), (1.0, 100.0, 0.0));
+        assert_eq!(og.mode, designcraft_color::BlendMode::Screen);
         let before = s.doc().unwrap().doc.clone();
         for bad in [json!({"effects": {"dropShadow": {"distance": "far"}}}), json!({"effects": 5}), json!({"blend": "loud"}), json!({"opacity": "x"})]
         {
