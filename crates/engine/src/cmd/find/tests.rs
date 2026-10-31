@@ -807,6 +807,12 @@ fn change_format_styles_the_found_text_and_keeps_it() {
     assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "charStyle": "Nope"})).is_err());
     assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "paraStyle": "Nope"})).is_err());
     assert_eq!(s.doc().unwrap().doc, before);
+    // A null attribute is a Change Format too: the found text stays and loses that override.
+    let before = s.doc().unwrap().doc.story(sid).unwrap().clone();
+    s.execute("find.change", &json!({"find": "cook", "change": "", "attrs": {"underline": null}})).unwrap();
+    let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
+    assert_eq!(story.text, before.text, "the words stay");
+    assert_eq!(story.format_after(25).over.underline, None);
     // With no Change Format, an empty Change to still deletes the found text.
     s.execute("find.change", &json!({"find": "Break ", "change": ""})).unwrap();
     assert!(!s.doc().unwrap().doc.story(sid).unwrap().text.contains("Break"));

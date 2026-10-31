@@ -857,55 +857,6 @@ Three"
     }
 
     #[test]
-    fn change_format_styles_the_found_text_and_keeps_it() {
-        // The course's chapter 22: every lowercase "eggs" gets the character style "eggs", with
-        // Change to empty, so the words stay.
-        let mut s = Session::new();
-        s.execute("file.new", &json!({})).unwrap();
-        let text = "Poached Eggs\nBreak eggs; cook until eggs are set.";
-        let r = s.execute("frame.create", &json!({"rect": [36, 36, 300, 300], "content": "text", "text": text})).unwrap();
-        let sid = designcraft_doc::StoryId(r["story"].as_u64().unwrap());
-        s.execute("style.character.create", &json!({"name": "eggs", "chars": {"fontStyle": "Bold", "fill": "C=15 M=100 Y=100 K=0"}})).unwrap();
-        s.execute("style.paragraph.create", &json!({"name": "Method"})).unwrap();
-        let undo = s.doc().unwrap().history.undo.len();
-        let r = s.execute("find.change", &json!({"find": "eggs", "change": "", "caseSensitive": true, "charStyle": "eggs"})).unwrap();
-        assert_eq!(r["count"], 2);
-        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "one undo step");
-        let style_at = |s: &Session, at: usize| s.doc().unwrap().doc.story(sid).unwrap().format_after(at).style.clone();
-        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
-        assert_eq!(story.text, text, "the words stay");
-        for at in [19, 36] {
-            assert_eq!(&story.text[at..at + 4], "eggs");
-            assert_eq!(style_at(&s, at), "eggs");
-        }
-        assert_eq!(style_at(&s, 8), designcraft_doc::NO_CHAR_STYLE, "case sensitive: not \"Eggs\"");
-        assert_eq!(style_at(&s, 25), designcraft_doc::NO_CHAR_STYLE, "only the found text");
-        // A paragraph style goes to the found text's paragraphs, with attributes over the text.
-        s.execute("find.change", &json!({"find": "cook", "change": "", "paraStyle": "Method", "attrs": {"underline": true}})).unwrap();
-        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
-        assert_eq!((story.paras[0].style.as_str(), story.paras[1].style.as_str()), (designcraft_doc::BASIC_PARAGRAPH, "Method"));
-        assert_eq!(story.format_after(25).over.underline, Some(true));
-        assert_eq!(story.format_after(19).style, "eggs", "the other text keeps its character style");
-        // Change to and a Change Format: the new text is formatted.
-        s.execute("find.change", &json!({"find": "set", "change": "firm", "charStyle": "eggs"})).unwrap();
-        assert_eq!(style_at(&s, s.doc().unwrap().doc.story(sid).unwrap().text.find("firm").unwrap()), "eggs");
-        // No such style: refused, nothing changed.
-        let before = s.doc().unwrap().doc.clone();
-        assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "charStyle": "Nope"})).is_err());
-        assert!(s.execute("find.change", &json!({"find": "eggs", "change": "", "paraStyle": "Nope"})).is_err());
-        assert_eq!(s.doc().unwrap().doc, before);
-        // A null attribute is a Change Format too: the found text stays and loses that override.
-        let before = s.doc().unwrap().doc.story(sid).unwrap().clone();
-        s.execute("find.change", &json!({"find": "cook", "change": "", "attrs": {"underline": null}})).unwrap();
-        let story = s.doc().unwrap().doc.story(sid).unwrap().clone();
-        assert_eq!(story.text, before.text, "the words stay");
-        assert_eq!(story.format_after(25).over.underline, None);
-        // With no Change Format, an empty Change to still deletes the found text.
-        s.execute("find.change", &json!({"find": "Break ", "change": ""})).unwrap();
-        assert!(!s.doc().unwrap().doc.story(sid).unwrap().text.contains("Break"));
-    }
-
-    #[test]
     fn find_and_change_objects_by_attributes() {
         let mut s = Session::new();
         s.execute("file.new", &json!({})).unwrap();
