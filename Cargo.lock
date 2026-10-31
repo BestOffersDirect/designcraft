@@ -1536,6 +1536,7 @@ dependencies = [
  "designcraft-fonts",
  "designcraft-geom",
  "designcraft-images",
+ "flate2",
  "hayro-cmap",
  "hayro-interpret",
  "hayro-syntax",
