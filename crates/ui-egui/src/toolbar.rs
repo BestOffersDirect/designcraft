@@ -104,12 +104,11 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
                                 let hold_id = egui::Id::unique(("flyout_hold", gi));
                                 let ended_hold = resp.clicked() && ui.data_mut(|d| d.remove_temp::<bool>(hold_id)).unwrap_or(false);
                                 // Plain click selects the shown tool; Alt/Option-click cycles the flyout
-                                // group (InDesign / Photoshop parity with the letter-key cycle).
-                                // Prefer the primary-release event's modifiers: Alt may already be up
-                                // by the time this frame reads i.modifiers.
-                                // Prefer a release on this slot; egui still counts a click when the
-                                // pointer drifts a little outside, so also accept a release whose
-                                // press started here. Ignore releases whose press was elsewhere.
+                                // group, as the letter-key cycle does. Read the modifiers from the
+                                // primary-release event (Alt may already be up by the time this frame
+                                // reads i.modifiers), preferring a release on this slot; egui still
+                                // counts a click when the pointer drifts a little outside, so a release
+                                // whose press started here counts too, and one pressed elsewhere doesn't.
                                 let click_mods = ui.input(|i| {
                                     let press_here = i.pointer.press_origin().is_some_and(|o| resp.rect.contains(o));
                                     i.events
