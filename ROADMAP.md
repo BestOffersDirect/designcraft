@@ -388,6 +388,7 @@ list) · [roadmap.md](docs/roadmap.md) (milestones, plan) · [parity-checklist.m
 
 Newest first.
 
+- **2026-10-30** · Parent pages: a running-header variable shows its name in angle brackets on the parent itself (it was blank), as InDesign shows it; on the document pages, and in text with no page, it shows its text as before. No readiness percentage change.
 - **2026-10-30** · Without facing pages, a page of a multi-page spread shows the parent page in its place, as in InDesign: the second page of a two-page spread shows the parent's second page. Every single-sided page showed the parent's first page, so an InDesign book set up without facing pages but laid out in two-page spreads repeated the left parent page's items (a black heading bar) on its right pages and lost the right parent page's. No readiness percentage change.
 - **2026-10-30** · File > Package opens a dialog, as the reference app's: a Summary of fonts, links and images and inks, pages for each, a Printing Instructions step, and a PDF made with the options of a preset (#1514, #1515).
 - **2026-10-30** · IDML import reads TOC separators and entry styles written with the `$ID/` prefix or as `Properties` children, and the TOC separator notation (`^t`, `^y`, `^m`, `^>`) is shared by the dialog and IDML, with a special-character menu on the separator field (#1249, #1255).
