@@ -99,7 +99,7 @@ pub fn expand(definition: &str, v: &XrefValues) -> String {
     let mut rest = definition;
     while let Some(i) = rest.find('<') {
         out.push_str(&rest[..i]);
-        let Some(j) = rest[i..].find('>') else {
+        let Some(j) = tag_end(&rest[i..]) else {
             out.push_str(&rest[i..]);
             return out;
         };
@@ -133,6 +133,20 @@ pub fn expand(definition: &str, v: &XrefValues) -> String {
     }
     out.push_str(rest);
     typographic_quotes(&out)
+}
+
+/// Byte index of the `>` that ends the tag starting at `s`, skipping quoted attribute values.
+/// An unterminated quote falls back to the first `>`, so only that malformed tag is affected.
+fn tag_end(s: &str) -> Option<usize> {
+    let mut in_quote = false;
+    for (k, c) in s.char_indices() {
+        match c {
+            '"' => in_quote = !in_quote,
+            '>' if !in_quote => return Some(k),
+            _ => {}
+        }
+    }
+    s.find('>')
 }
 
 /// Straight double quotes in format text become typographer's quotes.
@@ -431,6 +445,19 @@ pub fn clean(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gt_inside_quoted_attribute_does_not_end_tag() {
+        let v = XrefValues { para: "Intro > the start".into(), ..Default::default() };
+        assert_eq!(expand("<partialPara delim=\">\" includeDelim=\"false\" />|", &v), "Intro |");
+    }
+
+    #[test]
+    fn unterminated_quote_only_affects_its_own_tag() {
+        let v = XrefValues { para: "Intro > the start".into(), ..Default::default() };
+        let out = expand("<x a=\"b> <fullPara />", &v);
+        assert!(out.contains("Intro > the start"), "{out}");
+    }
 
     #[test]
     fn edited_text_fills_in_its_page_numbers() {
