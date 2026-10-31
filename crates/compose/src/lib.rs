@@ -268,6 +268,8 @@ pub struct Deco {
     pub path: Option<designcraft_geom::BezPath>,
     /// Shown on screen only (not printed or exported).
     pub nonprinting: bool,
+    /// Set to overprint (paragraph shading or border); PDF export doesn't overprint yet.
+    pub overprint: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -5406,6 +5408,7 @@ fn vertical_justify(ft: &mut FrameText, f: &FrameSpec, spanned: bool, notes: &de
             continue;
         }
         let _ = a;
+        let before: Vec<f64> = idx.iter().map(|&i| ft.lines[i].baseline).collect();
         match f.opts.vertical_justification {
             VerticalJustification::Center => idx.iter().for_each(|&i| ft.lines[i].baseline += space / 2.0),
             VerticalJustification::Bottom => idx.iter().for_each(|&i| ft.lines[i].baseline += space),
@@ -5424,13 +5427,38 @@ fn vertical_justify(ft: &mut FrameText, f: &FrameSpec, spanned: bool, notes: &de
                     .collect();
                 let n = rows.last().copied().unwrap_or(0);
                 if n > 0 {
-                    let per = space / n as f64;
+                    // Paragraph Spacing Limit: the space goes between paragraphs, up to the limit
+                    // each; what is left spreads over every line (all of it with no limit).
+                    let mut starts = vec![false; n + 1];
                     for (&i, &k) in idx.iter().zip(&rows) {
-                        ft.lines[i].baseline += per * k as f64;
+                        if k > 0 && ft.lines[i].first_in_para {
+                            starts[k] = true;
+                        }
+                    }
+                    let gaps = starts.iter().filter(|s| **s).count();
+                    let limit = f.opts.vj_paragraph_spacing_limit.max(0.0);
+                    let para = if gaps > 0 && limit > 0.0 { (space / gaps as f64).min(limit) } else { 0.0 };
+                    let per = (space - para * gaps as f64) / n as f64;
+                    let mut shift = vec![0.0; n + 1];
+                    for k in 1..=n {
+                        shift[k] = shift[k - 1] + per + if starts[k] { para } else { 0.0 };
+                    }
+                    for (&i, &k) in idx.iter().zip(&rows) {
+                        ft.lines[i].baseline += shift[k];
                     }
                 }
             }
             _ => {}
+        }
+        // A drop cap moves with its line.
+        for (&i, b) in idx.iter().zip(before) {
+            let line = &mut ft.lines[i];
+            let dy = line.baseline - b;
+            if let Some(dc) = &mut line.drop_cap {
+                dc.baseline += dy;
+                dc.rect.y0 += dy;
+                dc.rect.y1 += dy;
+            }
         }
     }
 }

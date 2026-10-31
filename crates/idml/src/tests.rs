@@ -340,6 +340,9 @@ fn indesign_text_defaults() -> Vec<AttrRow> {
         "ParagraphBorderOn": "false" => false, "true" => true, |r| r.0.border_on;
         "ParagraphBorderColor": "Color/Black" => "[Black]", "Swatch/None" => "[None]", |r| r.0.border_color;
         "ParagraphBorderTint": "-1" => 1.0f32, "50" => 0.5f32, |r| r.0.border_tint;
+        "ParagraphShadingOverprint": "false" => false, "true" => true, |r| r.0.shading_overprint;
+        "ParagraphBorderOverprint": "false" => false, "true" => true, |r| r.0.border_overprint;
+        "ParagraphBorderGapOverprint": "false" => false, "true" => true, |r| r.0.border_gap_overprint;
         "FontStyle": "Regular" => "Regular", "Bold" => "Bold", |r| r.1.font_style;
         "PointSize": "12" => 12.0, "9" => 9.0, |r| r.1.size;
         "Leading": "Auto" => Leading::Auto, "14" => Leading::Points(14.0), |r| r.1.leading;
@@ -3853,6 +3856,7 @@ fn object_style_effects_import_by_category_and_based_on() {
     let base = fx("Base").unwrap();
     assert!(base.drop_shadow.on && base.drop_shadow.size == 9.0 && (base.drop_shadow.distance - 5.0).abs() < 1e-9);
     assert_eq!(base.feather, 0.0, "EnableFeather=false");
+    assert_eq!(base.drop_shadow.mode, designcraft_color::BlendMode::Normal, "no BlendMode: Normal, as earlier exports rendered");
     let child = fx("Child").unwrap();
     assert_eq!((child.drop_shadow.size, child.feather), (9.0, 6.0), "settings from the BasedOn style");
     assert!(fx("Off").is_none());
@@ -4631,6 +4635,98 @@ fn cell_first_baseline_comes_from_cell_styles_table_regions_and_cells_and_round_
     assert_eq!(t2.cell(0, 1).unwrap().first_baseline, FirstBaseline::Leading);
     let s2 = back.styles.cell.iter().find(|c| c.name == "Cap").unwrap();
     assert_eq!(s2.first_baseline, Some(FirstBaseline::CapHeight));
+}
+
+/// A TOC style as InDesign writes it: `$ID/`-prefixed separator (`^y`, the right indent tab) and entry style.
+const TOC_STYLES: &str = r#"<idPkg:Styles xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging">
+<RootParagraphStyleGroup>
+  <ParagraphStyle Self="ParagraphStyle/Heading 1" Name="Heading 1"/>
+  <ParagraphStyleGroup Self="psg-toc" Name="TOC">
+    <ParagraphStyle Self="ParagraphStyle/TOC%3aTOC body text" Name="TOC:TOC body text" Capitalization="AllCaps"/>
+    <ParagraphStyle Self="ParagraphStyle/TOC%3aTOC Header" Name="TOC:TOC Header"/>
+  </ParagraphStyleGroup>
+</RootParagraphStyleGroup>
+<RootCharacterStyleGroup><CharacterStyle Self="CharacterStyle/TOC Page Number" Name="TOC Page Number"/></RootCharacterStyleGroup>
+<TOCStyle Self="TOCStyle/$ID/DefaultTOCStyleName" TitleStyle="ParagraphStyle/TOC%3aTOC Header" Title="Table of Contents" Name="$ID/DefaultTOCStyleName">
+  <TOCStyleEntry Self="e1" Name="Heading 1" Level="1" PageNumberPosition="AfterEntry" Separator="$ID/^y">
+    <Properties><FormatStyle type="object">ParagraphStyle/$ID/TOC%3aTOC body text</FormatStyle>
+    <PageNumberStyle type="object">CharacterStyle/TOC Page Number</PageNumberStyle>
+    <SeparatorStyle type="string">$ID/[Same Style]</SeparatorStyle></Properties>
+  </TOCStyleEntry>
+</TOCStyle></idPkg:Styles>"#;
+
+const TOC_STORY: &str = r#"<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging">
+<Story Self="s1" AppliedTOCStyle="TOCStyle/$ID/DefaultTOCStyleName"><ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/TOC%3aTOC body text"><CharacterStyleRange><Content>Welcome</Content></CharacterStyleRange></ParagraphStyleRange></Story></idPkg:Story>"#;
+
+#[test]
+fn toc_style_entries_read_id_prefixed_separators_and_styles() {
+    let d = import_idml(&fixture_with_table_styles(TOC_STYLES, TOC_STORY)).unwrap();
+    let toc = d.toc.as_ref().expect("the story's TOC style is imported");
+    let entry = toc.entries.iter().find(|e| e.style == "Heading 1").unwrap();
+    assert_eq!(entry.separator.as_deref(), Some("\u{E006}"), "right-indent tabs must not become ordinary tab stops");
+    assert_eq!(entry.entry_style.as_deref(), Some("TOC/TOC body text"));
+    assert_eq!(entry.page_number_style.as_deref(), Some("TOC Page Number"));
+    assert_eq!(toc.title_style.as_deref(), Some("TOC/TOC Header"));
+}
+
+#[test]
+fn toc_style_entries_fall_back_on_malformed_and_unsupported_values() {
+    let long = "x".repeat(65);
+    let entries = format!(
+        r#"<TOCStyleEntry Self="e1" Name="Heading 1" Level="abc" PageNumberPosition="Sideways" Separator="$ID/^q">
+    <Properties><FormatStyle type="object">ParagraphStyle/Missing</FormatStyle>
+    <PageNumberStyle type="object">CharacterStyle/$ID/[None]</PageNumberStyle>
+    <SeparatorStyle type="object">CharacterStyle/Missing</SeparatorStyle></Properties>
+  </TOCStyleEntry>
+  <TOCStyleEntry Self="e2" Name="TOC:TOC Header" Level="12" Separator="{long}"/>
+  <TOCStyleEntry Self="e3" Name="Heading 1" Level="2" Separator="^t"/>
+  <TOCStyleEntry Self="e4" Name="" Level="3"/>"#
+    );
+    let start = TOC_STYLES.find("<TOCStyleEntry").unwrap();
+    let end = TOC_STYLES.find("</TOCStyle>").unwrap();
+    let styles = format!("{}{entries}\n{}", &TOC_STYLES[..start], &TOC_STYLES[end..])
+        .replace(r#"TitleStyle="ParagraphStyle/TOC%3aTOC Header""#, r#"TitleStyle="ParagraphStyle/Missing""#);
+    let d = import_idml(&fixture_with_table_styles(&styles, TOC_STORY)).unwrap();
+    d.check().unwrap();
+    let toc = d.toc.as_ref().expect("the TOC style is still imported");
+    assert_eq!(toc.title_style, None, "a title style the document lacks is dropped");
+    assert_eq!(toc.entries.len(), 3, "an entry without a style name is skipped: {:?}", toc.entries);
+    let e1 = &toc.entries[0];
+    assert_eq!(e1.level, 1, "an unreadable level falls back to 1");
+    assert_eq!(e1.page_number, designcraft_doc::TocPageNumber::After, "an unknown page-number position falls back to After");
+    assert_eq!(e1.separator.as_deref(), Some("^q"), "an unknown special-character code is kept as written");
+    assert_eq!(
+        (e1.entry_style.as_deref(), e1.page_number_style.as_deref(), e1.separator_style.as_deref()),
+        (None, None, None),
+        "undefined and [None] styles are no style"
+    );
+    let e2 = &toc.entries[1];
+    assert_eq!(e2.level, 9, "a level past 9 is clamped");
+    assert_eq!(e2.separator, None, "an over-long separator is dropped");
+    assert_eq!((toc.entries[2].level, toc.entries[2].separator.as_deref()), (2, None), "a plain tab is the default separator");
+}
+
+#[test]
+fn toc_style_references_in_indented_properties_resolve() {
+    // Property children laid out on their own lines: the whitespace around a reference isn't
+    // part of the style name.
+    let styles = TOC_STYLES
+        .replace(
+            ">ParagraphStyle/$ID/TOC%3aTOC body text<",
+            ">
+      ParagraphStyle/$ID/TOC%3aTOC body text
+    <",
+        )
+        .replace(
+            ">CharacterStyle/TOC Page Number<",
+            ">
+      CharacterStyle/TOC Page Number
+    <",
+        );
+    let d = import_idml(&fixture_with_table_styles(&styles, TOC_STORY)).unwrap();
+    let entry = d.toc.as_ref().unwrap().entries.iter().find(|e| e.style == "Heading 1").unwrap();
+    assert_eq!(entry.entry_style.as_deref(), Some("TOC/TOC body text"));
+    assert_eq!(entry.page_number_style.as_deref(), Some("TOC Page Number"));
 }
 
 /// A graphic placed in a table cell is written into the cell, not dropped.
