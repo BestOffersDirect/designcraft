@@ -178,6 +178,23 @@ fn outer_glow_blends_with_its_mode() {
     assert!(s[2] > n[2] + 25, "screen keeps the backdrop's blue: {s:?} vs normal {n:?}");
 }
 
+/// A screened glow over blank paper shows in its colour: it blends with the objects below, and
+/// the paper is not one of them.
+#[test]
+fn screened_outer_glow_shows_on_blank_paper() {
+    let mut d = doc();
+    let id = rect_item(&mut d, Rect::new(50.0, 50.0, 110.0, 110.0), "[Black]");
+    let g = &mut d.item_mut(id).unwrap().effects.outer_glow;
+    g.on = true;
+    g.size = 12.0;
+    g.color = "C=0 M=0 Y=100 K=0".into();
+    g.opacity = 1.0;
+    g.mode = designcraft_color::BlendMode::Screen;
+    let img = render(&d);
+    let p = img.pixel(46, 80);
+    assert!(p[2] < 200 && p[0] > p[2] + 40, "yellow glow beside the item: {p:?}");
+}
+
 #[test]
 fn inner_shadow_darkens_inside_the_lit_edge() {
     let mut d = doc();
