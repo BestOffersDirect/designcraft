@@ -3745,6 +3745,21 @@ fn text_x(l: &Line, from: usize) -> f64 {
     l.glyphs.iter().find(|g| g.len > 0 && g.byte >= from).map(|g| g.x).unwrap()
 }
 
+/// Vertical justification moves the drop cap's box with its line.
+#[test]
+fn drop_cap_box_follows_vertical_justification() {
+    let (mut d, sid, fid) = drop_doc_in(&[LOREM; 2].join(" "), Rect::new(0.0, 0.0, 300.0, 400.0), drop_cap(3, 1));
+    let top = compose_story(&d, sid, &ComposeOptions::default());
+    d.item_mut(fid).unwrap().text_frame_mut().unwrap().options.vertical_justification = designcraft_doc::VerticalJustification::Bottom;
+    let bottom = compose_story(&d, sid, &ComposeOptions::default());
+    let (a, b) = (&top.frame(fid).unwrap().lines[0], &bottom.frame(fid).unwrap().lines[0]);
+    let dy = b.baseline - a.baseline;
+    assert!(dy > 1.0);
+    let (da, db) = (a.drop_cap.unwrap(), b.drop_cap.unwrap());
+    assert!((db.baseline - da.baseline - dy).abs() < 1e-6);
+    assert!((db.rect.y0 - da.rect.y0 - dy).abs() < 1e-6 && (db.rect.y1 - da.rect.y1 - dy).abs() < 1e-6);
+}
+
 #[test]
 fn drop_cap_spans_lines_and_indents_them() {
     let text = [LOREM; 2].join(" ");
