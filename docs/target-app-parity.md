@@ -71,17 +71,16 @@ they receive, setting type exactly, and basic editing that never fails.
 | AI features | 0% (not weighted) | 15% | 60–120 | Agent control through MCP goes beyond InDesign; no generative features (InDesign 2026: Generative Expand, Text to Image, Auto Style) | [gaps.md](gaps.md) |
 | **Weighted sum** | 100% | **47.2% → ~47%** (range 42–52%) | **1,150–1,950** | | |
 
-**How the number is built:** the plain weighted sum of the table above, per the craftrules
-standard: 25×55 + 15×45 + 20×40 + 15×45 + 10×45 + 5×65 + 3×45 + 3×55 + 2×45 + 2×15 = 47.2% →
+**How the number is built:** the plain weighted sum of the table above: 25×55 + 15×45 + 20×40 + 15×45 + 10×45 + 5×65 + 3×45 + 3×55 + 2×45 + 2×15 = 47.2% →
 **~47%** (range 42–52%, ±5 points of judgement in the dimension values). An earlier version
 today applied a further ×0.9 for cross-cutting core-path failures and reported 42%. That
-multiplicative step was dropped to match the standard (discounts belong only to the mainstream
+multiplicative step was dropped (discounts belong only to the mainstream
 and essentials numbers). Those failures are already in the UI/UX (45%) and Stability (45%) rows,
 and the Primary Text Frame page fixes (#165) are what hold the stage at pre-alpha through the gate.
 
 ## Mainstream practitioner and essentials user
 
-Two narrower questions, computed with the craftrules method so every app's numbers compare. The
+Two narrower questions. The
 stage still follows the full number (~47%) and the core-workflow gate. All three are estimates.
 
 | Audience | Ready | Opus 5.5 agent-hours to ~95% | Parallelizes | Work that dominates |

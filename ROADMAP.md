@@ -768,14 +768,14 @@ Newest first.
 - **2026-10-10 (UI.4–UI.5):** Panel tabs can move into other groups, split the dock, float, resize and return to their saved locations through shared docking transactions. Layouts persist in custom workspaces; UI and control commands share the same validated action path. Shared pane geometry and widget-state theme application retain all five palettes and local fonts. Split panes send keyboard input only to the focused canvas and scope contextual toolbar IDs per pane. No readiness percentage change.
 - **2026-10-10** · Version 0.6.0; releases add a Linux riscv64 tar.gz (cross-compiled, CLI
   smoke-tested under QEMU).
-- **2026-10-10** · Readiness per audience: full ~47% (method aligned with the standard, was
+- **2026-10-10** · Readiness per audience: full ~47% (method corrected, was
   42%), mainstream practitioner ~42%, essentials user ~54%, each with hours to ~95%.
-- **2026-10-10** · Stage re-normalized to **pre-alpha** under craftrules' core-workflow gate: text
+- **2026-10-10** · Stage re-normalized to **pre-alpha** under the core-workflow gate: text
   can't be threaded by hand (no out-port click, no thread command).
 - **2026-10-10** · Full re-measure against InDesign 2026 21.6 (menu dump, bundle formats and
   localizations, 124 issues): breadth ~80%, ready ~42% (down from the ~83% "including depth" of
-  2026-10-04, on user evidence and the INDD gap); progress docs restructured to the craftrules
-  standard (`docs/parity.md` → `docs/parity-checklist.md`; new target-app-parity, gaps, roadmap,
+  2026-10-04, on user evidence and the INDD gap); progress docs restructured
+  (`docs/parity.md` → `docs/parity-checklist.md`; new target-app-parity, gaps, roadmap,
   architecture, typography, file-format, UI, hardware and localization docs). Landed today:
   split columns (#295), PDF export options dialog (#196), column rules (#274), Paragraph Rules
   dialog (#263), Character Style Options (#144), PDF/X-4 RGB handling (#223), Spanish
