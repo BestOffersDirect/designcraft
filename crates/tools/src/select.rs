@@ -792,6 +792,7 @@ impl SelectionTool {
 
         self.shift_release = None;
         self.key_release = None;
+        self.anchor_release = None;
         // Type on a path: a bracket moves where the text starts or ends.
         if !ev.mods.shift
             && let Some((id, end)) = self.bracket_at(cx, p)

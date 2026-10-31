@@ -593,6 +593,21 @@ mod tests {
         assert_eq!(s.doc().unwrap().doc.item(ItemId(a)).unwrap().path.subpaths[0].anchors.len(), 3, "one point gone, the frame stays");
     }
 
+    /// Shift-adding an object to a point selection drops the points, so Clear deletes the objects.
+    #[test]
+    fn clear_after_adding_an_object_to_a_point_selection_deletes_objects() {
+        let mut s = Session::new();
+        s.execute("file.new", &json!({})).unwrap();
+        let a = s.execute("frame.create", &json!({"rect": [72, 72, 172, 172]})).unwrap()["id"].as_u64().unwrap();
+        let b = s.execute("frame.create", &json!({"rect": [200, 72, 300, 172]})).unwrap()["id"].as_u64().unwrap();
+        s.execute("selection.set", &json!({"anchors": [[a, 0, 0]]})).unwrap();
+        s.execute("selection.set", &json!({"ids": [b], "add": true})).unwrap();
+        assert!(s.doc().unwrap().selection.anchors.is_empty());
+        s.execute("edit.clear", &json!({})).unwrap();
+        assert!(s.doc().unwrap().doc.item(ItemId(a)).is_none());
+        assert!(s.doc().unwrap().doc.item(ItemId(b)).is_none());
+    }
+
     #[test]
     fn convert_point_kinds() {
         let mut s = Session::new();

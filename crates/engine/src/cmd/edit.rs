@@ -263,6 +263,11 @@ pub fn specs() -> Vec<CommandSpec> {
             }
             let ids: Vec<ItemId> = ids.into_iter().filter(|i| st.doc.item(*i).is_some()).collect();
             if add {
+                // Adding objects (no points) leaves no live points: Delete would otherwise remove
+                // the stale points instead of the objects.
+                if anchors.is_empty() {
+                    st.selection.anchors.clear();
+                }
                 for i in ids {
                     if !st.selection.items.contains(&i) {
                         st.selection.items.push(i);
@@ -296,6 +301,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
             } else {
                 st.selection.items.push(id);
+                st.selection.anchors.clear();
             }
             st.bump_revision();
             ok()
