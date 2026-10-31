@@ -397,19 +397,9 @@ fn alt_click_cycles_the_tool_flyout_group() {
     let click = |h: &mut egui_kittest::Harness<'static, crate::test_window::Window>, press_modifiers: Modifiers, current_modifiers: Modifiers| {
         h.input_mut().events.push(Event::ModifiersChanged(press_modifiers));
         h.input_mut().events.push(Event::PointerMoved(at));
-        h.input_mut().events.push(Event::PointerButton {
-            pos: at,
-            button: PointerButton::Primary,
-            pressed: true,
-            modifiers: press_modifiers,
-        });
+        h.input_mut().events.push(Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: true, modifiers: press_modifiers });
         h.input_mut().events.push(Event::ModifiersChanged(current_modifiers));
-        h.input_mut().events.push(Event::PointerButton {
-            pos: at,
-            button: PointerButton::Primary,
-            pressed: false,
-            modifiers: press_modifiers,
-        });
+        h.input_mut().events.push(Event::PointerButton { pos: at, button: PointerButton::Primary, pressed: false, modifiers: press_modifiers });
         h.run_steps(3);
     };
     // Break the double-click window between independent clicks (~0.4 s at 1 ms/step).
