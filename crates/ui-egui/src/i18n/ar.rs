@@ -112,13 +112,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Substituted", "مستبدل"),
     ("Modified", "معدل"),
     ("Missing", "مفقود"),
-    ("Colors and Inks: {process} process, {spot} spot", "الألوان والأحبار: {process} أحبار معالجة؛ {spot} أحبار مخصصة"),
-    ("Embedded images: {embedded}", "الصور: {embedded} مضمنة"),
-    (
-        "Links and Images: {found} linked, {modified} changed, {missing} not found",
-        "الروابط والصور: {found} روابط؛ {modified} معدلة، {missing} مفقودة",
-    ),
-    ("Fonts: {used} in use, {missing} unavailable", "الخطوط: {used} مستخدمة، {missing} مفقودة"),
     ("Instructions:", "التعليمات:"),
     ("Email:", "البريد الإلكتروني:"),
     ("Fax:", "الفاكس:"),

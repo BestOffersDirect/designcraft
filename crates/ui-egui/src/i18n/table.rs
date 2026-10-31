@@ -167,46 +167,6 @@ pub(super) const TABLE: &[(&str, [&str; 5])] = &[
     ("Fax:", ["Fax:", "Fax :", "Fax:", "FAX:", "传真："]),
     ("Email:", ["E-Mail:", "E-mail :", "Correo electrónico:", "メール:", "电子邮件："]),
     ("Instructions:", ["Anweisungen:", "Instructions :", "Instrucciones:", "指示:", "说明："]),
-    (
-        "Fonts: {used} in use, {missing} unavailable",
-        [
-            "Schriften: {used} verwendet, {missing} fehlen",
-            "Polices : {used} utilisées, {missing} manquantes",
-            "Fuentes: {used} utilizadas, {missing} ausentes",
-            "フォント : {used} 個使用、{missing} 個見つかりません",
-            "字体：使用 {used} 种，缺失 {missing} 种",
-        ],
-    ),
-    (
-        "Links and Images: {found} linked, {modified} changed, {missing} not found",
-        [
-            "Verknüpfungen und Bilder: {found} gefunden; {modified} geändert, {missing} fehlen",
-            "Liens et images : {found} liens trouvés ; {modified} modifiés, {missing} manquants",
-            "Vínculos e imágenes: {found} vínculos encontrados; {modified} modificados, {missing} ausentes",
-            "リンクと画像 : {found} 個のリンク、{modified} 個変更、{missing} 個見つかりません",
-            "链接和图像：找到 {found} 个链接；{modified} 个已修改，{missing} 个缺失",
-        ],
-    ),
-    (
-        "Embedded images: {embedded}",
-        [
-            "Bilder: {embedded} eingebettet",
-            "Images : {embedded} incorporées",
-            "Imágenes: {embedded} incrustadas",
-            "画像 : {embedded} 個埋め込み",
-            "图像：嵌入 {embedded} 个",
-        ],
-    ),
-    (
-        "Colors and Inks: {process} process, {spot} spot",
-        [
-            "Farben und Druckfarben: {process} Prozessfarben; {spot} Volltonfarben",
-            "Couleurs et encres : {process} encres quadri ; {spot} encres d’accompagnement",
-            "Colores y tintas: {process} tintas de cuatricromía; {spot} tintas planas",
-            "カラーとインキ : プロセスインキ {process} 個、スポットインキ {spot} 個",
-            "颜色和油墨：{process} 种印刷色油墨；{spot} 种专色油墨",
-        ],
-    ),
     ("Missing", ["Fehlt", "Manquant", "Ausente", "見つかりません", "缺失"]),
     ("Modified", ["Geändert", "Modifié", "Modificado", "変更", "已修改"]),
     ("Substituted", ["Ersetzt", "Remplacée", "Sustituida", "代替", "已替换"]),

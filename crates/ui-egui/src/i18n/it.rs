@@ -116,13 +116,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Substituted", "Sostituito"),
     ("Modified", "Modificato"),
     ("Missing", "Mancante"),
-    ("Colors and Inks: {process} process, {spot} spot", "Colori e inchiostri: {process} quadricromia; {spot} tinte piatte"),
-    ("Embedded images: {embedded}", "Immagini: {embedded} incorporate"),
-    (
-        "Links and Images: {found} linked, {modified} changed, {missing} not found",
-        "Collegamenti e immagini: {found} trovati; {modified} modificati, {missing} mancanti",
-    ),
-    ("Fonts: {used} in use, {missing} unavailable", "Font: {used} utilizzati, {missing} mancanti"),
     ("Instructions:", "Istruzioni:"),
     ("Email:", "E-mail:"),
     ("Fax:", "Fax:"),

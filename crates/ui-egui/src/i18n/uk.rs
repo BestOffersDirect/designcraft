@@ -117,13 +117,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Substituted", "Замінено"),
     ("Modified", "Змінено"),
     ("Missing", "Бракує"),
-    ("Colors and Inks: {process} process, {spot} spot", "Кольори й фарби: тріадних {process}; плашкових {spot}"),
-    ("Embedded images: {embedded}", "Зображення: вбудовано {embedded}"),
-    (
-        "Links and Images: {found} linked, {modified} changed, {missing} not found",
-        "Зв’язки й зображення: знайдено {found}; змінено {modified}, бракує {missing}",
-    ),
-    ("Fonts: {used} in use, {missing} unavailable", "Шрифти: використано {used}, бракує {missing}"),
     ("Instructions:", "Інструкції:"),
     ("Email:", "Ел. пошта:"),
     ("Fax:", "Факс:"),

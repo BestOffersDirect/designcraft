@@ -118,13 +118,6 @@ pub(super) const TABLE: &[(&str, &str)] = &[
     ("Substituted", "Nahrazeno"),
     ("Modified", "Změněno"),
     ("Missing", "Chybí"),
-    ("Colors and Inks: {process} process, {spot} spot", "Barvy a inkousty: procesní {process}; přímé {spot}"),
-    ("Embedded images: {embedded}", "Obrazy: vloženo {embedded}"),
-    (
-        "Links and Images: {found} linked, {modified} changed, {missing} not found",
-        "Odkazy a obrazy: nalezeno {found}; změněno {modified}, chybí {missing}",
-    ),
-    ("Fonts: {used} in use, {missing} unavailable", "Písma: použito {used}, chybí {missing}"),
     ("Instructions:", "Pokyny:"),
     ("Fax:", "Fax:"),
     ("Address:", "Adresa:"),
