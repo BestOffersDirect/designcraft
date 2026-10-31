@@ -140,9 +140,12 @@ fn core_breaks(core: &[char], lang: Lang) -> (Vec<usize>, Source) {
         return (vec![], Source::None);
     }
     if let Lang::Patterns(l) = lang {
-        // An elision (French "l'", Italian "dell'"): the word after the apostrophe hyphenates,
-        // with no break up to it.
         if let Some(ap) = core.iter().rposition(|&c| c == '\'') {
+            // An elision (French "l'", Italian "dell'"): the word after the apostrophe hyphenates,
+            // with no break up to it. Elsewhere (German "Rock'n'Roll") an apostrophe word gets none.
+            if !matches!(l, hypher::Lang::French | hypher::Lang::Italian) {
+                return (vec![], Source::None);
+            }
             let (pts, src) = if ap + 1 < n { core_breaks(&core[ap + 1..], lang) } else { (vec![], Source::None) };
             return (pts.into_iter().map(|p| p + ap + 1).collect(), src);
         }
@@ -401,6 +404,15 @@ mod tests {
         assert!(hyphen_points("Paragraph", &lim).is_empty());
         let lim = Limits { min_word: 12, ..Limits::default() };
         assert!(hyphen_points("typography", &lim).is_empty());
+    }
+
+    /// Only French and Italian elide at an apostrophe; other languages leave such words unbroken.
+    #[test]
+    fn apostrophe_words_hyphenate_only_in_french_and_italian() {
+        let de = Lang::for_language("German: 2006 Reform").unwrap();
+        assert!(hyphen_points_in("Rock'n'Roll", &Limits::default(), de).is_empty());
+        let fr = Lang::for_language("French").unwrap();
+        assert!(!hyphen_points_in("l'information", &Limits::default(), fr).is_empty());
     }
 
     #[test]
