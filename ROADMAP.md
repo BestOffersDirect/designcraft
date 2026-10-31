@@ -774,14 +774,14 @@ Newest first.
 - **2026-10-10 (UI.4–UI.5):** Panel tabs can move into other groups, split the dock, float, resize and return to their saved locations through shared docking transactions. Layouts persist in custom workspaces; UI and control commands share the same validated action path. Shared pane geometry and widget-state theme application retain all five palettes and local fonts. Split panes send keyboard input only to the focused canvas and scope contextual toolbar IDs per pane. No readiness percentage change.
 - **2026-10-10** · Version 0.6.0; releases add a Linux riscv64 tar.gz (cross-compiled, CLI
   smoke-tested under QEMU).
-- **2026-10-10** · Readiness per audience: full ~47% (method aligned with the standard, was
+- **2026-10-10** · Readiness per audience: full ~47% (method corrected, was
   42%), mainstream practitioner ~42%, essentials user ~54%, each with hours to ~95%.
-- **2026-10-10** · Stage re-normalized to **pre-alpha** under craftrules' core-workflow gate: text
+- **2026-10-10** · Stage re-normalized to **pre-alpha** under the core-workflow gate: text
   can't be threaded by hand (no out-port click, no thread command).
 - **2026-10-10** · Full re-measure against InDesign 2026 21.6 (menu dump, bundle formats and
   localizations, 124 issues): breadth ~80%, ready ~42% (down from the ~83% "including depth" of
-  2026-10-04, on user evidence and the INDD gap); progress docs restructured to the craftrules
-  standard (`docs/parity.md` → `docs/parity-checklist.md`; new target-app-parity, gaps, roadmap,
+  2026-10-04, on user evidence and the INDD gap); progress docs restructured
+  (`docs/parity.md` → `docs/parity-checklist.md`; new target-app-parity, gaps, roadmap,
   architecture, typography, file-format, UI, hardware and localization docs). Landed today:
   split columns (#295), PDF export options dialog (#196), column rules (#274), Paragraph Rules
   dialog (#263), Character Style Options (#144), PDF/X-4 RGB handling (#223), Spanish
@@ -810,10 +810,10 @@ Newest first.
 |---|---|---|
 | 2026-10-12 | minor | Manual text threading landed; alpha distance 15–25 h → 5–7 h (Primary Text Frame page fixes, #165) |
 | 2026-10-11 | minor | Localized Japanese print, import and table controls; readiness estimates unchanged |
-| 2026-10-10 | minor | Full number 42% → 47% (method aligned with the standard: plain weighted sum, no new evidence); readiness table with hours per audience |
+| 2026-10-10 | minor | Full number 42% → 47% (plain weighted sum, no new evidence); readiness table with hours per audience |
 | 2026-10-10 | minor | Headline adds mainstream practitioner (~42%) and essentials user (~54%); method in docs/target-app-parity.md |
 | 2026-10-10 | minor | Stage alpha → pre-alpha under the new core-workflow gate: manual text threading is missing; alpha gate table added to docs/roadmap.md |
-| 2026-10-10 | major | Restructured to the progress-docs standard; full re-measure; the "Working today" inventory moved to docs/target-app-parity.md, milestones to docs/roadmap.md, the CLI/MCP section left to docs/agents.md (which already covered it) |
+| 2026-10-10 | major | Progress docs restructured; full re-measure; the "Working today" inventory moved to docs/target-app-parity.md, milestones to docs/roadmap.md, the CLI/MCP section left to docs/agents.md (which already covered it) |
 | 2026-10-04 | major | Parity estimate: breadth 99%, depth ~83%, ~170 h |
 | 2026-10-01 | major | First roadmap: status, milestones |
 

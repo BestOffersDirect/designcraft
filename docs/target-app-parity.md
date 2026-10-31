@@ -71,17 +71,16 @@ they receive, setting type exactly, and basic editing that never fails.
 | AI features | 0% (not weighted) | 15% | 60–120 | Agent control through MCP goes beyond InDesign; no generative features (InDesign 2026: Generative Expand, Text to Image, Auto Style) | [gaps.md](gaps.md) |
 | **Weighted sum** | 100% | **47.2% → ~47%** (range 42–52%) | **1,150–1,950** | | |
 
-**How the number is built:** the plain weighted sum of the table above, per the craftrules
-standard: 25×55 + 15×45 + 20×40 + 15×45 + 10×45 + 5×65 + 3×45 + 3×55 + 2×45 + 2×15 = 47.2% →
+**How the number is built:** the plain weighted sum of the table above: 25×55 + 15×45 + 20×40 + 15×45 + 10×45 + 5×65 + 3×45 + 3×55 + 2×45 + 2×15 = 47.2% →
 **~47%** (range 42–52%, ±5 points of judgement in the dimension values). An earlier version
 today applied a further ×0.9 for cross-cutting core-path failures and reported 42%. That
-multiplicative step was dropped to match the standard (discounts belong only to the mainstream
+multiplicative step was dropped (discounts belong only to the mainstream
 and essentials numbers). Those failures are already in the UI/UX (45%) and Stability (45%) rows,
 and the Primary Text Frame page fixes (#165) are what hold the stage at pre-alpha through the gate.
 
 ## Mainstream practitioner and essentials user
 
-Two narrower questions, computed with the craftrules method so every app's numbers compare. The
+Two narrower questions. The
 stage still follows the full number (~47%) and the core-workflow gate. All three are estimates.
 
 | Audience | Ready | Opus 5.5 agent-hours to ~95% | Parallelizes | Work that dominates |
@@ -477,7 +476,7 @@ Task notes that headed ROADMAP.md:
 | 2026-10-13 | minor | `.indd` and `.indt` open through storytold/indd-utils; INDD remaining work 10–30 h (real-file corpus); readiness unchanged until it is measured |
 | 2026-10-12 | minor | Text threads by hand; stage note and distance to alpha follow the gate (5–7 h, #165); percentages unchanged |
 | 2026-10-11 | minor | Spring-loaded Zoom navigation added to the working feature inventory (DC-1); readiness estimates unchanged |
-| 2026-10-10 | minor | Full number 42% → 47%: method aligned with the standard (plain weighted sum, the ×0.9 discount dropped), no new evidence; readiness table with hours for full, mainstream and essentials; beta distance 33 → 28 points |
+| 2026-10-10 | minor | Full number 42% → 47%: plain weighted sum, the ×0.9 discount dropped, no new evidence; readiness table with hours for full, mainstream and essentials; beta distance 33 → 28 points |
 | 2026-10-10 | minor | Added mainstream practitioner (~42%) and essentials user (~54%) numbers with written weights and discounts and a user-evidence count; full number (42%) now written as 47.2% × 0.9, value unchanged |
 | 2026-10-10 | minor | Stage alpha → pre-alpha under the core-workflow gate (manual threading missing); Type & text frames row updated |
 | 2026-10-10 | major | Created from ROADMAP.md's "How far from full parity" (2026-10-04) and "Working today"; full re-measure against InDesign 2026 21.6: menu coverage measured against InDesign 21.6's menu dump (69%) and the documented tree (75%), breadth set at ~80%, ready-for-real-work re-estimated 83% → 42% on user-reported evidence and the INDD gap; hours recalibrated from git history |
