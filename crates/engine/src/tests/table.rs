@@ -503,7 +503,10 @@ fn insert_table_with_a_style_is_one_step() {
         assert!(s.execute("table.insert", &json!({"tableStyle": bad})).is_err(), "{bad}");
     }
     assert!(s.doc().unwrap().doc.story(designcraft_doc::StoryId(sid)).unwrap().tables.is_empty());
-    let r = s.execute("table.insert", &json!({"rows": 900, "cols": 300, "headerRows": 150, "tableStyle": "Grid"})).unwrap();
+    for over in [json!({"rows": 501}), json!({"cols": 201}), json!({"headerRows": 101})] {
+        assert!(s.execute("table.insert", &over).is_err(), "{over}");
+    }
+    let r = s.execute("table.insert", &json!({"rows": 500, "cols": 200, "headerRows": 100, "tableStyle": "Grid"})).unwrap();
     let t = s.execute("table.get", &json!({"table": r["table"]})).unwrap();
     assert_eq!(t["style"], "Grid");
     let n = |k: &str| t[k].as_array().unwrap().len() as u64;
