@@ -378,12 +378,11 @@ fn pointer_cursor(app: &mut DesignApp, ui: &egui::Ui, xf: &Xf, p: Pos2) -> Curso
     // canvas too (the tool's cursor took over as soon as the pointer left the ruler). Only
     // while the button is down: a drag state left behind by a skipped release doesn't stick.
     let dragging = ui.input(|i| i.pointer.primary_down());
-    let c = match ui.data(|d| d.get_temp::<GuideDrag>(egui::Id::unique(GUIDE_DRAG))).filter(|_| dragging).map(|g| g.orientation) {
+    match ui.data(|d| d.get_temp::<GuideDrag>(egui::Id::unique(GUIDE_DRAG))).filter(|_| dragging).map(|g| g.orientation) {
         Some(designcraft_doc::Orientation::Horizontal) => Cursor::ResizeV,
         Some(designcraft_doc::Orientation::Vertical) => Cursor::ResizeH,
         None => c,
-    };
-    c
+    }
 }
 
 /// Longest side of the loaded place cursor's thumbnail, in points.
