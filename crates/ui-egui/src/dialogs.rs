@@ -2186,7 +2186,6 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     }
 }
 
-/// Draw the active localized dialog; open popups own Enter/Escape, and result handling drives confirm or cancel.
 /// An alert's message. Import warnings (`lines`: `{text, item}`) list one per line, scrolling
 /// when there are many, with Show beside each that names a frame (sets `show`).
 fn alert_message(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
@@ -2217,6 +2216,7 @@ fn alert_message(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     });
 }
 
+/// Draw the active localized dialog; open popups own Enter/Escape, and result handling drives confirm or cancel.
 pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
     let shortcuts = app.ui.dialog.as_ref().is_some_and(|d| d.id == crate::shortcuts_dialog::DIALOG_ID);
     if shortcuts {
