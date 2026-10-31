@@ -301,7 +301,7 @@ fn erase_or_smooth(s: &mut Session, p: &Value, smooth: bool) -> Result<Value> {
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(|v| Some(Point::new(v.get(0)?.as_f64()?, v.get(1)?.as_f64()?))).collect())
         .unwrap_or_default();
-    s.edit(|d, _| {
+    s.edit(|d, sel| {
         path_editable(d, id, cmd)?;
         let inv = to_inner(d, id).ok_or(designcraft_doc::DocError::NoItem(id))?;
         let scale = inv.determinant().abs().sqrt().max(1e-9);
@@ -326,6 +326,8 @@ fn erase_or_smooth(s: &mut Session, p: &Value, smooth: bool) -> Result<Value> {
             return Err(bad(cmd, "the drag didn't touch the path"));
         };
         let sp = it.path.subpaths[si].clone();
+        // The subpath list changes under the stored point indices: they would name other points.
+        sel.anchors.retain(|a| a.0 != id);
         if smooth {
             it.path.subpaths[si] = designcraft_geom::edit_path::smooth(&sp, a, b, tol * scale);
         } else {
@@ -645,10 +647,12 @@ mod tests {
         let pts: Vec<Value> = (0..=20).map(|i| json!({"p": [100.0 + i as f64 * 20.0, if i % 2 == 0 { 300.0 } else { 306.0 }]})).collect();
         let id = s.execute("path.create", &json!({"anchors": pts})).unwrap()["id"].as_u64().unwrap();
         let n = s.doc().unwrap().doc.item(ItemId(id)).unwrap().path.anchor_count();
+        s.execute("selection.set", &json!({"anchors": [[id, 0, 20]]})).unwrap();
         let drag: Vec<Value> = (0..=12).map(|i| json!([150.0 + i as f64 * 20.0, 303.0])).collect();
         s.execute("path.smooth", &json!({"id": id, "points": drag})).unwrap();
         let after = s.doc().unwrap().doc.item(ItemId(id)).unwrap().path.anchor_count();
         assert!(after < n, "{after} < {n}");
+        assert!(s.doc().unwrap().selection.anchors.is_empty(), "stored point indices are stale after the path is rebuilt");
         let drag: Vec<Value> = (0..=5).map(|i| json!([200.0 + i as f64 * 20.0, 303.0])).collect();
         let r = s.execute("path.erase", &json!({"id": id, "points": drag})).unwrap();
         assert_eq!(r["subpaths"], 2, "a gap in the middle");
