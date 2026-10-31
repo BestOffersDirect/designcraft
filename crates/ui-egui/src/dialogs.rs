@@ -8889,6 +8889,8 @@ fn nums<const N: usize>(d: &Dialog, k: &str) -> Option<[f64; N]> {
     Some(out)
 }
 
+const EYEDROPPER_DRAG: &str = "color_picker_eyedropper_dragging";
+
 /// The Color Picker's eyedropper at `at`, as InDesign's: dragged onto the page, it takes the colour
 /// shown under the pointer when it is let go. The colour taken, if any.
 fn eyedropper(app: &mut DesignApp, ui: &mut egui::Ui, at: egui::Pos2, tip: String, t: &crate::theme::Tokens) -> Option<[u8; 3]> {
@@ -8899,13 +8901,23 @@ fn eyedropper(app: &mut DesignApp, ui: &mut egui::Ui, at: egui::Pos2, tip: Strin
         ui.painter().rect_filled(er, 3.0, t.hover);
     }
     crate::icons::paint(ui.painter(), egui::Rect::from_center_size(er.center(), egui::vec2(15.0, 15.0)), "tool-eyedropper", t.icon);
+    // Esc during the drag cancels just the drag (the picker's own Esc/Enter handling stands down
+    // while `EYEDROPPER_DRAG` is set), and the release takes nothing.
+    let cancel_id = egui::Id::new("color_picker_eyedropper_cancelled");
     if resp.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+            ui.data_mut(|d| d.insert_temp(cancel_id, true));
+        }
+        ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
     }
+    ui.data_mut(|d| d.insert_temp(egui::Id::new(EYEDROPPER_DRAG), resp.dragged()));
+    let cancelled = resp.drag_stopped() && ui.data_mut(|d| d.remove_temp::<bool>(cancel_id)).unwrap_or(false);
     // Let go over the picker itself it takes nothing, though a page may lie under it. (Its modal
     // backdrop shares the picker's layer and covers the screen: the picker is where it draws.)
     let mut taken = None;
     if resp.drag_stopped()
+        && !cancelled
         && let Some(pos) = ui.input(|i| i.pointer.latest_pos())
         && !ui.clip_rect().contains(pos)
     {
@@ -9030,8 +9042,15 @@ fn color_picker(app: &mut DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
     // The footer's padded OK key, which every catalog has.
     let ok = pill(ui, 0, tr("  OK  ").trim(), true);
     let cancel = pill(ui, 1, &tr("Cancel"), false);
-    let enter = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
-    let esc = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
+    let dragging = ui.data(|d| d.get_temp::<bool>(egui::Id::new(EYEDROPPER_DRAG))).unwrap_or(false);
+    let (enter, esc) = if dragging {
+        (false, false)
+    } else {
+        (
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)),
+            ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)),
+        )
+    };
     if ok || cancel {
         d.fields.insert("_close".into(), json!(if cancel { "cancel" } else { "ok" }));
     } else if enter || esc {
