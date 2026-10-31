@@ -210,6 +210,8 @@ struct Importer<'r> {
     /// The file's text variables (`None`: it defines none) and their Self → index.
     text_vars: Option<Vec<designcraft_doc::vars::TextVariable>>,
     text_var_ids: HashMap<String, usize>,
+    /// The Self of each cross-reference page number variable (`XrefPageNumberType`).
+    xref_page_vars: HashSet<String>,
     /// Creation and modification times (Unix seconds) from the package metadata.
     created: Option<i64>,
     modified: Option<i64>,
@@ -283,6 +285,7 @@ impl<'r> Importer<'r> {
             index_xrefs: Vec::new(),
             text_vars: None,
             text_var_ids: HashMap::new(),
+            xref_page_vars: HashSet::new(),
             created: None,
             modified: None,
             repaired_tab_lists: 0,
@@ -610,6 +613,9 @@ impl<'r> Importer<'r> {
         {
             d.settings.zero_point = zp;
         }
+        // Cross-reference text the format generates exactly is generated again; any other was
+        // typed over it and is kept (needs the destinations, resolved above).
+        d.drop_generated_xref_text();
         Ok(d)
     }
 }
