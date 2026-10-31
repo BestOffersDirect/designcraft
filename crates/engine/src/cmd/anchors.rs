@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             [],
             None,
             "{points?: [[id, subpath, index]]} — the Direct Selection tool's selected points by default, in one undo step (Properties › Quick Actions › Delete Point(s)); a subpath left with one point goes, and an object with none is removed → {deleted, removed: [id]}",
-            has_selection,
+            has_doc,
             delete_points
         ),
         cmd!(
@@ -587,6 +587,11 @@ mod tests {
         assert_eq!(r["removed"], json!([l]));
         assert!(s.doc().unwrap().doc.item(ItemId(l)).is_none());
         assert!(s.execute("path.deletePoints", &json!({"points": []})).is_err());
+        // Named points need no selected object.
+        s.execute("selection.set", &json!({"ids": []})).unwrap();
+        assert!(s.doc().unwrap().selection.items.is_empty());
+        let r = s.execute("path.deletePoints", &json!({"points": [[b, 0, 0]]})).unwrap();
+        assert_eq!(r["deleted"], 1);
         // Edit › Clear with points selected deletes the points, not their paths.
         s.execute("selection.set", &json!({"anchors": [[a, 0, 0]]})).unwrap();
         s.execute("edit.clear", &json!({})).unwrap();
