@@ -2819,6 +2819,36 @@ fn check(ui: &mut egui::Ui, d: &mut Dialog, key: &str, label: &str) {
     }
 }
 
+/// An alert's message. Import warnings (`lines`: `{text, item}`) list one per line, scrolling
+/// when there are many, with Show beside each that names a frame (sets `show`).
+fn alert_message(app: &DesignApp, ui: &mut egui::Ui, d: &mut Dialog) {
+    let lines: Vec<(String, Option<u64>)> = d
+        .fields
+        .get("lines")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|l| (l.get("text").and_then(Value::as_str).unwrap_or_default().to_string(), l.get("item").and_then(Value::as_u64)))
+        .collect();
+    if lines.iter().all(|(_, item)| item.is_none()) {
+        crate::rtl::label(ui, d.s("message"));
+        return;
+    }
+    let show = crate::i18n::tr(&app.ui.language, "Show");
+    egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, true]).show(ui, |ui| {
+        for (text, item) in &lines {
+            ui.horizontal_wrapped(|ui| {
+                if let Some(item) = item
+                    && ui.small_button(crate::rtl::widget(ui, show)).clicked()
+                {
+                    d.fields.insert("show".into(), json!(item));
+                }
+                crate::rtl::label(ui, text.as_str());
+            });
+        }
+    });
+}
+
 /// Draw the active localized dialog; open popups own Enter/Escape, and result handling drives confirm or cancel.
 pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
     let shortcuts = app.ui.dialog.as_ref().is_some_and(|d| d.id == crate::shortcuts_dialog::DIALOG_ID);
@@ -3704,7 +3734,7 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
                             crate::rtl::label(ui, egui::RichText::new(crate::rtl::isolate(&file)).font(semibold(13.0)));
                             ui.add_space(4.0);
                         }
-                        crate::rtl::label(ui, d.s("message"));
+                        alert_message(app, ui, &mut d);
                     }
                     _ => {}
                 }
@@ -3775,6 +3805,15 @@ pub fn show(app: &mut DesignApp, ctx: &egui::Context) {
             });
         });
     });
+    // Show on an import warning: close the warnings (the status line keeps them) and select the
+    // frame the warning is about, in view, so it can be fixed.
+    if let Some(item) = d.fields.remove("show").and_then(|v| v.as_u64()) {
+        app.ui.dialog = None;
+        if app.run("selection.set", json!({"ids": [item]})).is_ok() {
+            let _ = app.run("view.fitSelection", json!({}));
+        }
+        return;
+    }
     // Preferences › General › Interface Language takes effect at once, like any other app setting.
     if let Some(lang) = d.fields.remove("applyLanguage")
         && let Err(e) = app.run("app.language", json!({"lang": lang}))

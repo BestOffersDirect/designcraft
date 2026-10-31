@@ -3754,6 +3754,40 @@ fn character_style_options_set_the_digits() {
     assert_eq!(char_style(&app, "Emphasis").unwrap().chars.digits, Some(designcraft_doc::Digits::Farsi));
 }
 
+#[test]
+fn import_warning_show_selects_the_frame_it_is_about() {
+    use egui_kittest::{Harness, kittest::Queryable};
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let f = app.run("frame.create", json!({"rect": [36, 36, 300, 200], "content": "text"})).unwrap();
+    app.run("selection.set", json!({"ids": []})).unwrap();
+    let lines = json!([
+        {"text": "a table of 2 rows was read as 1", "item": null},
+        {"text": "story 30892: text orientation of its frames is not known or differs; written as horizontal", "item": f["id"]},
+    ]);
+    app.ui.dialog = Some(Dialog::new("alert", json!({"title": "Import Warnings", "file": "book.indd", "message": "", "lines": lines})));
+    let mut h = Harness::builder().with_size(egui::vec2(1000.0, 800.0)).build_ui_state(
+        |ui, app: &mut DesignApp| {
+            let key = egui::Id::unique("import_warning_show_fonts");
+            if ui.data(|d| d.get_temp::<bool>(key)).is_none() {
+                crate::theme::install_fonts(ui.ctx(), "");
+                ui.data_mut(|d| d.insert_temp(key, true));
+                return;
+            }
+            show(app, ui.ctx());
+        },
+        app,
+    );
+    h.run_steps(3);
+    // Only the warning that names a frame offers Show.
+    assert_eq!(h.query_all_by_label("Show").count(), 1);
+    h.get_by_label("Show").click();
+    h.run_steps(3);
+    let app = h.state();
+    assert!(app.ui.dialog.is_none(), "Show closes the warnings");
+    assert_eq!(app.session.doc().unwrap().selection.items, vec![designcraft_doc::ItemId(f["id"].as_u64().unwrap())]);
+}
+
 /// Replace the text of the field beside the `nth` label `label` (on its row, to its right) with
 /// `new`, and leave the field.
 fn retype_beside(h: &mut egui_kittest::Harness<'static, crate::test_window::Window>, label: &str, nth: usize, new: &str) {
