@@ -345,44 +345,44 @@ pub fn show(app: &mut DesignApp, ui: &mut egui::Ui) {
 /// The cursor under the pointer at `p` over the canvas: the navigation hands, then the guide
 /// resize cursors, then the active tool's.
 fn pointer_cursor(app: &mut DesignApp, ui: &egui::Ui, xf: &Xf, p: Pos2) -> Cursor {
-        let wants_text = app.session.wants_text();
-        let space = navigation_space(app, ui.ctx());
-        let zoom = spring_zoom_mode(app, ui.ctx(), space);
-        let middle = ui.input(|i| i.pointer.middle_down());
-        let alt_hand: bool = ui.data(|d| d.get_temp(egui::Id::unique(("canvas_alt_hand", app.pane)))).unwrap_or(false);
-        let tool_drag: bool = ui.data(|d| d.get_temp(egui::Id::unique(("canvas_pointer_down", app.pane)))).unwrap_or(false);
-        let alt_text = wants_text && !tool_drag && ui.input(|i| i.modifiers.alt);
-        let c = if middle || alt_hand {
-            Cursor::HandGrab
-        } else if zoom {
-            if ui.input(|i| i.modifiers.alt) { Cursor::ZoomOut } else { Cursor::ZoomIn }
-        } else if (space && !ui.input(|i| i.modifiers.command)) || alt_text {
-            Cursor::Hand
-        } else {
-            app.session.cursor(xf.to_canvas(p), ui.input(|i| mods(i, false)), app.view_info())
-        };
-        // A column guide that a press would drag, or one being dragged: a resize cursor across it.
-        let dragging = ui.data(|d| d.get_temp::<ColumnDrag>(egui::Id::unique((COLUMN_DRAG, app.pane)))).map(|g| g.spread);
-        let column = dragging.or_else(|| {
-            let menu_open = context_menu_open(ui.ctx());
-            (!space && !zoom && !middle && !alt_hand && !tool_drag && !menu_open && xf.rot == 0)
-                .then(|| column_guide_at(app, xf, p).map(|h| h.0))
-                .flatten()
-        });
-        let c = match column {
-            Some(r) if spread_x_across(app, r) => Cursor::ResizeH,
-            Some(_) => Cursor::ResizeV,
-            None => c,
-        };
-        // A ruler guide being dragged keeps the cursor across it until it is dropped, over the
-        // canvas too (the tool's cursor took over as soon as the pointer left the ruler). Only
-        // while the button is down: a drag state left behind by a skipped release doesn't stick.
-        let dragging = ui.input(|i| i.pointer.primary_down());
-        let c = match ui.data(|d| d.get_temp::<GuideDrag>(egui::Id::unique(GUIDE_DRAG))).filter(|_| dragging).map(|g| g.orientation) {
-            Some(designcraft_doc::Orientation::Horizontal) => Cursor::ResizeV,
-            Some(designcraft_doc::Orientation::Vertical) => Cursor::ResizeH,
-            None => c,
-        };
+    let wants_text = app.session.wants_text();
+    let space = navigation_space(app, ui.ctx());
+    let zoom = spring_zoom_mode(app, ui.ctx(), space);
+    let middle = ui.input(|i| i.pointer.middle_down());
+    let alt_hand: bool = ui.data(|d| d.get_temp(egui::Id::unique(("canvas_alt_hand", app.pane)))).unwrap_or(false);
+    let tool_drag: bool = ui.data(|d| d.get_temp(egui::Id::unique(("canvas_pointer_down", app.pane)))).unwrap_or(false);
+    let alt_text = wants_text && !tool_drag && ui.input(|i| i.modifiers.alt);
+    let c = if middle || alt_hand {
+        Cursor::HandGrab
+    } else if zoom {
+        if ui.input(|i| i.modifiers.alt) { Cursor::ZoomOut } else { Cursor::ZoomIn }
+    } else if (space && !ui.input(|i| i.modifiers.command)) || alt_text {
+        Cursor::Hand
+    } else {
+        app.session.cursor(xf.to_canvas(p), ui.input(|i| mods(i, false)), app.view_info())
+    };
+    // A column guide that a press would drag, or one being dragged: a resize cursor across it.
+    let dragging = ui.data(|d| d.get_temp::<ColumnDrag>(egui::Id::unique((COLUMN_DRAG, app.pane)))).map(|g| g.spread);
+    let column = dragging.or_else(|| {
+        let menu_open = context_menu_open(ui.ctx());
+        (!space && !zoom && !middle && !alt_hand && !tool_drag && !menu_open && xf.rot == 0)
+            .then(|| column_guide_at(app, xf, p).map(|h| h.0))
+            .flatten()
+    });
+    let c = match column {
+        Some(r) if spread_x_across(app, r) => Cursor::ResizeH,
+        Some(_) => Cursor::ResizeV,
+        None => c,
+    };
+    // A ruler guide being dragged keeps the cursor across it until it is dropped, over the
+    // canvas too (the tool's cursor took over as soon as the pointer left the ruler). Only
+    // while the button is down: a drag state left behind by a skipped release doesn't stick.
+    let dragging = ui.input(|i| i.pointer.primary_down());
+    let c = match ui.data(|d| d.get_temp::<GuideDrag>(egui::Id::unique(GUIDE_DRAG))).filter(|_| dragging).map(|g| g.orientation) {
+        Some(designcraft_doc::Orientation::Horizontal) => Cursor::ResizeV,
+        Some(designcraft_doc::Orientation::Vertical) => Cursor::ResizeH,
+        None => c,
+    };
     c
 }
 

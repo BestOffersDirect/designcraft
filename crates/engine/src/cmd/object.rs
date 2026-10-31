@@ -2363,7 +2363,9 @@ fn effects_all(s: &mut Session, p: &Value) -> Result<Value> {
                 let mut cur = serde_json::to_value(&it.effects).map_err(|e| bad(ID, e.to_string()))?;
                 // Default effects are left out of the serialized form; a patch without `mode` would
                 // then read the legacy Normal instead of the effect's current (Multiply, Screen) mode.
-                for (key, now) in [("innerShadow", serde_json::to_value(&it.effects.inner_shadow)), ("outerGlow", serde_json::to_value(&it.effects.outer_glow))] {
+                for (key, now) in
+                    [("innerShadow", serde_json::to_value(&it.effects.inner_shadow)), ("outerGlow", serde_json::to_value(&it.effects.outer_glow))]
+                {
                     if let (Some(o), Ok(now)) = (cur.as_object_mut(), now) {
                         o.entry(key).or_insert(now);
                     }
