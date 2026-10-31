@@ -3138,3 +3138,17 @@ fn forwarded_keys_run_shortcuts() {
     forwarded_shortcuts(&mut app, &ctx, press(Key::Delete), Modifiers::NONE);
     assert!(app.session.active().unwrap().doc.item(designcraft_doc::ItemId(frame["id"].as_u64().unwrap())).is_none(), "Delete clears the selection");
 }
+
+#[test]
+fn file_menu_ends_with_quit_but_the_macos_menu_bar_leaves_it_to_the_app_menu() {
+    let file = |tree: Vec<(&'static str, Vec<Item>)>| {
+        let mut out = Vec::new();
+        walk(&tree.into_iter().find(|(t, _)| *t == "File").map(|(_, e)| e).unwrap_or_default(), &mut out);
+        out.into_iter().map(|(_, id, _)| id).collect::<Vec<_>>()
+    };
+    assert_eq!(file(menu_tree()).last().map(String::as_str), Some("app.quit"), "File ends with the quit item");
+    assert!(!file(native_menu_tree()).iter().any(|id| id == "app.quit"), "macOS has Quit only in the app menu");
+    let native = native_menu_tree();
+    let file_items = native.iter().find(|(t, _)| *t == "File").map(|(_, e)| e);
+    assert!(!matches!(file_items.and_then(|e| e.last()), Some(Item::Sep)), "no separator left at the end of File");
+}
