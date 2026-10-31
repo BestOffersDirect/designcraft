@@ -2583,6 +2583,22 @@ fn cjk_menu_items_follow_show_cjk_features() {
     assert_eq!(app.ui.dialog.as_ref().map(|d| d.id.as_str()), Some("ruby"), "hidden, not removed");
 }
 
+/// The CJK commands sit in a group of their own, after a separator, and hiding them leaves no
+/// separator at the end of the menu.
+#[test]
+fn cjk_menu_items_have_their_own_group() {
+    let mut app = DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
+    let ty = menu_tree().into_iter().find(|(m, _)| *m == "Type").unwrap().1;
+    let first = ty.iter().position(|i| matches!(i, Item::Cmd { id, .. } if CJK_ONLY.contains(&id.as_str()))).unwrap();
+    assert!(matches!(ty[first - 1], Item::Sep), "separator before the CJK group");
+    assert!(matches!(ty[first - 2], Item::Sub(..)), "the group comes after Story Direction");
+    app.ui.language = String::new();
+    app.run("prefs.set", json!({"cjkFeatures": false})).unwrap();
+    assert!(!has_shown_item(&app, &ty[first..]), "nothing left after the separator");
+    app.run("prefs.set", json!({"cjkFeatures": true})).unwrap();
+    assert!(has_shown_item(&app, &ty[first..]));
+}
+
 /// Preferences › Type › Show CJK Features: left as it is, it keeps following the interface
 /// language; changed, it is kept in prefs.json.
 #[test]

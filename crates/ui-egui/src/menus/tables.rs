@@ -274,6 +274,7 @@ pub const MENUS: &[(&str, &[&str])] = &[
             "cmd:type.storyDirection|Horizontal|{\"vertical\": false}",
             "cmd:type.storyDirection|Vertical|{\"vertical\": true}",
             "<",
+            "-",
             "cmd:type.tateChuYoko",
             "ui:app.rubyDialog",
             "cmd:type.kenten",
